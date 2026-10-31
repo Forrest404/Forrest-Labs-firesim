@@ -12,8 +12,8 @@ import {
   windTowardDeg,
 } from '../contract';
 import type { Scenario, SimResult } from '../contract';
-import { crossWetEdge } from './crossing';
-import type { Crossing } from './crossing';
+import { crossTimeVarying, crossWetEdge } from './crossing';
+import type { Crossing, TimeVaryingContext } from './crossing';
 import { buildEventLayers } from './events';
 import { MinHeap } from './heap';
 import { byramIntensityKwM, flameLengthM } from './intensity';
@@ -22,6 +22,7 @@ import { createSpotter } from './spotting';
 import type { EdgeInput } from './models';
 import { mulberry32 } from './prng';
 import { NEIGHBOR_OFFSETS, KING_MOVES, cosAgainstWind } from './rates';
+import { createWeatherTimeline } from './weather';
 
 const DEG = Math.PI / 180;
 
@@ -45,12 +46,14 @@ export function simulate(scenario: Scenario): SimResult {
   // Per-cell downwind unit vector (x east, y north). Optional seeded jitter of the direction.
   const windX = new Float32Array(n);
   const windY = new Float32Array(n);
+  const jitterDeg = new Float32Array(n); // each cell's fixed direction jitter (used when the weather changes over time)
   {
     const variability = weather.windVariabilityDeg ?? 0;
     const rand = mulberry32(scenario.seed);
     const toward = windTowardDeg(weather.windFromDeg);
     for (let i = 0; i < n; i++) {
       const jitter = variability > 0 ? (rand() * 2 - 1) * variability : 0;
+      jitterDeg[i] = jitter;
       const a = (toward + jitter) * DEG;
       windX[i] = Math.sin(a);
       windY[i] = Math.cos(a);
@@ -80,6 +83,9 @@ export function simulate(scenario: Scenario): SimResult {
   }
 
   const crossing: Crossing = { t: Infinity, rate: 0 };
+  // Weather that changes over time (null = steady: the fast path, identical to before).
+  const timeline = createWeatherTimeline(scenario);
+  const tvCtx: TimeVaryingContext | null = timeline ? { layers: events, timeline, rateFn, edge, duration } : null;
   const moves = settings.neighbourhood;
 
   // Ember spotting (off unless settings.spottingEnabled): embers become extra, positive-delay edges.
@@ -87,7 +93,7 @@ export function simulate(scenario: Scenario): SimResult {
   const spotter = settings.spottingEnabled
     ? createSpotter({
         settings, seed: scenario.seed, width, height, cellSizeM, fuel, elevation, baseMoisture,
-        windSpeedMps: weather.windSpeedMps, windX, windY, events, rateFn, edge,
+        windSpeedMps: weather.windSpeedMps, windX, windY, events, rateFn, edge, timeline, jitterDeg,
       })
     : null;
   const emitEmber = (target: number, tArr: number): void => {
@@ -127,7 +133,7 @@ export function simulate(scenario: Scenario): SimResult {
       const fj = fuel[j];
       if (fj === FuelClass.NONE) continue;
       const mx = extinction[fj];
-      if (mx <= baseMoisture) continue;
+      if (!timeline && mx <= baseMoisture) continue;
 
       // Knight move: only across two cells that are the same fuel as the target, unsprayed (see
       // rates.ts). Their firebreak status is checked once the arrival time is known.
@@ -148,7 +154,13 @@ export function simulate(scenario: Scenario): SimResult {
       edge.dist = dist;
       let tArr: number;
       let rate: number;
-      if (events.hasWater && events.sprayHead[j] >= 0) {
+      if (tvCtx) {
+        // Weather changes over time: integrate every edge over the schedule (FIFO-safe).
+        crossTimeVarying(tvCtx, j, t, dist, off.ux, off.uy, jitterDeg[i], mx, burnout, crossing);
+        tArr = crossing.t;
+        rate = crossing.rate;
+        if (!(tArr < Infinity)) continue;
+      } else if (events.hasWater && events.sprayHead[j] >= 0) {
         // Sprayed target: integrate over its changing moisture (FIFO-safe), see crossing.ts.
         crossWetEdge(events, j, t, dist, baseMoisture, mx, burnout, duration, rateFn, edge, crossing);
         tArr = crossing.t;

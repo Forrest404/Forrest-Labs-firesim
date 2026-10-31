@@ -70,3 +70,6 @@ html, body { margin: 0; height: 100%; background: #0b0d10; overflow: hidden; }
   #panel { width: calc(100% - 24px); max-height: 55%; top: auto; bottom: 12px; }
   #notices { bottom: auto; top: 10px; width: calc(100% - 24px); }
 }
+
+/* Long preset names must not push a select out of the panel. */
+#panel label select { min-width: 0; max-width: 190px; flex: 1; }

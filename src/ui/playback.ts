@@ -2,7 +2,11 @@
 
 import type { Store } from '../app/state';
 import { liveStats } from '../app/overlayPainter';
+import { scheduleFromPreset } from '../contract';
+import type { Scenario } from '../contract';
 import { intensityClass } from '../sim/intensity';
+import { createWeatherTimeline } from '../sim/weather';
+import type { WeatherTimeline } from '../sim/weather';
 import { el, formatClock } from './el';
 import { STR } from './strings';
 
@@ -11,6 +15,19 @@ const SPEEDS = [1, 4, 16, 64, 256];
 export interface PlaybackActions {
   simulate(): void;
   cancel(): void;
+}
+
+// The weather timeline only changes when its inputs do, so it is cached between playback ticks.
+let cachedKey = '';
+let cachedTimeline: WeatherTimeline | null = null;
+function timelineFor(s: { weather: Scenario['weather']; weatherPreset: Parameters<typeof scheduleFromPreset>[0]; settings: Scenario['settings']; durationSeconds: number }): WeatherTimeline | null {
+  const key = JSON.stringify([s.weather, s.weatherPreset, s.settings.fuelMoistureLagS, s.durationSeconds]);
+  if (key !== cachedKey) {
+    cachedKey = key;
+    const schedule = scheduleFromPreset(s.weatherPreset, s.weather);
+    cachedTimeline = schedule.length ? createWeatherTimeline({ weather: s.weather, weatherSchedule: schedule, settings: s.settings, durationSeconds: s.durationSeconds } as Scenario) : null;
+  }
+  return cachedTimeline;
 }
 
 export function mountPlayback(container: HTMLElement, store: Store, actions: PlaybackActions): void {
@@ -61,7 +78,9 @@ export function mountPlayback(container: HTMLElement, store: Store, actions: Pla
       const fire = st.maxIntensityKwM > 0
         ? ` · ${STR.peakIntensity} ${st.maxIntensityKwM.toFixed(0)} kW/m (${STR.intensityClass[intensityClass(st.maxIntensityKwM)]}), ${STR.flameLength} ${st.maxFlameLengthM.toFixed(1)} m`
         : '';
-      stats.textContent = `${st.burnedAreaHa.toFixed(0)} ha · ${st.burnedCells} cells burned${fire} · ${STR.simTime} ${s.result!.stats.runtimeMs.toFixed(0)} ms`;
+      const tl = timelineFor(s);
+      const wind = tl ? ` · ${STR.windNow} ${Math.round(tl.speedAt(s.playback.t) * 3.6)} km/h from ${Math.round(tl.fromDegAt(s.playback.t))}°` : '';
+      stats.textContent = `${st.burnedAreaHa.toFixed(0)} ha · ${st.burnedCells} cells burned${fire}${wind} · ${STR.simTime} ${s.result!.stats.runtimeMs.toFixed(0)} ms`;
     } else stats.textContent = '';
   });
 }

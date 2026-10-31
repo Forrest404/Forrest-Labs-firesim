@@ -26,6 +26,8 @@ export const STR = {
   dryness: 'Dryness',
   drynessCustom: 'Custom (advanced)',
   duration: 'Duration',
+  weatherOverTime: 'Weather over time',
+  windNow: 'wind now',
 
   simulateTitle: 'Simulate',
   simulate: 'Simulate',

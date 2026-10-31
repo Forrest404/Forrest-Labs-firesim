@@ -63,6 +63,16 @@ interval then does not depend on the start time, so crossing time is non-decreas
 (FIFO) by construction, and never earlier than the unsprayed crossing. Cells without sprays keep
 the closed form. Cost: about 2x on a 200 x 200 grid with 2,000 sprayed cells (about 50 ms).
 
+Accuracy fix (found while building SIM-11): the rate of an interval is evaluated at its midpoint, so a
+spray that STARTS inside an interval was ignored for the whole interval. With a spray that cuts the
+speed 16x just before the front would finish, the crossing came out 300 s too early (up to 4,186 % in
+random trials). Each sprayed cell's spray start times are now extra breakpoints on the absolute grid,
+which keeps the partition independent of the start time (FIFO is preserved). Tested against a
+brute-force fine-step integral: median error 0.01 %, worst 0.74 % (400 random edges); the test fails
+with 83 % and 2,128 % errors if the breakpoints are removed (`tests/crossing-accuracy.test.ts`).
+Scenarios without sprays are byte-identical to before; with sprays 21 of 80 random scenarios changed,
+by 0.2 % of cells on average and at most 68 s.
+
 ## SIM-5. Overlapping sprays: the wettest wins
 
 Previously the latest spray on a cell replaced earlier ones, so a weak late spray cancelled a strong
@@ -154,3 +164,36 @@ neighbours (embers legitimately land far from any burned cell) and monotonicity 
 Known gap found while tuning: the default ignition for the real Boulder Creek bundle burns only
 2 ha (it appears to be boxed in); `defaultIgnition()` in `src/data/ignition.ts` needs a better
 choice (`demo-ship` slot).
+
+## SIM-11. Weather over time (`Scenario.weatherSchedule`, `src/sim/weather.ts`)
+
+Wind speed, wind direction, temperature and humidity can follow keyframes (each field is its own
+series, linearly interpolated, direction along the shorter arc, held after the last keyframe;
+`Scenario.weather` is t = 0). Dead fuel moisture follows the weather with a lag
+(`settings.fuelMoistureLagS`, default 1 h): `equilibrium = deriveFuelMoisture(T, RH) + offset` where
+`offset = m0 - derive(T0, RH0)`, so a constant schedule reproduces the constant run exactly and an
+explicit moisture at t = 0 is respected; `dm/dt = (equilibrium - m) / lag`, tabulated at 60 s.
+
+Solver: with a schedule every edge is integrated over time (`crossTimeVarying`), the weather piecewise
+constant on an absolute 600 s grid (60 s into a sprayed cell, with spray starts as breakpoints), so
+FIFO holds by construction and the shortest-path search stays correct, the same idea as SIM-4.
+Without a schedule nothing changes: 160 of 160 random scenarios without sprays are byte-identical to
+the previous commit. A constant schedule matches steady weather to 4 ms (rounding) without
+interventions; with sprays the two crossing integrators discretise differently and differ slightly,
+plus a burnout cliff (a wait that just fits in the source's burn time on one grid but not the other).
+
+Behaviour: a too-wet interval (moisture at or above extinction) makes the front wait, but only while
+the source still burns (same rule as water, SIM-6); with burnout off, fuel that starts too wet burns
+once it dries. Embers use the wind and moisture at the moment of ignition and landing.
+
+Limits: no precipitation. With the simple linear moisture model even 100 % humidity tops out near 27 %,
+below the 30-35 % extinction moisture, so damp air slows a fire but cannot stop it unless extinction
+is lowered; a rain keyframe would need its own wetting term. Wind variability stays a fixed per-cell
+direction offset. The UI offers five presets as data (`WEATHER_PRESETS`: steady, wind shift, wind
+rise, front passage, evening cooling), applied relative to the starting weather at simulate time, and
+shows the wind "now" while playing.
+
+Tests: `tests/weather-timeline.test.ts` (interpolation, direction wrap, moisture lag, validation),
+`tests/weather.test.ts` (constant schedule equals steady, wind shift, monotone wind ramp, damp air
+and lag, too-wet-then-dry, FIFO sweep, fuzzed firebreak monotonicity and validity under random
+schedules), `tests/crossing-accuracy.test.ts`. Mutation-checked: five injected bugs are caught.

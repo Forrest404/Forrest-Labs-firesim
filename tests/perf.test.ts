@@ -96,6 +96,25 @@ describe('performance', () => {
     expect(ms).toBeLessThan(2000);
   });
 
+  it('a changing-weather schedule on 300 x 300 stays under 2.5 s, with and without spotting', () => {
+    for (const spottingEnabled of [false, true]) {
+      const base = bigScenario(300, 300);
+      const w = base.weather;
+      const s = {
+        ...base,
+        weatherSchedule: [{ tSeconds: 3600, windSpeedMps: 14, windFromDeg: 300 }, { tSeconds: 3 * 3600, windSpeedMps: 5, windFromDeg: 200, relativeHumidity: 0.5 }, { tSeconds: 9 * 3600, relativeHumidity: 0.2 }],
+        settings: { ...DEFAULT_SETTINGS, spottingEnabled, spottingIgnitionProb: 0.05 },
+        weather: { ...w, windSpeedMps: 8 },
+      };
+      simulate(s);
+      const t0 = performance.now();
+      const r = simulate(s);
+      const ms = performance.now() - t0;
+      console.log(`300x300 weather schedule (spotting ${spottingEnabled}): ${ms.toFixed(1)} ms, burned ${r.stats.burnedCells}`);
+      expect(ms).toBeLessThan(2500);
+    }
+  });
+
   it('simulates a 300 x 300 grid (the cap) under 2 s', () => {
     const s = bigScenario(300, 300);
     const t0 = performance.now();

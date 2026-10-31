@@ -3,8 +3,8 @@
  * TOWARD), dryness preset (data from presets.ts), duration. Writes SI into the store.
  */
 
-import { DRYNESS_PRESETS, DRYNESS_PRESET_ORDER, applyDrynessPreset, deriveFuelMoisture, windTowardDeg } from '../contract';
-import type { DrynessPreset } from '../contract';
+import { DRYNESS_PRESETS, DRYNESS_PRESET_ORDER, WEATHER_PRESETS, WEATHER_PRESET_ORDER, applyDrynessPreset, deriveFuelMoisture, windTowardDeg } from '../contract';
+import type { DrynessPreset, WeatherPresetId } from '../contract';
 import { staleIfResult } from '../app/state';
 import type { Store } from '../app/state';
 import { compass, el, formatDuration } from './el';
@@ -22,6 +22,9 @@ export function mountSettingsSimple(container: HTMLElement, store: Store): void 
   for (const p of DRYNESS_PRESET_ORDER) dryness.append(el('option', { value: p }, DRYNESS_PRESETS[p].label));
   dryness.append(el('option', { value: 'custom', disabled: true }, STR.drynessCustom));
   const drynessVal = el('span', { class: 'value' });
+  const weatherOverTime = el('select', { 'aria-label': STR.weatherOverTime }) as HTMLSelectElement;
+  for (const id of WEATHER_PRESET_ORDER) weatherOverTime.append(el('option', { value: id }, WEATHER_PRESETS[id].label));
+  weatherOverTime.onchange = () => store.update((s) => ({ weatherPreset: weatherOverTime.value as WeatherPresetId, ...staleIfResult(s) }));
   const duration = el('select') as HTMLSelectElement;
   for (const d of DURATIONS) duration.append(el('option', { value: d }, formatDuration(d)));
 
@@ -35,6 +38,7 @@ export function mountSettingsSimple(container: HTMLElement, store: Store): void 
     el('label', {}, el('span', {}, STR.windSpeed), speed, speedVal),
     el('label', {}, el('span', {}, STR.windFrom), dir, arrow, dirVal),
     el('label', {}, el('span', {}, STR.dryness), dryness, drynessVal),
+    el('label', {}, el('span', {}, STR.weatherOverTime), weatherOverTime),
     el('label', {}, el('span', {}, STR.duration), duration),
   );
 
@@ -53,5 +57,6 @@ export function mountSettingsSimple(container: HTMLElement, store: Store): void 
     dryness.value = preset ?? 'custom';
     drynessVal.textContent = `${Math.round(w.baseFuelMoisture * 100)} % moisture`;
     duration.value = String(s.durationSeconds);
+    weatherOverTime.value = s.weatherPreset;
   });
 }

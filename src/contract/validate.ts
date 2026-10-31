@@ -77,6 +77,19 @@ export function validateScenario(s: Scenario): string[] {
   if (!['factors', 'rothermel', 'iso'].includes(s.settings.rateModel)) errors.push(`unknown rateModel ${String(s.settings.rateModel)}`);
   if (s.settings.neighbourhood !== 8 && s.settings.neighbourhood !== 16) errors.push('neighbourhood must be 8 or 16');
   if (!(s.settings.isoSpeedMps >= 0)) errors.push('isoSpeedMps must be >= 0');
+  if (!(s.settings.fuelMoistureLagS >= 0)) errors.push('fuelMoistureLagS must be >= 0');
+  const sched = s.weatherSchedule ?? [];
+  if (sched.length > 200) errors.push('weatherSchedule has more than 200 keyframes');
+  let lastT = -Infinity;
+  for (const k of sched) {
+    if (!Number.isFinite(k.tSeconds) || k.tSeconds < 0) errors.push(`weather keyframe time ${k.tSeconds} must be >= 0`);
+    else if (k.tSeconds <= lastT) errors.push(`weather keyframe times must be strictly increasing (at ${k.tSeconds})`);
+    lastT = Math.max(lastT, k.tSeconds);
+    if (k.windSpeedMps !== undefined && !(k.windSpeedMps >= 0 && k.windSpeedMps < 200)) errors.push(`weather keyframe wind speed ${k.windSpeedMps} out of range`);
+    if (k.windFromDeg !== undefined && !Number.isFinite(k.windFromDeg)) errors.push('weather keyframe wind direction must be finite');
+    if (k.temperatureC !== undefined && !(k.temperatureC > -60 && k.temperatureC < 70)) errors.push(`weather keyframe temperature ${k.temperatureC} out of range`);
+    if (k.relativeHumidity !== undefined && !(k.relativeHumidity >= 0 && k.relativeHumidity <= 1)) errors.push(`weather keyframe humidity ${k.relativeHumidity} must be 0-1`);
+  }
   const st = s.settings;
   if (!(st.spottingIntensityKwM > 0)) errors.push('spottingIntensityKwM must be > 0');
   if (!(st.spottingEmbers >= 0 && st.spottingEmbers <= 8)) errors.push('spottingEmbers must be 0-8');

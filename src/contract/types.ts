@@ -63,6 +63,23 @@ export interface Weather {
   windVariabilityDeg?: number;
 }
 
+/**
+ * A weather change at a point in time. Each field is optional: a field a keyframe leaves out keeps
+ * following its own earlier keyframes. Values are linearly interpolated between keyframes (wind
+ * direction along the shorter arc) and held after the last one. Scenario.weather is the state at
+ * t = 0.
+ */
+export interface WeatherKeyframe {
+  /** Seconds from ignition; keyframes must be strictly increasing. */
+  tSeconds: number;
+  windSpeedMps?: number;
+  /** Direction the wind blows FROM, degrees clockwise from north. */
+  windFromDeg?: number;
+  temperatureC?: number;
+  /** 0-1 */
+  relativeHumidity?: number;
+}
+
 export type InterventionType = 'firebreak' | 'water';
 
 export interface InterventionParams {
@@ -117,6 +134,11 @@ export interface SimSettings {
   waterMoistureBoost: number;
   /** If true, a cell stops spreading after its fuel's burn duration (affects delayed ignition through drying cells). */
   burnoutEnabled: boolean;
+  /**
+   * Time lag (seconds) with which dead fuel moisture follows the weather when a schedule is set:
+   * dm/dt = (equilibrium - m) / lag. 3600 is the classic 1-hour fine-fuel timelag; 0 = instant.
+   */
+  fuelMoistureLagS: number;
   /** Ember spotting on/off. Off by default: with it off a firebreak is an absolute barrier. */
   spottingEnabled: boolean;
   /** Spotting: potential head-fire intensity (kW/m) a burning cell needs before it throws embers. */
@@ -138,6 +160,8 @@ export interface Scenario {
   /** Optional hook for future fuel-load scaling. Unused in v0. Metres. */
   canopyHeight?: Float32Array;
   weather: Weather;
+  /** Optional weather changes after t = 0 (see WeatherKeyframe). Empty or missing = constant weather. */
+  weatherSchedule?: WeatherKeyframe[];
   /** Ignition cells at t = 0. The UI uses exactly one. */
   ignition: CellRef[];
   interventions: Intervention[];

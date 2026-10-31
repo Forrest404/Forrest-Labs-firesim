@@ -3,7 +3,7 @@
  * viewer objects are created in response to state changes.
  */
 
-import { FuelClass, validateScenario, windTowardDeg } from '../contract';
+import { FuelClass, scheduleFromPreset, validateScenario, windTowardDeg } from '../contract';
 import type { Scenario } from '../contract';
 import { scenarioFromArea } from '../data/bundle';
 import { loadDemoArea } from '../data/demoAreas';
@@ -188,6 +188,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
       seed: s.seed,
     });
     scenario.interventions = s.interventions;
+    scenario.weatherSchedule = scheduleFromPreset(s.weatherPreset, s.weather);
     const errors = validateScenario(scenario);
     return errors.length ? errors[0] : scenario;
   }

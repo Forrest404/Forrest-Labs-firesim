@@ -4,7 +4,7 @@
  */
 
 import { DEFAULT_DURATION_SECONDS, DEFAULT_SETTINGS, DEFAULT_WEATHER } from '../contract';
-import type { CellRef, Intervention, SimResult, SimSettings, Weather } from '../contract';
+import type { CellRef, Intervention, SimResult, SimSettings, Weather, WeatherPresetId } from '../contract';
 import type { DemoArea, DemoAreaIndexEntry } from '../data/bundle';
 import type { ViewerMode } from '../viewer/createViewer';
 
@@ -43,6 +43,8 @@ export interface AppState {
   viewerMode: ViewerMode;
 
   weather: Weather;
+  /** How the weather changes during the run (applied relative to `weather` when simulating). */
+  weatherPreset: WeatherPresetId;
   settings: SimSettings;
   durationSeconds: number;
   seed: number;
@@ -79,6 +81,7 @@ export function initialState(): AppState {
     areaLoading: false,
     viewerMode: 'fallback',
     weather: { ...DEFAULT_WEATHER },
+    weatherPreset: 'steady',
     settings: { ...DEFAULT_SETTINGS },
     durationSeconds: DEFAULT_DURATION_SECONDS,
     seed: 1,

@@ -17,7 +17,7 @@
  * (1979, 1983) spotting-distance models, NOT calibrated. See docs/sim-realism.md SIM-10.
  */
 
-import { FUELS } from '../contract';
+import { FUELS, windTowardDeg } from '../contract';
 import type { FuelClass, SimSettings } from '../contract';
 import { sprayContribution } from './events';
 import type { EventLayers } from './events';
@@ -25,6 +25,7 @@ import { hashNormal, hashUnit } from './hash';
 import { byramIntensityKwM, flameLengthM } from './intensity';
 import type { EdgeInput, RateFn } from './models';
 import { KING_MOVES, NEIGHBOR_OFFSETS } from './rates';
+import type { WeatherTimeline } from './weather';
 
 /** Landings closer than this many cells are ordinary spread, not spotting. */
 export const SPOT_MIN_DISTANCE_CELLS = 2.3;
@@ -46,9 +47,12 @@ export interface SpotterInput {
   elevation: Float32Array;
   baseMoisture: number;
   windSpeedMps: number;
-  /** Per-cell downwind unit vector (x east, y north). */
+  /** Per-cell downwind unit vector (x east, y north) for steady weather. */
   windX: Float32Array;
   windY: Float32Array;
+  /** When the weather changes over time: the timeline, and each cell's fixed wind-direction jitter (degrees). */
+  timeline?: WeatherTimeline | null;
+  jitterDeg?: Float32Array;
   events: EventLayers;
   rateFn: RateFn;
   edge: EdgeInput;
@@ -62,8 +66,15 @@ export interface Spotter {
 }
 
 export function createSpotter(c: SpotterInput): Spotter {
-  const { settings, seed, width, height, cellSizeM, fuel, elevation, baseMoisture, events, rateFn, edge } = c;
-  const U = c.windSpeedMps;
+  const { settings, seed, width, height, cellSizeM, fuel, elevation, events, rateFn, edge, timeline } = c;
+  const DEG = Math.PI / 180;
+  // Weather at the moment a cell ignites or an ember lands (constants when the weather is steady).
+  const baseAt = (t: number): number => (timeline ? timeline.baseMoistureAt(t) : c.baseMoisture);
+  const speedAt = (t: number): number => (timeline ? timeline.speedAt(t) : c.windSpeedMps);
+  const headingAt = (cell: number, t: number): number =>
+    timeline
+      ? ((windTowardDeg(timeline.fromDegAt(t)) + (c.jitterDeg ? c.jitterDeg[cell] : 0)) * DEG)
+      : Math.atan2(c.windX[cell], c.windY[cell]);
 
   function headRate(cell: number, t: number): number {
     const fs = fuel[cell];
@@ -79,9 +90,10 @@ export function createSpotter(c: SpotterInput): Spotter {
       if (tan > tanUp) tanUp = tan;
     }
     edge.fuel = fs;
-    edge.moisture = events.hasWater && events.sprayHead[cell] >= 0 ? baseMoisture + sprayContribution(events, cell, t) : baseMoisture;
+    const base = baseAt(t);
+    edge.moisture = events.hasWater && events.sprayHead[cell] >= 0 ? base + sprayContribution(events, cell, t) : base;
     edge.cosTheta = 1;
-    edge.windSpeedMps = U;
+    edge.windSpeedMps = speedAt(t);
     edge.dz = tanUp * cellSizeM;
     edge.dist = cellSizeM;
     const r = rateFn(edge);
@@ -89,6 +101,7 @@ export function createSpotter(c: SpotterInput): Spotter {
   }
 
   function spot(src: number, t: number, emit: (target: number, tArrival: number) => void): void {
+    const U = speedAt(t);
     if (U < MIN_WIND_MPS || fuel[src] === 0) return;
     const rate = headRate(src, t);
     if (!(rate > 0)) return;
@@ -101,7 +114,7 @@ export function createSpotter(c: SpotterInput): Spotter {
     const meanDist = settings.spottingRangeScale * DISTANCE_COEFF * U * Math.sqrt(flameLengthM(intensity));
     const row = (src / width) | 0;
     const col = src - row * width;
-    const heading = Math.atan2(c.windX[src], c.windY[src]); // clockwise from north, direction the wind blows toward
+    const heading = headingAt(src, t); // clockwise from north, direction the wind blows toward
 
     for (let k = 0; k < n; k++) {
       const dist = meanDist * Math.exp(DISTANCE_SIGMA * hashNormal(seed, src, k, 1) - (DISTANCE_SIGMA * DISTANCE_SIGMA) / 2);
@@ -115,11 +128,12 @@ export function createSpotter(c: SpotterInput): Spotter {
       const ft = fuel[target];
       if (ft === 0) continue;
       const mx = FUELS[ft as FuelClass].extinctionMoisture;
-      if (baseMoisture >= mx) continue;
-      const dry = 1 - baseMoisture / mx;
-      if (hashUnit(seed, src, k, 3) >= settings.spottingIgnitionProb * dry * dry) continue;
       const tLand = t + dist / (FLIGHT_SPEED_FRACTION * U);
-      if (events.hasWater && events.sprayHead[target] >= 0 && baseMoisture + sprayContribution(events, target, tLand) >= mx) continue;
+      const baseLand = baseAt(tLand);
+      if (baseLand >= mx) continue;
+      const dry = 1 - baseLand / mx;
+      if (hashUnit(seed, src, k, 3) >= settings.spottingIgnitionProb * dry * dry) continue;
+      if (events.hasWater && events.sprayHead[target] >= 0 && baseLand + sprayContribution(events, target, tLand) >= mx) continue;
       emit(target, tLand + IGNITION_DELAY_S);
     }
   }
