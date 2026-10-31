@@ -6,6 +6,9 @@ import { simulate } from '../src/sim';
 import { runEnsemble } from '../src/sim/ensemble';
 import { DEFAULT_ENSEMBLE_SPEC } from '../src/contract';
 
+/** Shared CI runners are slower and noisier than a dev machine: these are regression tripwires, not benchmarks. */
+const SLACK = process.env.CI ? 3 : 1;
+
 function bigScenario(width: number, height: number): Scenario {
   const n = width * height;
   const rand = mulberry32(7);
@@ -47,7 +50,7 @@ describe('performance', () => {
     const r = simulate(s);
     const ms = performance.now() - t0;
     console.log(`200x200 simulate: ${ms.toFixed(1)} ms, burned ${r.stats.burnedCells} cells (reported ${r.stats.runtimeMs.toFixed(1)} ms)`);
-    expect(ms).toBeLessThan(1000);
+    expect(ms).toBeLessThan((1000) * SLACK);
     expect(r.stats.burnedCells).toBeGreaterThan(1000);
   });
 
@@ -58,7 +61,7 @@ describe('performance', () => {
     const r = simulate(s);
     const ms = performance.now() - t0;
     console.log(`200x200 rothermel: ${ms.toFixed(1)} ms, burned ${r.stats.burnedCells} cells`);
-    expect(ms).toBeLessThan(1000);
+    expect(ms).toBeLessThan((1000) * SLACK);
     expect(r.stats.burnedCells).toBeGreaterThan(500);
   });
 
@@ -81,7 +84,7 @@ describe('performance', () => {
       const r = simulate(s);
       const ms = performance.now() - t0;
       console.log(`200x200 ${rateModel} + ${interventions.reduce((n, i) => n + i.cells.length, 0)} sprayed cells: ${ms.toFixed(1)} ms, burned ${r.stats.burnedCells}`);
-      expect(ms).toBeLessThan(1500);
+      expect(ms).toBeLessThan((1500) * SLACK);
     }
   });
 
@@ -95,7 +98,7 @@ describe('performance', () => {
     const ms = performance.now() - t0;
     console.log(`300x300 heavy spotting: ${ms.toFixed(1)} ms, burned ${r.stats.burnedCells}, spot fires ${r.stats.spotFires}`);
     expect(r.stats.spotFires).toBeGreaterThan(100);
-    expect(ms).toBeLessThan(2000);
+    expect(ms).toBeLessThan((2000) * SLACK);
   });
 
   it('a changing-weather schedule on 300 x 300 stays under 2.5 s, with and without spotting', () => {
@@ -113,7 +116,7 @@ describe('performance', () => {
       const r = simulate(s);
       const ms = performance.now() - t0;
       console.log(`300x300 weather schedule (spotting ${spottingEnabled}): ${ms.toFixed(1)} ms, burned ${r.stats.burnedCells}`);
-      expect(ms).toBeLessThan(2500);
+      expect(ms).toBeLessThan((2500) * SLACK);
     }
   });
 
@@ -134,9 +137,9 @@ describe('performance', () => {
       const ms = performance.now() - t0;
       console.log(`100-run ensemble, 200x200, ${name}: ${(ms / 1000).toFixed(2)} s (${(ms / 100).toFixed(0)} ms/run), mean ${e.area.meanHa.toFixed(0)} ha`);
       // The heavy variant burns almost the whole grid with time-integrated edges and embers: ~80 ms per run.
-      expect(ms).toBeLessThan(name === 'spotting + schedule' ? 15000 : 6000);
+      expect(ms).toBeLessThan((name === 'spotting + schedule' ? 15000 : 6000) * SLACK);
     }
-  }, 60_000); // three 100-run ensembles take ~15 s together; vitest's default timeout is 5 s
+  }, 120_000); // three 100-run ensembles take ~15 s together; vitest's default timeout is 5 s
 
   it('simulates a 300 x 300 grid (the cap) under 2 s', () => {
     const s = bigScenario(300, 300);
@@ -144,6 +147,6 @@ describe('performance', () => {
     simulate(s);
     const ms = performance.now() - t0;
     console.log(`300x300 simulate: ${ms.toFixed(1)} ms`);
-    expect(ms).toBeLessThan(2000);
+    expect(ms).toBeLessThan((2000) * SLACK);
   });
 });
