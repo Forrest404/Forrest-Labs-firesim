@@ -109,21 +109,38 @@ export function simulate(scenario: Scenario): SimResult {
       const wind = windFactor(cosAgainstWind(off, wx, wy), windSpeed, settings);
       const slope = slopeFactor(elevation[j] - ei, dist, settings);
 
-      let tStart = t;
-      let m = events.hasWater ? moistureAt(events, j, t, baseMoisture) : baseMoisture;
-      if (m >= mx) {
-        // Sprayed cell is too wet right now. The fire may still get there once it dries, as long
-        // as the source is still burning. Approximation, see DECISIONS.md D3.
-        const ready = baseMoisture + 0.25 * (mx - baseMoisture);
-        const tReady = timeUntilMoisture(events, j, baseMoisture, ready);
-        if (tReady >= burnout || tReady === NEVER_ARRIVES) continue;
-        tStart = tReady;
-        m = ready;
+      // Arrival if the fire leaves the source at time tLeave, given the cell's moisture then.
+      const arriveIfLeaving = (tLeave: number): { tArr: number; rate: number } => {
+        const m = events.hasWater ? moistureAt(events, j, tLeave, baseMoisture) : baseMoisture;
+        const r = m < mx ? combineRate(baseRate[fj], wind, slope, moistureFactor(m, mx), settings) : 0;
+        return { tArr: r > 0 ? tLeave + dist / r : NEVER_ARRIVES, rate: r };
+      };
+      let { tArr, rate } = arriveIfLeaving(t);
+      // A sprayed cell dries over time, so leaving later can mean arriving sooner. The fire may
+      // wait at the source (while it still burns) for the best moment. Taking that minimum makes
+      // arrival non-decreasing in t, which keeps Dijkstra correct and means more water or a later
+      // source can never make a cell burn earlier. Approximation, see DECISIONS.md D3.
+      if (events.hasWater && events.sprays.has(j)) {
+        const nearlyDry = baseMoisture + 1e-3 * (mx - baseMoisture);
+        const tDry = timeUntilMoisture(events, j, baseMoisture, nearlyDry, t);
+        let lo = t;
+        let hi = Math.min(tDry === NEVER_ARRIVES ? duration : tDry, burnout, duration);
+        if (hi > lo) {
+          // Arrival vs leave time is unimodal (infinite while too wet, then falling, then rising
+          // once the cell is dry), so a ternary search finds the best leave time.
+          for (let it = 0; it < 60 && hi - lo > 1e-3; it++) {
+            const a = lo + (hi - lo) / 3;
+            const b = hi - (hi - lo) / 3;
+            if (arriveIfLeaving(a).tArr <= arriveIfLeaving(b).tArr && Number.isFinite(arriveIfLeaving(a).tArr)) hi = b;
+            else lo = a;
+          }
+          for (const cand of [lo, hi]) {
+            const o = arriveIfLeaving(cand);
+            if (o.tArr < tArr) ({ tArr, rate } = o);
+          }
+        }
       }
-
-      const rate = combineRate(baseRate[fj], wind, slope, moistureFactor(m, mx), settings);
       if (!(rate > 0)) continue;
-      const tArr = tStart + dist / rate;
       if (tArr >= events.breakT[j] || tArr > duration) continue;
       if (tArr < arrival[j]) {
         arrival[j] = tArr;

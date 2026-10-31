@@ -39,6 +39,35 @@ Keys go in `.env.local` (gitignored). Never commit keys.
 **Google tiles are display only.** Nothing in the app reads data from Google tiles or imagery. All
 simulation inputs come from open data (OpenStreetMap, AWS Terrain Tiles) or are synthetic.
 
+## Google 3D tiles setup
+
+The 3D backdrop is Google Photorealistic 3D Tiles, loaded through Cesium. It is optional: with no
+key the app runs on the OpenStreetMap fallback globe and shows the banner
+"Fallback view: Google 3D tiles unavailable".
+
+1. **Get a key.** In Google Cloud Console pick a project with billing, enable the **Map Tiles
+   API** (APIs & Services -> Library), then create an API key (APIs & Services -> Credentials).
+2. **Restrict it** (Edit key):
+   - Application restrictions: *Websites*, add `localhost:*` and the deploy domain.
+   - API restrictions: *Restrict key*, select **Map Tiles API** only.
+   - Billing -> Budgets & alerts: set a small monthly budget with an email alert.
+3. **Put it in `.env.local`** in the repo root (copy `.env.example` if the file does not exist):
+   ```
+   VITE_GOOGLE_MAPS_API_KEY=<your key, no quotes, no spaces>
+   ```
+   `.env.local` is gitignored. **Never commit a key**, never paste one in chat or an issue, and
+   each teammate needs their own `.env.local`. Vite reads env files at startup, so **restart
+   `npm run dev`** after editing it.
+4. **Check it worked.** The panel's mode line reads "3D tiles: Google Photorealistic (display
+   only)", photoreal buildings and terrain appear with the Google logo in the bottom-right credit
+   area, and there is no fallback banner. If the banner appears, its text says why: no key, the
+   key was rejected (HTTP 403: API not enabled or referrer restriction), quota exceeded (HTTP 429),
+   or tiles stopped loading (network).
+
+The app never crashes on a bad key: the fallback globe is always underneath and is shown again
+when tiles stop loading. Cost controls live in `src/viewer/googleTiles.ts` (screen-space error,
+no preloading of flight destinations, culling while moving, a modest cache).
+
 ## Using the app
 
 1. Pick a **demo area** (two real: Alpirsbach, Boulder Creek; two synthetic, labelled as such).

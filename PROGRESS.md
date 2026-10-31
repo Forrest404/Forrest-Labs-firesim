@@ -145,13 +145,26 @@ Companion files: [DECISIONS.md](DECISIONS.md) (judgement calls), [FEATURES.md](F
 - [x] Works with no network apart from map tiles (bundles are static); synthetic areas labelled
 - [x] PROGRESS / DECISIONS / FEATURES / README complete; branch tagged `v0`
 
+### Google tiles key plumbing (`feature/google-tiles`)
+
+- `.env.example` now documents how to obtain and restrict a key; `.env.local` is created empty
+  and confirmed gitignored (`git check-ignore`). History check: only `.env.example` was ever
+  tracked, no key value in any commit.
+- `src/viewer/googleTiles.ts`: sliding-window failure detection (auth/quota fast path), cost
+  controls, URL/key redaction (`src/viewer/redact.ts`, tested in `tests/redact.test.ts`).
+- README "Google 3D tiles setup" section; DECISIONS D17.
+- Exercised with a real key via headless Chrome: tiles load, overlay drapes on tiles, click
+  picking exact (see Known issues). A Cesium ion variant (asset 2275207, `VITE_CESIUM_ION_TOKEN`)
+  was built and then reverted the same day because the team's credential is a Google Maps key;
+  commits bdde0a6 / d2c0c65 hold it if ion is wanted later (D18).
+
 ## Known issues / not verified
 
-- **Google Photorealistic 3D Tiles path not exercised** (no key on the build machine): draping of
-  the overlay on 3D tiles, picking on tiles, and particle heights on tiles are untested. First
-  teammate with a key: put it in `.env.local`, load the app, check the overlay aligns with the
-  corner markers (Debug layers -> Grid outline). If classification on tiles fails, set
-  `classificationType: ClassificationType.TERRAIN` in `src/viewer/burnLayer.ts` and keep the globe.
+- **Google Photorealistic 3D Tiles path verified headlessly** (2026-10-31, real key in
+  `.env.local`): tileset loads, mode line reads Google, Google credit shown, burn overlay drapes
+  onto the tiles (`ClassificationType.BOTH`), and a synthetic click on the tiles placed the
+  ignition marker within 1 px of the click (pickPosition path). Particle heights on tiles still
+  unchecked by a human. Earlier fallback suggestion (`ClassificationType.TERRAIN`) is not needed.
 - **Real mouse drags** on the Cesium canvas were not exercised (no interactive browser); the
   pick/drag path runs only through `wiring.debugStroke()`. Click-to-ignite and drag-to-draw should
   be the first things a human checks.

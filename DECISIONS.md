@@ -147,7 +147,37 @@ Branch `scaffold/v0` from `main`. `plan.md` (untracked, written earlier this ses
 with the Stage 1 docs because `DECISIONS.md` references it. One commit per stage. Nothing pushed.
 A teammate branch `feature/gemini-agent` exists on the remote (adds `docs/research/eaton-fire-data.md`); untouched.
 
-## D14. California first, real fire test, impact number, AI plan (Person B/C follow-up)
+## D17. Google 3D tiles: key plumbing, failure detection and cost controls
+
+The key reaches the viewer only via `import.meta.env.VITE_GOOGLE_MAPS_API_KEY` (read once in
+`src/app/main.ts`, passed to `createViewer`). It is never stored in a tracked file, never logged,
+and every error message that could contain a tile URL passes through `src/viewer/redact.ts`
+(URLs and `key=` fragments are stripped) before it reaches a banner or console.
+
+Fallback triggers, all leading to the same OSM globe plus banner: empty key; root tileset fetch
+failure (any HTTP status or network error); 3 auth/quota failures (401/403/429) or 25 other tile
+failures inside any sliding 30 s window after start. The old fixed 30 s window after boot was
+replaced because a quota can run out mid-session. There is no automatic switch back to Google
+mode; reload the page.
+
+Cost: `maximumScreenSpaceError` 20 (default 16), `preloadFlightDestinations` off,
+`cullRequestsWhileMoving` on, `dynamicScreenSpaceError` on, cache 512 MB. No geocoder exists, so
+`onlyUsingWithGoogleGeocoder` is set to silence Cesium's warning.
+
+Draping and picking on tiles: `ClassificationType.BOTH` (D5) classifies onto the 3D Tiles and
+`scene.pickPosition` (D6) is the tile-aware path. Both verified headlessly with a real key on
+2026-10-31: overlay drapes on the tiles, synthetic click lands the marker within 1 px.
+
+## D18. Stay on the Google Maps key; Cesium ion variant shelved
+
+An ion-based variant (asset 2275207 "Google Photorealistic 3D Tiles" via `IonResource.fromAssetId`
+with `VITE_CESIUM_ION_TOKEN`, token passed per asset and never set on `Ion.defaultAccessToken`)
+was built in bdde0a6 and reverted in d2c0c65: the credential the team actually holds is a Google
+Maps key (`AIza...` shape), which ion rejects with 401. One credential, one path. If the team
+later gets an ion account, cherry-pick bdde0a6; its redaction also covers `access_token=`,
+Bearer headers and JWTs, which is worth keeping either way.
+
+## D19. California first, real fire test, impact number, AI plan (Person B/C follow-up)
 
 - **Areas:** `index.json` now lists Boulder Creek first (opens by default), then `crozier`. Boulder
   Creek's unmapped land is conifer, not grass (it's redwood forest; only OSM-mapped grassland stays
@@ -169,3 +199,22 @@ A teammate branch `feature/gemini-agent` exists on the remote (adds `docs/resear
   it cuts homes reached (or burned area) by 25 %. Rejected plans go back to Gemini with the numbers,
   up to 3 attempts. Without a key a labelled built-in planner is used. The key is in the browser
   bundle, so restrict it to the Generative Language API and the deploy domain.
+
+## D20. Water: keep every spray, and let the fire wait for the best moment (open question)
+
+Found by the fuzzed invariant in `tests/invariants.test.ts` once the branches were merged.
+
+- **Fixed: a later spray erased an earlier one.** Only the latest spray per cell was kept, so before
+  the second spray the cell counted as dry. Now every spray is kept and the wettest remaining one
+  counts (`src/sim/events.ts`, `tests/water.test.ts`).
+- **Fixed: spreading into a drying cell was not time-consistent.** Leaving a source later could
+  reach a sprayed cell sooner (it had dried more), which breaks Dijkstra's assumption and made a cell
+  burn up to ~80 s earlier when more interventions were added. The solver now searches for the best
+  moment to leave the source (ternary search; arrival vs leave time is unimodal for one spray).
+  Sim time on 200 x 200 went from ~18 ms to ~57 ms.
+- **Open, for the team:** the invariant still fails for seed 208 by ~15 s. Cause: the fire may only
+  wait while the source still burns (burnout). A delayed source burns later, so it can still be
+  burning when the water has dried. That's physical (water sprayed too early can dry before a late
+  fire arrives), but it contradicts "interventions never make any cell burn earlier". Removing the
+  burnout cap on waiting makes all 15 invariants pass. Choose: keep the cap and narrow the invariant
+  to firebreaks / no-burnout, or drop the cap.
