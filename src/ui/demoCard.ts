@@ -37,8 +37,8 @@ export function mountDemoCard(container: HTMLElement, store: Store, actions: Dem
     tips.replaceChildren(
       el('div', { class: 'tips-h' }, STR.demoTipsHeading),
       ...STR.demoBeats(formatClock(sc.pauseAtSeconds)).map(([t, text]) => el('div', { class: 'tip' }, el('b', {}, t), el('span', {}, text))),
-      el('div', { class: 'tips-h' }, STR.demoShortcutsHeading),
-      ...STR.demoShortcuts.map(([k, text]) => el('div', { class: 'tip' }, el('kbd', {}, k), el('span', {}, text))),
+      el('div', { class: 'tips-h kbd-only' }, STR.demoShortcutsHeading),
+      ...STR.demoShortcuts.map(([k, text]) => el('div', { class: 'tip kbd-only' }, el('kbd', {}, k), el('span', {}, text))),
     );
   }
 

@@ -35,12 +35,39 @@ export interface PanelSlots {
 export function mountPanel(root: HTMLElement, store: Store, actions: PanelActions): PanelSlots {
   // Header
   const modePill = el('span', { class: 'pill mode', title: STR.googleAttribution }, el('i', { class: 'dot' }), el('span', { class: 'pill-text' }));
-  const collapseBtn = iconButton('chevronLeft', STR.collapsePanel, () => {
-    const collapsed = root.classList.toggle('collapsed');
-    collapseBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-    collapseBtn.title = collapsed ? STR.expandPanel : STR.collapsePanel;
-  }, { class: 'collapse' });
+  const collapseBtn = iconButton('chevronLeft', STR.collapsePanel, () => setSheet(root.classList.contains('collapsed') ? 'mid' : 'peek'), { class: 'collapse' });
   collapseBtn.setAttribute('aria-expanded', 'true');
+
+  // Phone layout: the panel is a bottom sheet with three heights. Tap the handle to step through
+  // them, or drag it up/down. (On wide screens the handle is hidden and only Hide/Show applies.)
+  type Sheet = 'peek' | 'mid' | 'tall';
+  const ORDER: Sheet[] = ['peek', 'mid', 'tall'];
+  let sheet: Sheet = 'mid';
+  function setSheet(next: Sheet): void {
+    sheet = next;
+    root.classList.toggle('collapsed', next === 'peek');
+    root.classList.toggle('tall', next === 'tall');
+    collapseBtn.setAttribute('aria-expanded', next === 'peek' ? 'false' : 'true');
+    collapseBtn.title = next === 'peek' ? STR.expandPanel : STR.collapsePanel;
+    handle.setAttribute('aria-valuenow', String(ORDER.indexOf(next)));
+  }
+  const handle = el('button', { type: 'button', class: 'sheet-handle', 'aria-label': STR.resizePanel, role: 'slider', 'aria-valuemin': '0', 'aria-valuemax': '2', 'aria-valuenow': '1' }, el('i', {}));
+  let dragY: number | null = null;
+  handle.addEventListener('pointerdown', (e) => { dragY = e.clientY; handle.setPointerCapture(e.pointerId); });
+  handle.addEventListener('pointerup', (e) => {
+    if (dragY === null) return;
+    const dy = e.clientY - dragY;
+    dragY = null;
+    const i = ORDER.indexOf(sheet);
+    if (Math.abs(dy) > 24) setSheet(ORDER[Math.max(0, Math.min(2, i + (dy < 0 ? 1 : -1)))]);
+    else setSheet(ORDER[(i + 1) % 3]);
+  });
+  handle.addEventListener('pointercancel', () => { dragY = null; });
+  handle.addEventListener('keydown', (e) => {
+    const i = ORDER.indexOf(sheet);
+    if (e.key === 'ArrowUp') { setSheet(ORDER[Math.min(2, i + 1)]); e.preventDefault(); }
+    if (e.key === 'ArrowDown') { setSheet(ORDER[Math.max(0, i - 1)]); e.preventDefault(); }
+  });
   const header = el('header', { class: 'brand' },
     el('div', { class: 'brand-left' }, el('h1', {}, STR.appTitle)),
     el('div', { class: 'brand-right' }, modePill, collapseBtn),
@@ -106,7 +133,7 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
   const livePane = el('div', { class: 'pane', role: 'tabpanel' });
   livePane.hidden = true;
   tabs.set('sim');
-  root.append(header, honesty, tabs.root, simPane, livePane, footer);
+  root.append(handle, header, honesty, tabs.root, simPane, livePane, footer);
 
   mountDemoCard(demo.body, store, actions.demo);
   mountAreaPicker(area.body, store, actions);

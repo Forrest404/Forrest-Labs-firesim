@@ -422,3 +422,19 @@ but is a long drag for a presenter.
 backup (118, 145)) 2.6-2.8 km out, looking along the fire, rather than framing the whole 6 km grid. Unmapped land is GRASS (D10). Playback speed 256x for both scenarios (4 h = 56 s,
 6 h = 84 s of real time). Camera heading 40 deg (Surrey) / 70 deg (backup), pitch -30, looking along the
 fire. A run takes about 5 ms, so re-simulation after every change is instant.
+
+## D28. Mobile: bottom sheet with three heights, 44 px touch targets
+
+- **Phones (≤720 px):** the panel is a bottom sheet. A 36 px handle steps it peek → mid → tall (tap, drag up/down, or
+  arrow keys; `role="slider"`). Peek leaves almost the whole map visible. `100dvh`-based heights, safe-area insets
+  (`viewport-fit=cover`), `theme-color`.
+- **Landscape phones (short height):** a side column instead of a sheet, so the map keeps its height.
+- **Coarse pointers:** every control is ≥ 44 px (measured: 0 undersized at 390 px), text fields are 16 px (no iOS focus
+  zoom), larger slider thumbs, keyboard-only tips hidden. The map canvas has `touch-action: none`.
+- **Map credit** moves to the top-left on phones because the sheet covers the bottom edge; the toast sits below it.
+- **Bugs found while testing:** a column-flex `flex: 1` collapsed the wind-direction and time sliders to their 6 px track
+  (all sizes); Cesium's own `bottom/left/right` on the credit box beat my override and it covered the map, so taps never
+  reached the ignition tool (fixed with `!important` and `pointer-events: none` on the box, links stay clickable).
+- **Verified (headless Chrome, touch emulation):** a finger tap moves the ignition; a finger drag draws a firebreak
+  (176 cells); no horizontal overflow in portrait or landscape. **Not verified:** a physical phone, iOS Safari
+  specifics, pinch/tilt on the 3D globe, Google 3D tiles (no key).

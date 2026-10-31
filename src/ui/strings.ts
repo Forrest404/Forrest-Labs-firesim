@@ -34,6 +34,7 @@ export const STR = {
     ['Drag / scroll', 'rotate / zoom the map'],
     ['Middle-drag', 'tilt the map'],
   ] as [string, string][],
+  resizePanel: 'Resize panel',
   collapsePanel: 'Hide panel',
   expandPanel: 'Show panel',
   fallbackBanner: 'Fallback view: Google 3D tiles unavailable.',
