@@ -1,82 +1,95 @@
-# DEMO: wind-driven woodland fire, Surrey Hills (3 minutes)
+# DEMO: a fire above Boulder Creek, and the response that stops it (3 minutes)
 
-One-click demo: a wind-driven fire runs through woodland towards a village, the presenter pauses,
-cuts a firebreak and sprays water across its path, and the village is spared. Everything below was
-checked headlessly (`npm run tune:demo`, `tests/demoScenario.test.ts`) and click-tested in Chrome.
+The story: a wind-driven fire starts in the redwoods west of Boulder Creek and runs into town.
+Without a response it reaches 262 homes in 12 hours. A Standard response barely dents it. A Maximum
+response holds it to 11 ha and no home is reached. Then one click of "Red Flag day" shows that on a bad
+weather day even the maximum response only saves half.
 
-## Settings (set by "Load demo scenario", do not change by hand)
+Every number below comes from the headless rehearsal of 2026-10-31 (`feature/demo-integration`,
+Google 3D mode, 214 tests green). The planner is deterministic, so the numbers repeat exactly as long
+as the settings in the table are the ones on screen.
 
-| | Surrey Hills (main) | Backup (offline) |
+## Settings
+
+| | Value | Where |
 |---|---|---|
-| Area | `surrey-hills` (real OpenStreetMap land cover + AWS terrain), Leith Hill | `synthetic-ridge` ("Forest Ridge", generated) |
-| Ignition (row, col) | 142, 102 = 51.1635 N, -0.3749 E, woodland, 110 m | 114, 124 = 48.3411 N, 8.4099 E, forest, 457 m |
-| Wind | from 225 deg (SW), 25 km/h | from 270 deg (W), 25 km/h |
-| Dryness | High (8 % fuel moisture) | High |
-| Duration, seed | 4 h, 1 | 6 h, 1 |
-| Threatened | Coldharbour, 51.1757 N, -0.3719 E (disc of 240 m) | the generated village, 48.3392 N, 8.4266 E |
-| Playback speed | 256x (4 h in about 56 s) | 256x (5.5 h in about 77 s) |
-| Camera | looks NE (heading 30), tilted 32 deg, 2.6 km out | looks ENE (heading 70), 2.8 km out |
+| Area | **Boulder Creek, CA** (opens by default) | Demo area |
+| Ignition | the suggested one, in the forest 1.2 km west of town (row 114, col 62) | already placed; do not click the map |
+| Wind | **22 km/h from 250° (WSW)** | default for the area |
+| Dryness | **High** (8 % moisture) | default |
+| Duration | **12 h** | Conditions, chip "12 h" (the default is 6 h: change it) |
+| Response level | Standard, then **Maximum** | Emergency response popup, top right |
+| Playback speed | **256×** (12 h in 169 s) or **1024×** (42 s) | chips under the clock |
 
-What happens (numbers from the headless run): **uncontained** Surrey burns 119 ha and reaches the
-village at 2h40 (67 % of the run); the head crosses the planned break line at 1h48. **Contained** burns
-69 ha (58 %) and never reaches the village, even if you run it to 6 h. With the wind flipped to the NE the
-fire turns round and runs the other way. Backup: 148 ha, village at 4h45; contained 93 ha (63 %).
+## What the numbers will be
 
-## The 3-minute script
+| Run | Burned | Homes reached | Orders | Plan time |
+|---|---|---|---|---|
+| No response | 176 ha | 262 of 1339 | – | 2.5 s |
+| Standard (2 crews, 2 engines, 1 helicopter, 20 min delay) | 153 ha (−13 %) | 254 | 11 | 1.9 s |
+| Aggressive | 108 ha (−39 %) | 222 | 23 | ~1 s |
+| **Maximum** (4 crews, 4 engines, 2 dozers, 3 helicopters, 2 airtankers, 5 min delay) | **11 ha (−94 %)** | **0** | 17 | 1.0 s |
+| Red Flag day + Maximum (40 km/h, 4 % moisture) | 179 ha of 339 (−47 %) | 259 of 276 | 24 | 2.8 s |
+
+With the default 6 h duration the fire is only 67 ha and the first homes are reached in the last
+hour, so the "Standard is not enough" beat does not land. Use 12 h.
+
+## The script
 
 | Time | Beat | Do | Say |
 |---|---|---|---|
-| 0:00 (15 s) | **Fly-in** | Demo card: scenario "Surrey Hills", press **Load demo scenario**. The camera flies in over Leith Hill. | "Real Surrey woodland and terrain: Leith Hill, Coldharbour on the ridge ahead." |
-| 0:15 (30 s) | **Ignite and run** | Press **Simulate** (big orange button). It plays at 256x. | "A fire starts low on the south-west slope. Wind from the south-west, 25 km/h, dry fuel." |
-| 0:45 (20 s) | **Uphill and downwind** | Keep playing. Point at the wind arrow in Conditions and at the head of the fire. | "It runs downwind and up the slope. The back barely moves." |
-| 1:05 (45 s) | **Pause and cut** | At about **1h30** on the clock press **Space** (pause). Tools card: **Firebreak**, drag across the front from the road on the west (51.1700 N, -0.3786 E) east to (51.1700 N, -0.3622 E). Then **Water**, radius 4, click-drag a short stroke at the east end (51.1707 N, -0.3601 E to 51.1696 N, -0.3601 E). | "Pause, and cut a line across the front, anchored on the road. Water on the open flank." |
-| 1:50 (30 s) | **Payoff and compare** | Press **Space** to play on to the end. The fire stops short of the village. Then press **Undo** in Tools (or Ctrl/Cmd+Z) twice, once per stroke, and play again to show the village burning; or press **Reset**, **Load demo scenario**, **Simulate**, then **Show contained version** to apply the saved plan in one step. | "Same fire, same wind. Without the line it reaches the village at 2h40. With it, never." |
-| 2:20 (20 s) | **Close** | Open the **Demo tips** (i) if you want the shortcuts on screen. | "Next: live data for any place, more tools (retardant, backburn, crews), calibration." |
+| 0:00 (15 s) | **Fly-in** | Page loads on Boulder Creek, camera oblique over the grid. Click **12 h**. | "Real terrain and land cover above Boulder Creek, Santa Cruz Mountains. Redwood forest, 1,300 buildings. Wind 22 km/h from the south-west, dry fuel." |
+| 0:15 (45 s) | **The fire alone** | Press **Simulate**. It plays at 256×. Pick **1024×** to finish in 40 s. Point at the clock and at "Homes reached" under the stat chips. | "One ignition in the forest. Downwind and uphill it runs into town. Twelve hours: 176 hectares, 262 homes reached." |
+| 1:00 (30 s) | **Standard response** | In the top-right popup press **Dispatch response**. The progress bar runs for 2 s. Press **Top-down**. Scrub to the end. | "Now the response: two hand crews, two engines, one helicopter, dispatched 20 minutes after detection. Each unit gets an assignment, builds its line cell by cell, and can be outrun. The magenta outline is the fire without them. 153 hectares, 254 homes. Not enough." |
+| 1:30 (45 s) | **Maximum response** | Click **Maximum**, then **Dispatch response**. Scrub to **1h30** on the clock, zoom in on the fire with the mouse wheel (unit labels appear under about 7 km). Press **Play**; the dispatch cards on the right tell what every unit is doing. Scrub to the end. | "Maximum: four crews, four engines, two dozers, three helicopters, two air tankers, five-minute dispatch. Dozer line on the south flank, retardant to the north-east, wet lines along the roads. Eleven hectares. No home reached." |
+| 2:15 (20 s) | **Without / With** | Click **Without**, then **With response**. | "Same fire, same wind. Only the response differs." |
+| 2:35 (25 s) | **Red Flag day** | Press **Red Flag day** (Conditions), then **Dispatch response**. | "Forty kilometres an hour, four percent moisture. The same maximum response saves half the area and a few homes. Weather decides what a response can do." |
 
-Total about 2:40, 20 s of slack. At 256x the fire reaches the break line about 25 s after Simulate.
-If you draw the line yourself, any time before about 1h45 on the clock works (the head arrives at 1h48).
+Reset between runs: switch **Simulate the response** off (the view returns to the run without a
+response), click **High** under Dryness to leave Red Flag, press the reset icon under the clock.
 
-### Quick version (no drawing)
+### Shorter variant (90 s)
 
-Load demo scenario, Simulate, play to the end (village burns), **Reset**, **Load demo scenario**,
-**Show contained version**, Simulate. Undo removes the plan again (one step).
+Simulate, Dispatch (Standard), Maximum + Dispatch, Without / With. Skip Red Flag.
 
-## Backup scenario (no network at all)
+### Optional extras, if asked
 
-Pick "Backup: predictable test area" in the Demo card, **Load demo scenario**. The area is generated and
-labelled synthetic (the tag shows in the Demo area card). Run it the same way. Break: north-south line
-across the front at 48.3477 N, 8.4197 E down to 48.3353 N, 8.4197 E at about **2h06** (the head arrives at
-2h21); water at the two ends (48.3485 N, 8.4207 E and 48.3345 N, 8.4207 E). With no network the map
-background has no tiles (a blank globe), but the fire overlay, tools and playback work.
+- **AI plan** card: "Suggest a plan" (labelled built-in when no Gemini key is set) places one
+  firebreak and re-runs; the sim verifies the claim: 67 → 17 ha, 65 → 0 homes on the 6 h run.
+- **Tools**: pause, pick **Firebreak** or **Water**, drag on the map; the response re-plans around
+  your lines on the next Dispatch.
+- **Crozier Fire 2024** (Demo area): **Compare with real fire** gives 67 % IoU at real size with the
+  recorded wind, 37 % with no wind, 11 % with the wind reversed. **Real vs simulation** draws both
+  maps side by side and pauses itself at real size (about 5.6 h).
+- **Live fires** tab: NASA FIRMS detections of the last 24 h on the globe (needs the FIRMS key and
+  a responsive NASA server: it was slow to answer on the rehearsal day, so do not promise it).
 
-## Pre-flight checklist (5 minutes before)
+## Pre-flight (5 minutes before)
 
-1. `npm install` done; `npm run dev` starts (note the URL it prints; another dev server may already hold 5173).
-2. Tiles: top-left pill says **Google 3D** (key present in `.env.local`, never commit it) or **Map · fallback**
-   (OpenStreetMap globe; fine, the banner "Fallback view" is expected without a key).
-3. Bundle loads: press **Load demo scenario**; the card says "...loaded. Press Simulate." If it shows a
-   "Showing the offline backup instead" banner, the Surrey bundle failed to load: reload the page.
-4. Speed chip shows **256x** after loading (Load sets it).
-5. Press **Simulate**, check about 119 ha / 1,319 cells at the end, then **Reset**.
-6. Optional: `npm run tune:demo` (every line PASS) and `npm test`.
-7. Browser window at least 1200 px wide, panel open, zoom 100 %.
+1. `npm run dev` from the `feature/demo-integration` checkout; open the printed URL in Chrome,
+   window at least 1,200 px wide (the response popup and dispatch cards are hidden under 720 px).
+2. Top-left pill says **Google 3D** (key in `.env.local`). "Map · fallback" also works; only the
+   backdrop changes.
+3. Boulder Creek is selected, the ignition marker sits west of town, the response popup is visible
+   top right with the switch **off**.
+4. Click **12 h**, **Simulate**: the stat chips must end at **176 ha / 1960 cells, Homes reached 262**.
+   Then **Dispatch response** at Standard: **Saved 24 ha · 13 %**. Then **Maximum**: **Saved 165 ha · 94 %**.
+5. Switch the response off, press the reset icon. Leave the duration at 12 h.
 
 ## If something breaks
 
 | Symptom | Do |
 |---|---|
-| Map tiles missing or "Fallback view" banner | Expected without a key or network. Carry on: the overlay does not depend on tiles. |
-| "Could not load ... Showing the offline backup" | Run the backup instead (it is a static file), or reload and try again. |
-| Simulate does nothing or the numbers look odd | **Reset**, then **Load demo scenario**. Check the settings table above against Conditions. |
-| The fire is already past the line when you draw it | Press **Reset**, or **Undo** and draw earlier (before 1h45). Or use **Show contained version**. |
-| Drawing on the 3D map is awkward | Use **Show contained version**: it applies the same line and spray in one click (Undo removes both). |
-| Playback too fast or slow | Speed chips under the clock (1x to 256x). |
-| Page hangs | Reload. Nothing is saved between loads, so Load demo scenario starts clean. |
+| Numbers differ from the table | Check Conditions (22 km/h, 250°, High, 12 h) and that the ignition was not moved: reload the page and click 12 h again. |
+| "Inputs changed · simulate again to replan" in the popup | You changed a setting after dispatching. Press **Dispatch response** again. |
+| Dispatch button greyed | No ignition (click a forest cell) or a run is in progress. |
+| "No useful assignment found" | Only happens on tiny or already contained fires; pick 12 h. |
+| Units pile up or labels overlap | Zoom out: labels hide beyond 7 km and the dispatch cards carry the status. |
+| Fallback banner / no tiles | Expected without the key or offline. Carry on. |
+| Page hangs | Reload. Nothing is saved between loads. |
 
-## Reproduce and re-tune
+## What is honest about it
 
-`npm run tune:demo` prints the full report and exits 1 if any promise breaks. Values live in
-`src/data/demo-scenarios.ts` (weather, ignition, duration, camera, the saved plan). To rebuild the Surrey
-area on a networked machine: `npm run build:demo-area -- --name surrey-hills --label "Surrey Hills (Leith Hill)" --center -0.376,51.175 --wind 225 --default GRASS`
-(Overpass can return 502 or time out: it tries three mirrors, so run it again if it fails). Reasoning and
-limits (why the fire is a teardrop, what "reaching the village" means): `DECISIONS.md` D29 and D30.
+The spread model is simplified (D3, D10, D13), the response units are order-of-magnitude realistic
+and uncalibrated (D27), and the planner is greedy: a bigger response is usually, not always, better
+(Red Flag day: Aggressive 54 %, Maximum 47 % on the 6 h run). The disclaimer under the title stays on.

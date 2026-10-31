@@ -4,7 +4,7 @@
  * pure function of playback time, so scrubbing works. Entities only; nothing here touches state.
  */
 
-import { Cartesian2, Cartesian3, Color, ConstantProperty, HeightReference, LabelStyle, VerticalOrigin } from 'cesium';
+import { Cartesian2, Cartesian3, Color, ConstantProperty, DistanceDisplayCondition, HeightReference, LabelStyle, VerticalOrigin } from 'cesium';
 import type { Entity, Viewer } from 'cesium';
 import type { GridSpec } from '../contract';
 import { UNITS, unitKinematicsAt } from '../contain';
@@ -24,6 +24,9 @@ export const UNIT_COLOR: Record<UnitType, string> = {
   helicopter: '#38bdf8',
   airtanker: '#f43f5e',
 };
+
+/** Unit labels are shown only when the camera is nearer than this (metres). */
+const LABEL_MAX_DISTANCE_M = 7000;
 
 interface Marker {
   order: Order;
@@ -80,6 +83,10 @@ export function createDispatchOverlay(viewer: Viewer): DispatchOverlay {
           showBackground: true,
           backgroundColor: Color.BLACK.withAlpha(0.45),
           backgroundPadding: new Cartesian2(5, 3),
+          // From the whole-grid views the labels of units working the same front pile up into an
+          // unreadable clump; the dispatch cards carry the status there. Labels appear once the
+          // camera is closer than this.
+          distanceDisplayCondition: new DistanceDisplayCondition(0, LABEL_MAX_DISTANCE_M),
         },
       });
       const water = order.tactic === 'wetline' || order.tactic === 'bucket' || order.tactic === 'retardant';

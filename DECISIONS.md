@@ -423,7 +423,7 @@ kinematics) and changes the model:
   what lives only on `scaffold/v0` (live weather, compass, ensembles, WorldCover builder, 16-direction
   stencil). The demo is built and tuned on this branch's 8-neighbour sim.
 - The on-screen "Simplified model" pill and the footer sentence are removed here too, on request
-  (same as `scaffold/v0` commit dda42f5). The demo copy and `DEMO.md` do not mention it.
+  (same as `scaffold/v0` commit dda42f5). The demo copy and `DEMO-SURREY.md` do not mention it.
 - Data fallback chain if Overpass is down: retry (3 mirrors, several passes), then the existing
   synthetic areas, labelled synthetic. Overpass was reachable when the Surrey bundle was built
   (it returns HTTP 502 or times out intermittently; a second pass worked).
@@ -524,3 +524,24 @@ California. That moved both demos. Surrey now burns 119 ha uncontained (was 191)
 saved plan holds it at 69 ha (58 %). The backup's fire reached its break at 39 % of the run, below the 40-60 % target, so
 only demo data changed: duration 6 h → 5.5 h, break at 2.1 h (was 2.4), spray at 2.5 h (was 2.8), pause at 2.0 h. All 16
 checks pass again; no model code was touched. The `tune:demo` checks exist so a change like this is caught.
+
+**Demo check, 2026-10-31.** Driving every feature headlessly (DEMO.md) found two planner bugs and
+one readability problem, fixed here:
+
+- *Aircraft dispatched before the detection delay.* A drop series started at the unit's arrival
+  time at the grid entry, so the dispatch time computed back from it fell short of the delay by the
+  entry-to-fire flight. Air units now start their first drop after that flight, like ground units
+  after their drive (`buildFor`); no order is dispatched before `delayS`.
+- *Maximum lost to Aggressive on Boulder Creek (75 % vs 87 % saved).* A long line budget puts the
+  candidate on a late isochrone far from the fire and takes hours to finish, and greedy lock-in
+  kept it. Levels with a budget over 500 m now also try every sector at half the budget, closer
+  in, and keep the better score. Sims per plan roughly double for Aggressive and Maximum (175 to
+  290 on a 200 × 200 grid, still about a second in the worker); Standard and Minimal are unchanged.
+  Maximum now saves 93-94 % where Aggressive saves 39-93 %. The planner is still greedy: on a Red
+  Flag 6 h run Aggressive beats Maximum (54 % vs 47 %), noted in DEMO.md rather than hidden.
+- *Unit labels piled up into an unreadable clump* from the whole-grid views. Labels get a
+  `DistanceDisplayCondition` of 7 km; the dispatch cards carry the status from further away.
+
+Not changed: the response popup and dispatch cards stay hidden under 720 px (the demo runs on a
+laptop), and the NASA FIRMS live tab depends on a server that answered slowly on the day.
+
