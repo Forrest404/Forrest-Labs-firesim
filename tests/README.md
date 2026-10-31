@@ -16,6 +16,7 @@ Vitest, Node environment, pure modules only (no Cesium, no DOM). `npm test` runs
   slope/aspect, OSM rules.
 - `tools.test.ts` — firebreak/water rasterisation, undo/redo, and "a tool-drawn firebreak stops
   the simulated fire".
+- `invariants.test.ts` — model invariants that hold for ANY parameters (causality, monotonicity in moisture/wind/slope, mirror and rotation symmetry, interventions never make fire arrive earlier, fuzzed over random scenarios). Every rate model in `MODELS` runs the same suite. Mutation-checked: injected sign bugs are caught.
 - `burnCanvas.test.ts` — overlay painters.
 
 The viewer and UI are verified by hand or headlessly (see `PROGRESS.md`), not by unit tests.
