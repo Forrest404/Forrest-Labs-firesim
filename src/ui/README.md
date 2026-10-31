@@ -3,7 +3,7 @@
 Plain TypeScript DOM UI (no framework). One side panel, notices, and a small `el()` helper.
 
 **Owns:** `panel.ts` (layout), `settingsSimple.ts`, `settingsAdvanced.ts`, `playback.ts`,
-`tools.ts` (tool palette + intervention list), `notices.ts` (honesty notice, fallback banner,
+`tools.ts` (tool palette + intervention list), `notices.ts` (fallback banner,
 errors, loading), `debug.ts` (debug toggles), `strings.ts` (ALL user-facing text), `styles.css`.
 `live.ts` is the Live fires pane; `panel.ts` holds the Simulation / Live fires tab bar
 (`controls.tabBar`) and shows one pane at a time (`state.view`).
@@ -12,7 +12,6 @@ errors, loading), `debug.ts` (debug toggles), `strings.ts` (ALL user-facing text
 
 **Rules**
 - Every user-facing string lives in `strings.ts`. Never write "exact" or "accurate" in copy.
-- The honesty notice ("Simplified model. Not for real-world decisions.") is always visible.
 - Panels read and write the app store (`src/app/state.ts`); they never own state.
 - Units: the store is SI; sliders convert at the edge (e.g. km/h shown, m/s stored).
 

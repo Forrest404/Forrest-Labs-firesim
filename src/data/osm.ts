@@ -125,12 +125,11 @@ export function buildFuelGrid(
       else if (closed) features.push({ rule, rings: [pts], tags: el.tags });
       else stats.skippedUnclosed++;
     } else if (el.type === 'relation' && el.members && rule.kind === 'area') {
-      const rings: Pt[][] = [];
-      for (const m of el.members) {
-        if (m.type !== 'way' || !m.geometry || m.geometry.length < 4) continue;
-        if (isClosed(m.geometry)) rings.push(toCell(m.geometry));
-        else stats.skippedUnclosed++;
-      }
+      // A multipolygon's outline is often split across several ways: join them into rings first.
+      const parts = el.members.filter((m) => m.type === 'way' && m.geometry && m.geometry.length >= 2).map((m) => m.geometry!);
+      const assembled = assembleRings(parts);
+      stats.skippedUnclosed += assembled.unjoined;
+      const rings = assembled.rings.map(toCell);
       if (rings.length > 0) features.push({ rule, rings, tags: el.tags });
     }
   }
@@ -145,6 +144,53 @@ export function buildFuelGrid(
     stats[f.rule.name] = (stats[f.rule.name] ?? 0) + count;
   }
   return { fuel, stats };
+}
+
+const pointKey = (p: OsmGeomPoint): string => `${p.lat},${p.lon}`;
+
+/**
+ * Joins the member ways of a multipolygon into closed rings. Ways that are already closed pass
+ * through; open ways are chained end to end (in any order and direction, matching shared node
+ * coordinates exactly as Overpass returns them). A chain that never closes (the rest of the ring is
+ * outside the extract, or the data is broken) is not turned into a polygon: it is counted in
+ * `unjoined`. Where three or more ways meet at one node the pairing is greedy, which can leave
+ * chains unjoined; that is counted, never hidden.
+ */
+export function assembleRings(parts: OsmGeomPoint[][]): { rings: OsmGeomPoint[][]; unjoined: number } {
+  const rings: OsmGeomPoint[][] = [];
+  const open: OsmGeomPoint[][] = [];
+  for (const p of parts) {
+    if (isClosed(p)) rings.push(p);
+    else if (p.length >= 2) open.push(p);
+  }
+  const used = new Array<boolean>(open.length).fill(false);
+  const byEnd = new Map<string, number[]>();
+  const index = (key: string, i: number): void => {
+    const list = byEnd.get(key);
+    if (list) list.push(i);
+    else byEnd.set(key, [i]);
+  };
+  open.forEach((p, i) => {
+    index(pointKey(p[0]), i);
+    index(pointKey(p[p.length - 1]), i);
+  });
+  let unjoined = 0;
+  for (let i = 0; i < open.length; i++) {
+    if (used[i]) continue;
+    used[i] = true;
+    let chain = open[i].slice();
+    while (!isClosed(chain)) {
+      const tail = chain[chain.length - 1];
+      const j = (byEnd.get(pointKey(tail)) ?? []).find((k) => !used[k]);
+      if (j === undefined) break;
+      used[j] = true;
+      const seg = open[j];
+      chain = pointKey(seg[0]) === pointKey(tail) ? chain.concat(seg.slice(1)) : chain.concat(seg.slice(0, -1).reverse());
+    }
+    if (isClosed(chain)) rings.push(chain);
+    else unjoined++;
+  }
+  return { rings, unjoined };
 }
 
 function isClosed(g: OsmGeomPoint[]): boolean {

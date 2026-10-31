@@ -1,5 +1,5 @@
 /**
- * Side panel: brand header (title, viewer-mode pill, collapse), compact honesty pill, then one
+ * Side panel: brand header (title, viewer-mode pill, collapse), then one
  * card per section. Sections mount themselves into the bodies handed to them.
  */
 
@@ -9,6 +9,8 @@ import type { AreaPickerActions } from './areaPicker';
 import type { LiveActions } from '../app/liveController';
 import { iconButton, section, segmented, tabBar, toggle } from './controls';
 import { mountDebug } from './debug';
+import { mountDemoCard } from './demoCard';
+import type { DemoActions } from './demoCard';
 import { mountLive } from './live';
 import { el } from './el';
 import { icon } from './icons';
@@ -18,6 +20,7 @@ import { mountSettingsSimple } from './settingsSimple';
 import { STR } from './strings';
 
 export interface PanelActions extends AreaPickerActions, PlaybackActions, LiveActions {
+  demo: DemoActions;
   topDown(): void;
   resetView(): void;
 }
@@ -42,10 +45,12 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
     el('div', { class: 'brand-left' }, el('h1', {}, STR.appTitle)),
     el('div', { class: 'brand-right' }, modePill, collapseBtn),
   );
-  const honestyText = el('span', {}, STR.honestyNotice);
-  const honesty = el('div', { class: 'honesty', title: STR.honestyDetail, tabindex: '0' }, icon('info', 14), honestyText);
+  // Only the Live tab carries a data note (satellite age); the simulator view has none by request.
+  const honesty = el('div', { class: 'honesty', title: STR.liveHonesty, tabindex: '0' }, icon('info', 14), el('span', {}, STR.honestyNoticeLive));
+  honesty.hidden = true;
 
   // Sections
+  const demo = section('sparkles', STR.demoTitle, { class: 'demo' });
   const area = section('map', STR.areaLabel);
   const settings = section('wind', STR.settingsTitle);
   const sim = section('flame', STR.simulateTitle, { class: 'sim' });
@@ -97,12 +102,13 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
     (v) => actions.setView(v),
     { ariaLabel: STR.tabsLabel },
   );
-  const simPane = el('div', { class: 'pane', role: 'tabpanel' }, area.root, settings.root, sim.root, tools.root, advanced.root, view.root);
+  const simPane = el('div', { class: 'pane', role: 'tabpanel' }, demo.root, area.root, settings.root, sim.root, tools.root, advanced.root, view.root);
   const livePane = el('div', { class: 'pane', role: 'tabpanel' });
   livePane.hidden = true;
   tabs.set('sim');
   root.append(header, honesty, tabs.root, simPane, livePane, footer);
 
+  mountDemoCard(demo.body, store, actions.demo);
   mountAreaPicker(area.body, store, actions);
   mountSettingsSimple(settings.body, store);
   mountPlayback(sim.body, store, actions);
@@ -115,8 +121,7 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
       simPane.hidden = s.view !== 'sim';
       livePane.hidden = s.view !== 'live';
       footer.textContent = s.view === 'live' ? STR.liveFooter : STR.footer;
-      honestyText.textContent = s.view === 'live' ? STR.honestyNoticeLive : STR.honestyNotice;
-      honesty.title = s.view === 'live' ? STR.liveHonesty : STR.honestyDetail;
+      honesty.hidden = s.view !== 'live';
       modePill.hidden = s.view === 'live';
     }
     advanced.root.classList.toggle('open', s.advancedOpen);

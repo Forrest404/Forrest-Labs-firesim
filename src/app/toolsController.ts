@@ -16,6 +16,8 @@ export interface ToolsController {
   redo(): void;
   remove(id: string): void;
   clearAll(): void;
+  /** Adds several interventions as ONE undo step (used by the demo's "Show contained version"). */
+  applyAll(list: Intervention[]): void;
   readonly canUndo: boolean;
   readonly canRedo: boolean;
 }
@@ -87,6 +89,9 @@ export function createToolsController(store: Store, wiring: Wiring): ToolsContro
     redo: () => applyHistory(history.redo()),
     remove: (id) => commit(store.get().interventions.filter((iv) => iv.id !== id)),
     clearAll: () => commit([]),
+    applyAll: (list) => {
+      if (list.length) commit([...store.get().interventions, ...list]);
+    },
     get canUndo() {
       return history.canUndo;
     },

@@ -12,6 +12,8 @@ import { mountTools } from '../ui/tools';
 import { startClock } from './clock';
 import { createLiveController } from './liveController';
 import { createStore } from './state';
+import { createDemoController } from './demoController';
+import type { DemoController } from './demoController';
 import { createToolsController } from './toolsController';
 import { wire } from './wiring';
 
@@ -36,9 +38,10 @@ async function main(): Promise<void> {
   window.addEventListener('error', (e) => report(e.message));
   window.addEventListener('unhandledrejection', (e) => report(e.reason instanceof Error ? e.reason.message : String(e.reason)));
 
-  // Panel first so the honesty notice is visible even if the viewer fails.
+  // Panel first so it is visible even if the viewer fails.
   let wiringRef: ReturnType<typeof wire> | null = null;
   const live = createLiveController(store, notices, firms, (lon, lat, r) => wiringRef?.flyToLonLat(lon, lat, r));
+  let demoRef: DemoController | null = null;
   const slots = mountPanel(panelEl, store, {
     ...live,
     selectArea: (name) => void wiringRef?.selectArea(name),
@@ -46,6 +49,11 @@ async function main(): Promise<void> {
     cancel: () => wiringRef?.cancel(),
     topDown: () => wiringRef?.topDown(),
     resetView: () => wiringRef?.resetView(),
+    demo: {
+      load: (id) => void demoRef?.load(id),
+      reset: () => void demoRef?.reset(),
+      showContained: () => demoRef?.showContained(),
+    },
   });
   mountSettingsAdvanced(slots.advanced, store);
 
@@ -63,7 +71,10 @@ async function main(): Promise<void> {
 
   const wiring = wire(handle.viewer, store, notices, { setBackdrop: handle.setBackdrop, setBasemap: handle.setBasemap });
   wiringRef = wiring;
-  mountTools(slots.tools, store, createToolsController(store, wiring));
+  const toolsController = createToolsController(store, wiring);
+  mountTools(slots.tools, store, toolsController);
+  const demo = createDemoController(store, wiring, toolsController, notices);
+  demoRef = demo;
   startClock(store);
 
   try {
@@ -96,7 +107,7 @@ async function main(): Promise<void> {
 
   if (import.meta.env.DEV) {
     // Dev/test hook (not in production builds): lets headless tests and teammates poke the app.
-    (window as unknown as { __firesim: unknown }).__firesim = { store, wiring, live, viewer: handle.viewer };
+    (window as unknown as { __firesim: unknown }).__firesim = { store, wiring, live, viewer: handle.viewer, demo };
   }
   console.log('[app] ready', { mode: handle.mode });
 }

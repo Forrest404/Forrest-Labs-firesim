@@ -336,3 +336,89 @@ every sentence). The content was fine, so this pass changes only chrome and copy
   replaced by a text credit since ion is never used.
 The overrides sit at the end of `styles.css` so the old rules can still be diffed; folding
 them in is a follow-up.
+
+## D25. Demo scenario work: base, disclaimer, fallbacks
+
+- Branch `feature/demo-scenario` is cut from `main` in its own worktree (`../Forrest-Labs-firesim-demo`)
+  because the shared directory had another session's uncommitted edits. It therefore does NOT have
+  what lives only on `scaffold/v0` (live weather, compass, ensembles, WorldCover builder, 16-direction
+  stencil). The demo is built and tuned on this branch's 8-neighbour sim.
+- The on-screen "Simplified model" pill and the footer sentence are removed here too, on request
+  (same as `scaffold/v0` commit dda42f5). The demo copy and `DEMO.md` do not mention it.
+- Data fallback chain if Overpass is down: retry (3 mirrors, several passes), then the existing
+  synthetic areas, labelled synthetic. Overpass was reachable when the Surrey bundle was built
+  (it returns HTTP 502 or times out intermittently; a second pass worked).
+
+## D26. Surrey Hills data: multipolygon woodland was being dropped (fixed), class shares, road check
+
+**Bug found by looking at the first Surrey build.** The builder only used a multipolygon relation's
+member ways that were already closed on their own. Large woodlands are usually split over several ways,
+so they were skipped (17 "unclosed" shapes) and the whole ridge-top wood of Leith Hill came out as
+default fill (21 % of the grid). `assembleRings` (`src/data/osm.ts`) now joins member ways end to end
+into rings (any order or direction, shared node coordinates matched exactly); chains that do not close
+are still counted in `skippedUnclosed`, never turned into polygons. After the fix: 0 skipped, default fill
+5.5 % (scattered gardens and verges). Tests: `tests/osmRings.test.ts` (fuzzed order and direction,
+holes, unjoinable chains, through `buildFuelGrid`); mutation-checked.
+
+**Surrey Hills bundle** (`public/demo-areas/surrey-hills.json`, real OpenStreetMap land cover and AWS
+Terrain Tiles, 200 x 200 cells of 30 m around 51.175 N, -0.376 E; unmapped land = GRASS, D10):
+conifer forest 48.5 %, farmland 34.1 %, grass 10.7 %, non-burnable 4.0 %, shrub 2.5 %, deciduous 0.1 %.
+Elevation 61-300 m. Trees default to conifer unless OSM says `leaf_type=broadleaved`, so the mixed
+Surrey woods read as mostly conifer (the model treats them as one dense woodland class anyway).
+Non-burnable is far from "mostly": the grid is not walled in.
+
+**Road leak check (fuzzed).** A 1-cell road cannot be crossed by a fire that moves to its 8
+neighbours: `lineCells` adds an orthogonal bridge cell whenever a step changes both row and column,
+which makes every rasterised line 4-connected. `tests/roadLeak.test.ts` fuzzes this three ways
+(connectivity of 400 random polylines; 300 roads built through `buildFuelGrid` for every road class
+separate the two sides under 8-neighbour flood fill; 40 solver runs pushed hard at a road never burn
+the far side). Removing the bridge makes three tests fail, so they would catch a regression. No change
+to the rasteriser was needed. Consequence for the demo: with no spotting on this branch a road is an
+absolute barrier, so the fire can only reach what is in its own compartment of woodland.
+
+## D27. Demo scenarios: tuned values, and what the model can and cannot show
+
+Values live in `src/data/demo-scenarios.ts`; `npm run tune:demo` prints the report and
+`tests/demoScenario.test.ts` guards the same checks (`src/app/demoEval.ts`). Only weather, ignition,
+duration and the saved plan were tuned; `src/contract` and the sim physics are untouched, default
+settings (factors rate model).
+
+**Surrey Hills** (real data): ignition cell (row 142, col 102) = 51.1635 N, -0.3749 E (110 m), dense
+woodland on the low south-west side; wind from 225 deg (SW) at 25 km/h, dryness high, 4 h, seed 1.
+Threatened: a disc of 8 cells (240 m) around Coldharbour at (97, 109). Uncontained: 191 ha, reaches the
+zone at 2.65 h (66 % of the run), head at the break line at 1.80 h (45 %). Contained plan (cell-space
+[col, row]): firebreak (94, 118.5) to (132, 118.5), width 3, at t = 1.6 h (anchored on the road at col 94,
+1.1 km long); water spray radius 4 along (137, 116) to (137, 120) at t = 2 h (the open east end). Result:
+118 ha (62 %), village zone never reached, and still not at 6 h. Wind from 45 deg instead: the fire turns
+168 deg (SSW) and burns 31 ha.
+
+**Backup** (generated "Forest Ridge", river on the east side): ignition (114, 124), wind from 270 deg
+(W) at 25 km/h, high, 6 h. Threatened: 8 cells around the generated village at (121, 165). Uncontained:
+143 ha, zone at 5.07 h (84 %), head at the line at 2.71 h (45 %). Plan: firebreak col 148.5, rows 90 to 136
+(1.4 km, north-south, across the front), width 3, at t = 2.4 h; water spray r4 at (151, 87) and (151, 139) at
+2.8 h. Result: 95 ha (66 %), zone never reached. Flipped wind: head turns 115 deg, 242 ha.
+
+**Why not the brief's exact picture.** (1) The village is not a block of non-burnable cells: OSM maps most
+Coldharbour buildings as tiny footprints and the village as residential land (deliberately not a barrier,
+D13), so "reaching the village" means burning any cell within 240 m of its centre. (2) With no spotting a
+road is an absolute wall, so fire stays in its own compartment of woodland; the demo ignition was chosen
+inside the compartment south of Coldharbour. (3) This model's wind factor makes a fat teardrop, not a thin
+ellipse: on flat ground at 25 km/h a fire reaches about 40 cells downwind and 2 upwind but is 30 cells wide.
+At the moment the Surrey fire reaches the zone its aspect (length / width) is 1.28 and it reaches 1201 m
+ahead and 64 m behind the ignition. So "elongated" is asserted as: head within 40 deg of downwind, at least
+4x further ahead than behind, aspect at least 1.25. A thinner ellipse would need a change to the sim, which
+is out of scope. (4) Wind speed and dryness barely change the shape; they change the speed (35 km/h and
+"extreme" made fires faster, not thinner). (5) A SSW wind (195 deg) gives a more direct hit and aspect up to
+2.9 but departs further from the brief's south-westerly.
+
+**What the contained run looks like.** The break is anchored on the road at its west end only; the east
+side is open farmland, so some fire still spills round the east end of the line toward the north-east. It
+is held away from Coldharbour (never reaches the zone, not even at 6 h) and burns 62 % of the area, but the
+picture is "held back", not "stopped dead". A longer line (to col 160, 2 km) lowers the area to about 51 %
+but is a long drag for a presenter.
+
+**Other choices.** `surrey-hills` is listed first in `index.json`, so it is now the area the app opens on
+(the loader takes the first entry). Camera: flies to the middle of the action (Surrey (120, 105),
+backup (118, 145)) 2.6-2.8 km out, looking along the fire, rather than framing the whole 6 km grid. Unmapped land is GRASS (D10). Playback speed 256x for both scenarios (4 h = 56 s,
+6 h = 84 s of real time). Camera heading 40 deg (Surrey) / 70 deg (backup), pitch -30, looking along the
+fire. A run takes about 5 ms, so re-simulation after every change is instant.

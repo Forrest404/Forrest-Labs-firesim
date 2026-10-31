@@ -85,12 +85,6 @@ button:disabled { cursor: not-allowed; }
 .pill.live .dot { background: var(--ok); box-shadow: 0 0 0 3px rgba(74, 209, 122, 0.2); }
 .pill.tag { height: 20px; padding: 0 7px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
 
-.honesty {
-  display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: var(--radius-sm);
-  background: var(--accent-soft); border: 1px solid rgba(255, 122, 26, 0.35); color: #ffd2ad; font-size: 12px; font-weight: 600;
-  cursor: help;
-}
-
 /* ---------- Cards ---------- */
 .card {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
@@ -451,3 +445,16 @@ ul.interventions li { border-radius: 4px; }
   #panel { padding: 16px 14px 14px; }
 }
 .sub-title { font-size: 12.5px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--muted); }
+
+/* ---------- Demo card ---------- */
+.demo .row { display: flex; flex-wrap: nowrap; gap: 8px; }
+.demo .row button { flex: 1 1 auto; min-width: 0; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.demo .row button.reset { flex: 0 0 auto; }
+.demo-tips {
+  display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: var(--radius-sm);
+  background: var(--surface-2, rgba(255, 255, 255, 0.04)); border: 1px solid var(--border); font-size: 12px; line-height: 1.4;
+}
+.demo-tips[hidden] { display: none; }
+.demo-tips .tips-h { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-top: 2px; }
+.demo-tips .tip { display: flex; gap: 8px; align-items: baseline; }
+.demo-tips .tip b, .demo-tips .tip kbd { flex: 0 0 74px; font-variant-numeric: tabular-nums; font-family: inherit; color: var(--accent); font-weight: 600; }
