@@ -9,6 +9,8 @@ import { mountPanel } from '../ui/panel';
 import { STR } from '../ui/strings';
 import { createViewer } from '../viewer/createViewer';
 import { mountSettingsAdvanced } from '../ui/settingsAdvanced';
+import { mountPlanner } from '../ui/planner';
+import { mountRealVsSim } from '../ui/realVsSim';
 import { mountTools } from '../ui/tools';
 import { startClock } from './clock';
 import { createLiveController } from './liveController';
@@ -44,12 +46,18 @@ async function main(): Promise<void> {
     ...live,
     selectArea: (name) => void wiringRef?.selectArea(name),
     simulate: () => void wiringRef?.simulate(),
+    compareWithRealFire: () => void wiringRef?.compareWithRealFire(),
+    realVsSim: () => void wiringRef?.realVsSim(),
     cancel: () => wiringRef?.cancel(),
     topDown: () => wiringRef?.topDown(),
     resetView: () => wiringRef?.resetView(),
+    groundView: () => wiringRef?.groundView(),
+    loadLiveFires: () => void wiringRef?.loadLiveFires(),
+    predictLiveFire: (fire) => void wiringRef?.predictLiveFire(fire),
   });
   mountSettingsAdvanced(slots.advanced, store);
   mountDispatchHud(document.getElementById('app') as HTMLElement, store);
+  mountRealVsSim(document.getElementById('app') as HTMLElement, store, () => wiringRef?.groundView());
 
   notices.persistent('loading', STR.loadingArea, 'info');
   const handle = await createViewer({
@@ -57,14 +65,16 @@ async function main(): Promise<void> {
     googleApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined,
     onModeChange: (mode, reason) => {
       store.set({ viewerMode: mode });
-      notices.persistent('fallback', `${STR.fallbackBanner} ${reason}`);
+      notices.show(`${STR.fallbackBanner} ${reason}`, 'warn', 8000);
     },
   });
   store.set({ viewerMode: handle.mode });
-  if (handle.mode === 'fallback') notices.persistent('fallback', `${STR.fallbackBanner} ${handle.fallbackReason}`);
+  // Shown briefly: a persistent banner would cover the time scrubber. The panel keeps a mode pill.
+  if (handle.mode === 'fallback') notices.show(`${STR.fallbackBanner} ${handle.fallbackReason}`, 'warn', 8000);
 
   const wiring = wire(handle.viewer, store, notices, { setBackdrop: handle.setBackdrop, setBasemap: handle.setBasemap });
   wiringRef = wiring;
+  mountPlanner(slots.planner, store, wiring);
   mountTools(slots.tools, store, createToolsController(store, wiring));
   startClock(store);
 

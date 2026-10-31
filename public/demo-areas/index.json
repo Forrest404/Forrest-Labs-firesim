@@ -2,6 +2,28 @@
   "version": 1,
   "areas": [
     {
+      "name": "boulder-creek",
+      "label": "Boulder Creek, CA",
+      "synthetic": false,
+      "file": "boulder-creek.json",
+      "center": {
+        "lon": -122.122,
+        "lat": 37.126
+      },
+      "description": "Real land cover (OpenStreetMap) and elevation (AWS Terrain Tiles) around 37.126, -122.122. Land without an OSM land-cover polygon is assumed to be conifer forest (redwoods). OSM fetched in overpass-turbo on 2026-10-31."
+    },
+    {
+      "name": "crozier",
+      "label": "Crozier Fire 2024, CA (real-fire test)",
+      "synthetic": false,
+      "file": "crozier.json",
+      "center": {
+        "lon": -120.68995,
+        "lat": 38.83855
+      },
+      "description": "Real pre-fire fuel (LANDFIRE 2023, Scott & Burgan 40 fuel models) and elevation (AWS Terrain Tiles) around the 2024 Crozier Fire, El Dorado County. Simulated with the Rothermel spread model."
+    },
+    {
       "name": "alpirsbach",
       "label": "Alpirsbach, Black Forest",
       "synthetic": false,
@@ -11,17 +33,6 @@
         "lat": 48.345
       },
       "description": "Real land cover (OpenStreetMap) and elevation (AWS Terrain Tiles) around 48.345, 8.400."
-    },
-    {
-      "name": "boulder-creek",
-      "label": "Boulder Creek, CA",
-      "synthetic": false,
-      "file": "boulder-creek.json",
-      "center": {
-        "lon": -122.122,
-        "lat": 37.126
-      },
-      "description": "Real land cover (OpenStreetMap) and elevation (AWS Terrain Tiles) around 37.126, -122.122."
     },
     {
       "name": "synthetic-ridge",

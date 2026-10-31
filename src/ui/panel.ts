@@ -11,6 +11,8 @@ import type { LiveActions } from '../app/liveController';
 import { iconButton, section, segmented, tabBar, toggle } from './controls';
 import { mountDebug } from './debug';
 import { mountLive } from './live';
+import { mountLiveFires } from './liveFires';
+import type { LiveFiresActions } from './liveFires';
 import { el } from './el';
 import { icon } from './icons';
 import { mountPlayback } from './playback';
@@ -18,9 +20,10 @@ import type { PlaybackActions } from './playback';
 import { mountSettingsSimple } from './settingsSimple';
 import { STR } from './strings';
 
-export interface PanelActions extends AreaPickerActions, PlaybackActions, LiveActions {
+export interface PanelActions extends AreaPickerActions, PlaybackActions, LiveActions, LiveFiresActions {
   topDown(): void;
   resetView(): void;
+  groundView(): void;
 }
 
 export interface PanelSlots {
@@ -28,6 +31,8 @@ export interface PanelSlots {
   tools: HTMLElement;
   /** Section body for the advanced settings. */
   advanced: HTMLElement;
+  /** Section body for "Suggest a plan" (Gemini + simulator check). */
+  planner: HTMLElement;
 }
 
 export function mountPanel(root: HTMLElement, store: Store, actions: PanelActions): PanelSlots {
@@ -50,6 +55,8 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
   const settings = section('wind', STR.settingsTitle);
   const sim = section('flame', STR.simulateTitle, { class: 'sim' });
   const respond = section('target', STR.containTitle, { class: 'respond' });
+  const planner = section('sparkles', STR.planTitle);
+  const predict = section('globe', STR.predictTitle, { class: 'live' });
   const tools = section('axe', STR.toolsTitle);
   const advChevron = el('span', { class: 'chev' }, icon('chevron', 16));
   const advanced = section('sliders', STR.advancedTitle, { class: 'adv', trailing: advChevron });
@@ -64,8 +71,10 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
   advanced.header.addEventListener('click', toggleAdvanced);
   advanced.header.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleAdvanced(); } });
 
+  const groundBtn = iconButton('camera', STR.cameraGround, () => actions.groundView());
   const view = section('eye', STR.viewTitle, {
     trailing: el('div', { class: 'row tight' },
+      groundBtn,
       iconButton('topdown', STR.cameraTopDown, () => actions.topDown()),
       iconButton('compass', STR.cameraReset, () => actions.resetView()),
     ),
@@ -98,7 +107,7 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
     (v) => actions.setView(v),
     { ariaLabel: STR.tabsLabel },
   );
-  const simPane = el('div', { class: 'pane', role: 'tabpanel' }, area.root, settings.root, sim.root, respond.root, tools.root, advanced.root, view.root);
+  const simPane = el('div', { class: 'pane', role: 'tabpanel' }, area.root, settings.root, sim.root, respond.root, planner.root, tools.root, advanced.root, view.root);
   const livePane = el('div', { class: 'pane', role: 'tabpanel' });
   livePane.hidden = true;
   tabs.set('sim');
@@ -110,6 +119,8 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
   mountContain(respond.body, store);
   mountDebug(debugBody, store);
   mountLive(livePane, store, actions);
+  livePane.append(predict.root);
+  mountLiveFires(predict.body, store, actions);
 
   store.subscribe((s, prev) => {
     if (s.view !== prev.view) {
@@ -118,6 +129,8 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
       livePane.hidden = s.view !== 'live';
       footer.textContent = s.view === 'live' ? STR.liveFooter : STR.footer;
     }
+    groundBtn.classList.toggle('active', s.groundFollow);
+    groundBtn.setAttribute('aria-pressed', s.groundFollow ? 'true' : 'false');
     advanced.root.classList.toggle('open', s.advancedOpen);
     advanced.header.setAttribute('aria-expanded', s.advancedOpen ? 'true' : 'false');
     modePill.classList.toggle('live', s.viewerMode === 'google');
@@ -131,5 +144,5 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
     quality.set(s.effects.quality);
     quality.setDisabled(!(s.effects.flames || s.effects.embers || s.effects.smokeParticles));
   });
-  return { tools: tools.body, advanced: advanced.body };
+  return { tools: tools.body, advanced: advanced.body, planner: planner.body };
 }

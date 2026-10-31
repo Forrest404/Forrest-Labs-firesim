@@ -13,6 +13,7 @@ import { icon } from './icons';
 import { STR } from './strings';
 
 const DURATIONS = [3600, 3 * 3600, 6 * 3600, 12 * 3600, 24 * 3600];
+const RED_FLAG_WIND_KMH = 40;
 
 export function mountSettingsSimple(container: HTMLElement, store: Store): void {
   const speed = slider({ min: 0, max: 80, step: 1, ariaLabel: STR.windSpeed }, (v) =>
@@ -60,6 +61,13 @@ export function mountSettingsSimple(container: HTMLElement, store: Store): void 
     { ariaLabel: STR.duration, class: 'grow' },
   );
 
+  // One click for the demo: extreme dryness and Red Flag wind, keeping the wind direction.
+  const redFlag = el('button', {
+    type: 'button',
+    title: STR.redFlagTitle,
+    onclick: () => store.update((s) => ({ weather: { ...applyDrynessPreset(s.weather, 'extreme'), windSpeedMps: RED_FLAG_WIND_KMH / 3.6 }, ...staleIfResult(s) })),
+  }, icon('flame', 16), el('span', {}, STR.redFlag));
+
   container.append(
     row(STR.windSpeed, speed, speedVal),
     el('div', { class: 'ctl-row wind' },
@@ -68,6 +76,7 @@ export function mountSettingsSimple(container: HTMLElement, store: Store): void 
     ),
     el('div', { class: 'ctl-row stacked' }, el('div', { class: 'ctl-label-row' }, el('span', { class: 'ctl-label' }, STR.dryness), drynessVal), dryness.root),
     el('div', { class: 'ctl-row stacked' }, el('span', { class: 'ctl-label' }, STR.duration), duration.root),
+    el('div', { class: 'row' }, redFlag),
   );
 
   store.subscribe((s) => {

@@ -10,6 +10,9 @@ import type { Basemap, ViewerMode } from '../viewer/createViewer';
 import { DEFAULT_FILTERS } from '../data/firms';
 import type { FireRegion, Hotspot, HotspotFilters, LiveSource } from '../data/firms';
 import type { ContainOverrides, ContainPlan, ResponseLevel } from '../contain';
+import type { PlanState } from './planner';
+import type { ControlRun } from './realFire';
+import type { LiveFire } from '../data/liveFire';
 
 export type ToolId = 'ignite' | 'firebreak' | 'water';
 
@@ -120,6 +123,23 @@ export interface AppState {
   interventions: Intervention[];
 
   result: SimResult | null;
+  /** The same run without any interventions, for "homes reached: before -> after". Equals `result` when there are none. */
+  baseline: SimResult | null;
+  /** Gemini (or built-in) plan suggestions and their verification. */
+  plan: PlanState | null;
+  /** Accuracy colours against the area's real fire instead of the fire colours. */
+  compare: boolean;
+  /** No-wind and reversed-wind re-runs from "Compare with real fire", for the current result. */
+  controls: ControlRun[] | null;
+  /** The "Real vs simulation" card: the real perimeter and our run side by side. */
+  sideBySide: boolean;
+  /** Ground view: the camera stays low in front of the fire front while it plays. */
+  groundFollow: boolean;
+  /** Fires reported now (NIFC), once loaded; null before the first load. */
+  liveFires: LiveFire[] | null;
+  liveLoading: boolean;
+  /** Draw the 1 h / 3 h / 6 h forecast rings on the overlay (live fires). */
+  forecast: boolean;
   /** True when inputs changed since `result` was computed. */
   resultStale: boolean;
   simRunning: boolean;
@@ -177,10 +197,19 @@ export function initialState(): AppState {
     ignition: null,
     interventions: [],
     result: null,
+    baseline: null,
+    plan: null,
+    compare: false,
+    controls: null,
+    sideBySide: false,
+    groundFollow: false,
+    liveFires: null,
+    liveLoading: false,
+    forecast: false,
     resultStale: false,
     simRunning: false,
     simError: null,
-    playback: { t: 0, playing: false, speed: 64 },
+    playback: { t: 0, playing: false, speed: 256 },
     tool: 'ignite',
     toolParams: { firebreakWidthCells: 3, waterRadiusCells: 3, preClear: false },
     debug: { outline: false, fuel: false, slope: false },

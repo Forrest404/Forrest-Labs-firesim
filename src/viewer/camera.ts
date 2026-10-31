@@ -58,3 +58,36 @@ export function flyToCell(viewer: Viewer, grid: GridSpec, cell: CellRef, heightM
     offset: new HeadingPitchRange(CesiumMath.toRadians(35), CesiumMath.toRadians(-28), rangeM),
   });
 }
+
+export interface GroundPose {
+  lon: number;
+  lat: number;
+  /** Camera height above the ellipsoid, metres. */
+  heightM: number;
+  /** Compass heading the camera looks toward, degrees. */
+  headingDeg: number;
+}
+
+/**
+ * Ground view: low and in front of the fire, looking back at it as it comes toward you.
+ * `front` is the fire front (or ignition), `towardDeg` the direction the wind pushes the fire.
+ */
+export function groundPose(front: { lon: number; lat: number }, groundM: number, towardDeg: number, distanceM = 1300, heightM = 300): GroundPose {
+  const a = CesiumMath.toRadians(towardDeg);
+  const dx = Math.sin(a) * distanceM;
+  const dy = Math.cos(a) * distanceM;
+  return {
+    lon: front.lon + dx / (111320 * Math.cos(CesiumMath.toRadians(front.lat))),
+    lat: front.lat + dy / 111320,
+    heightM: groundM + heightM,
+    headingDeg: (towardDeg + 180) % 360,
+  };
+}
+
+export function flyToGround(viewer: Viewer, p: GroundPose, durationS = 1.5): void {
+  viewer.camera.flyTo({
+    destination: Cartesian3.fromDegrees(p.lon, p.lat, p.heightM),
+    orientation: { heading: CesiumMath.toRadians(p.headingDeg), pitch: CesiumMath.toRadians(-20), roll: 0 },
+    duration: durationS,
+  });
+}

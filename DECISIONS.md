@@ -356,3 +356,45 @@ kinematics) and changes the model:
 - **Cost.** A full plan is 20-130 sims and finishes in well under a second on a 200×200 grid,
   so candidates are evaluated per unit, not per unit type, and every level tries all eight
   sectors each cycle.
+
+## D25. California first, real fire test, impact number, AI plan (Person B/C follow-up)
+
+- **Areas:** `index.json` now lists Boulder Creek first (opens by default), then `crozier`. Boulder
+  Creek's unmapped land is conifer, not grass (it's redwood forest; only OSM-mapped grassland stays
+  grass), and its suggested ignition is in the forest 1.2 km west of town (37.1221, -122.1347).
+  Built by `npm run build:california` from OSM extracts in `scripts/data/`. Overpass refuses
+  scripted requests, so those were fetched in overpass-turbo in a browser and rasterised there with
+  the same rules as `src/data/osm.ts`.
+- **Fuel numbers:** shrub 0.045 -> 0.06 m/s (chaparral is fast under wind), farmland 0.03 -> 0.015
+  (irrigated orchards/vineyards). `globalMultiplier` stays 1: on Crozier the sim already grows faster
+  than the real fire did early on.
+- **Real-fire test (`crozier`):** real perimeter (NIFC), ignition and afternoon weather (Open-Meteo).
+  The panel reports IoU at the moment the run reaches the real size, so the score measures where the
+  fire goes, not how fast. With the real wind: 63 % IoU; wrong wind direction 33 %; no wind 24 %.
+- **Homes reached:** bundles may carry per-cell building counts (`homesBase64`). A home counts as
+  reached when fire arrives in its cell or any neighbour. With interventions, the sim also runs the
+  same scenario without them on the main thread (~15 ms) to show "before -> after".
+- **AI plan:** Gemini (REST, `VITE_GEMINI_API_KEY`, `VITE_GEMINI_MODEL`) proposes up to 3 firebreak
+  lines within a 4.5 km budget, from 30 min. The sim re-runs each proposal; a plan is accepted only if
+  it cuts homes reached (or burned area) by 25 %. Rejected plans go back to Gemini with the numbers,
+  up to 3 attempts. Without a key a labelled built-in planner is used. The key is in the browser
+  bundle, so restrict it to the Generative Language API and the deploy domain.
+
+## D26. Water: keep every spray, and let the fire wait for the best moment (open question)
+
+Found by the fuzzed invariant in `tests/invariants.test.ts` once the branches were merged.
+
+- **Fixed: a later spray erased an earlier one.** Only the latest spray per cell was kept, so before
+  the second spray the cell counted as dry. Now every spray is kept and the wettest remaining one
+  counts (`src/sim/events.ts`, `tests/water.test.ts`).
+- **Fixed: spreading into a drying cell was not time-consistent.** Leaving a source later could
+  reach a sprayed cell sooner (it had dried more), which breaks Dijkstra's assumption and made a cell
+  burn up to ~80 s earlier when more interventions were added. The solver now searches for the best
+  moment to leave the source (ternary search; arrival vs leave time is unimodal for one spray).
+  Sim time on 200 x 200 went from ~18 ms to ~57 ms.
+- **Open, for the team:** the invariant still fails for seed 208 by ~15 s. Cause: the fire may only
+  wait while the source still burns (burnout). A delayed source burns later, so it can still be
+  burning when the water has dried. That's physical (water sprayed too early can dry before a late
+  fire arrives), but it contradicts "interventions never make any cell burn earlier". Removing the
+  burnout cap on waiting makes all 15 invariants pass. Choose: keep the cap and narrow the invariant
+  to firebreaks / no-burnout, or drop the cap.
