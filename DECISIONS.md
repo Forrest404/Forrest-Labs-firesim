@@ -292,3 +292,42 @@ separate the two sides under 8-neighbour flood fill; 40 solver runs pushed hard 
 the far side). Removing the bridge makes three tests fail, so they would catch a regression. No change
 to the rasteriser was needed. Consequence for the demo: with no spotting on this branch a road is an
 absolute barrier, so the fire can only reach what is in its own compartment of woodland.
+
+## D24. Demo scenarios: tuned values, and what the model can and cannot show
+
+Values live in `src/data/demo-scenarios.ts`; `npm run tune:demo` prints the report and
+`tests/demoScenario.test.ts` guards the same checks (`src/app/demoEval.ts`). Only weather, ignition,
+duration and the saved plan were tuned; `src/contract` and the sim physics are untouched, default
+settings (factors rate model).
+
+**Surrey Hills** (real data): ignition cell (row 142, col 102) = about 51.165 N, -0.384 E, dense
+woodland on the low south-west side; wind from 225 deg (SW) at 25 km/h, dryness high, 4 h, seed 1.
+Threatened: a disc of 8 cells (240 m) around Coldharbour at (97, 109). Uncontained: 191 ha, reaches the
+zone at 2.65 h (66 % of the run), head at the break line at 1.80 h (45 %). Contained plan (cell-space
+[col, row]): firebreak (94, 118.5) to (132, 118.5), width 3, at t = 1.6 h (anchored on the road at col 94,
+1.1 km long); water spray radius 4 along (137, 116) to (137, 120) at t = 2 h (the open east end). Result:
+118 ha (62 %), village zone never reached, and still not at 6 h. Wind from 45 deg instead: the fire turns
+168 deg (SSW) and burns 31 ha.
+
+**Backup** (generated "Forest Ridge", river on the east side): ignition (114, 124), wind from 270 deg
+(W) at 25 km/h, high, 6 h. Threatened: 8 cells around the generated village at (121, 165). Uncontained:
+143 ha, zone at 5.07 h (84 %), head at the line at 2.71 h (45 %). Plan: firebreak col 148.5, rows 90 to 136
+(1.4 km, north-south, across the front), width 3, at t = 2.4 h; water spray r4 at (151, 87) and (151, 139) at
+2.8 h. Result: 95 ha (66 %), zone never reached. Flipped wind: head turns 115 deg, 242 ha.
+
+**Why not the brief's exact picture.** (1) The village is not a block of non-burnable cells: OSM maps most
+Coldharbour buildings as tiny footprints and the village as residential land (deliberately not a barrier,
+D13), so "reaching the village" means burning any cell within 240 m of its centre. (2) With no spotting a
+road is an absolute wall, so fire stays in its own compartment of woodland; the demo ignition was chosen
+inside the compartment south of Coldharbour. (3) This model's wind factor makes a fat teardrop, not a thin
+ellipse: on flat ground at 25 km/h a fire reaches about 40 cells downwind and 2 upwind but is 30 cells wide.
+At the moment the Surrey fire reaches the zone its aspect (length / width) is 1.28 and it reaches 1201 m
+ahead and 64 m behind the ignition. So "elongated" is asserted as: head within 40 deg of downwind, at least
+4x further ahead than behind, aspect at least 1.25. A thinner ellipse would need a change to the sim, which
+is out of scope. (4) Wind speed and dryness barely change the shape; they change the speed (35 km/h and
+"extreme" made fires faster, not thinner). (5) A SSW wind (195 deg) gives a more direct hit and aspect up to
+2.9 but departs further from the brief's south-westerly.
+
+**Other choices.** Unmapped land is GRASS (D10). Playback speed 256x for both scenarios (4 h = 56 s,
+6 h = 84 s of real time). Camera heading 40 deg (Surrey) / 70 deg (backup), pitch -30, looking along the
+fire. A run takes about 5 ms, so re-simulation after every change is instant.
