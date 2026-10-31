@@ -52,7 +52,7 @@ export function mountTools(container: HTMLElement, store: Store, ctl: ToolsContr
     }
   });
 
-  store.subscribe((s) => {
+  store.subscribe((s, prev) => {
     for (const [id, b] of buttons) {
       b.classList.toggle('on', s.tool === id);
       b.setAttribute('aria-checked', s.tool === id ? 'true' : 'false');
@@ -73,6 +73,7 @@ export function mountTools(container: HTMLElement, store: Store, ctl: ToolsContr
     undoBtn.disabled = !ctl.canUndo;
     redoBtn.disabled = !ctl.canRedo;
     clearBtn.disabled = s.interventions.length === 0;
+    if (s.interventions === prev.interventions && list.childElementCount === s.interventions.length) return;
     list.replaceChildren(
       ...s.interventions.map((iv) =>
         el('li', {},

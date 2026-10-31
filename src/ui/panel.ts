@@ -47,7 +47,18 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
   const settings = section('wind', STR.settingsTitle);
   const sim = section('flame', STR.simulateTitle, { class: 'sim' });
   const tools = section('axe', STR.toolsTitle);
-  const advanced = section('sliders', STR.advancedTitle, { class: 'adv' });
+  const advChevron = el('span', { class: 'chev' }, icon('chevron', 16));
+  const advanced = section('sliders', STR.advancedTitle, { class: 'adv', trailing: advChevron });
+  // settingsAdvanced.ts renders a <details>; its summary is hidden and the card header drives it.
+  advanced.header.setAttribute('role', 'button');
+  advanced.header.setAttribute('tabindex', '0');
+  advanced.header.setAttribute('aria-expanded', 'false');
+  const toggleAdvanced = () => {
+    const d = advanced.body.querySelector('details');
+    if (d) d.open = !d.open;
+  };
+  advanced.header.addEventListener('click', toggleAdvanced);
+  advanced.header.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleAdvanced(); } });
 
   const view = section('eye', STR.viewTitle, {
     trailing: el('div', { class: 'row tight' },
@@ -74,6 +85,8 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
   mountDebug(debugBody, store);
 
   store.subscribe((s) => {
+    advanced.root.classList.toggle('open', s.advancedOpen);
+    advanced.header.setAttribute('aria-expanded', s.advancedOpen ? 'true' : 'false');
     modePill.classList.toggle('live', s.viewerMode === 'google');
     (modePill.querySelector('.pill-text') as HTMLElement).textContent = STR.viewerMode[s.viewerMode];
     particles.input.checked = s.effects.particles;

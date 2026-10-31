@@ -176,3 +176,22 @@ was built in bdde0a6 and reverted in d2c0c65: the credential the team actually h
 Maps key (`AIza...` shape), which ion rejects with 401. One credential, one path. If the team
 later gets an ion account, cherry-pick bdde0a6; its redaction also covers `access_token=`,
 Bearer headers and JWTs, which is worth keeping either way.
+
+## D19. UI system: one control kit, SVG icons, motion tokens
+
+The side panel was rebuilt as cards on a small token set (`src/ui/styles.css` `:root`) with
+shared primitives in `src/ui/controls.ts` (section, segmented chips, filled slider, switch,
+icon button, value chip) and one Lucide-style inline SVG set in `src/ui/icons.ts` (no emoji,
+no icon font, no network font). Rules that follow from it:
+- Presets and enumerations are chips (`segmented`), not `<select>`; the area picker stays a
+  native select because its list is data-driven and can grow.
+- Every slider is `slider()` so the filled track stays in sync when the store writes `.value`.
+- Motion uses two durations (140 / 240 ms) and one easing; `prefers-reduced-motion` collapses
+  all of it. Store subscribers must not rebuild DOM every tick: the clock updates the store
+  every frame during playback, so lists and icons are only replaced when their input changes
+  (the first version re-created the intervention list per tick and its fade-in never finished).
+- `settingsAdvanced.ts` is owned by the `settings-polish` slot and was not edited; its
+  `<details>` summary is hidden and the card header drives `open`, synced through
+  `store.advancedOpen`.
+- Copy is shorter everywhere (hints are one line, "display only" wording lives in the mode pill
+  tooltip and README); the honesty notice text itself is unchanged.
