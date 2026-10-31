@@ -4,6 +4,7 @@
  */
 
 import type { Scenario, SimResult } from '../contract';
+import type { ContainPlan, PlanInput } from '../contain/planner';
 import type { SimRequest, SimResponse } from '../sim/protocol';
 
 export class SimCancelledError extends Error {
@@ -15,7 +16,9 @@ export class SimCancelledError extends Error {
 
 interface Pending {
   resolve: (r: SimResult) => void;
+  resolvePlan?: (p: ContainPlan) => void;
   reject: (e: Error) => void;
+  onProgress?: (fraction: number) => void;
 }
 
 export class SimClient {
@@ -36,6 +39,11 @@ export class SimClient {
       if (msg.type === 'result') {
         this.pending.delete(msg.id);
         p.resolve(msg.result);
+      } else if (msg.type === 'planResult') {
+        this.pending.delete(msg.id);
+        p.resolvePlan?.(msg.plan);
+      } else if (msg.type === 'progress') {
+        p.onProgress?.(msg.fraction);
       } else if (msg.type === 'error') {
         this.pending.delete(msg.id);
         p.reject(new Error(msg.message));
@@ -58,6 +66,17 @@ export class SimClient {
     return new Promise<SimResult>((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
       // Scenario arrays are shared with the loaded area, so they are copied (structured clone), not transferred.
+      this.worker.postMessage(msg);
+    });
+  }
+
+  /** Plans the emergency response (baseline + contained runs). Cancels any in-flight job like run(). */
+  plan(input: PlanInput, onProgress?: (fraction: number) => void): Promise<ContainPlan> {
+    this.cancelAll();
+    const id = this.nextId++;
+    const msg: SimRequest = { type: 'plan', id, input };
+    return new Promise<ContainPlan>((resolve, reject) => {
+      this.pending.set(id, { resolve: () => undefined, resolvePlan: resolve, reject, onProgress });
       this.worker.postMessage(msg);
     });
   }

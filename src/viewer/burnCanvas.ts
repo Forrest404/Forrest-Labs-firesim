@@ -262,3 +262,142 @@ export function paintCheckerboard(data: Uint8ClampedArray, width: number, height
     }
   }
 }
+
+/**
+ * Outline of the burned area of another run at time t: cells that have burned whose 4-neighbour
+ * has not (or lies outside the grid), filled over the scaled canvas. Used to show the "without
+ * response" perimeter over the contained run (and the reverse).
+ */
+export function paintRing(data: Uint8ClampedArray, arrival: Float32Array, width: number, height: number, scale: number, t: number, rgba: RGBA): void {
+  const W = width * scale;
+  const [cr, cg, cb, ca] = rgba;
+  for (let r = 0; r < height; r++) {
+    for (let c = 0; c < width; c++) {
+      const i = r * width + c;
+      if (!(arrival[i] <= t)) continue;
+      const edge =
+        r === 0 || c === 0 || r === height - 1 || c === width - 1 ||
+        !(arrival[i - width] <= t) || !(arrival[i + width] <= t) || !(arrival[i - 1] <= t) || !(arrival[i + 1] <= t);
+      if (!edge) continue;
+      for (let dy = 0; dy < scale; dy++) {
+        let p = ((r * scale + dy) * W + c * scale) * 4;
+        for (let dx = 0; dx < scale; dx++, p += 4) {
+          data[p] = cr;
+          data[p + 1] = cg;
+          data[p + 2] = cb;
+          data[p + 3] = ca;
+        }
+      }
+    }
+  }
+}
+
+export const COMPARE_RGBA: Record<'both' | 'missed' | 'extra', RGBA> = {
+  both: [40, 200, 90, 210],
+  missed: [235, 60, 50, 200],
+  extra: [250, 190, 40, 170],
+};
+
+/**
+ * Accuracy view at time t against a real fire's burned mask: burned in both green, burned only in
+ * reality (missed) red, burned only in the simulation (extra) amber, everything else transparent.
+ */
+export function paintCompare(data: Uint8ClampedArray, arrival: Float32Array, t: number, realMask: Uint8Array): void {
+  for (let i = 0, p = 0; i < arrival.length; i++, p += 4) {
+    const sim = arrival[i] !== NEVER_ARRIVES && arrival[i] <= t;
+    const real = realMask[i] === 1;
+    const c = sim && real ? COMPARE_RGBA.both : real ? COMPARE_RGBA.missed : sim ? COMPARE_RGBA.extra : null;
+    data[p] = c ? c[0] : 0;
+    data[p + 1] = c ? c[1] : 0;
+    data[p + 2] = c ? c[2] : 0;
+    data[p + 3] = c ? c[3] : 0;
+  }
+}
+
+export interface ForecastRing {
+  /** Seconds after ignition. */
+  t: number;
+  rgba: RGBA;
+}
+
+/** Forecast rings: 1 h / 3 h / 6 h in white -> amber -> red. */
+export const FORECAST_RINGS: ForecastRing[] = [
+  { t: 3600, rgba: [255, 255, 255, 255] },
+  { t: 3 * 3600, rgba: [255, 200, 60, 255] },
+  { t: 6 * 3600, rgba: [255, 70, 70, 255] },
+];
+
+/**
+ * Where each ring is drawn: cells burned by its time with a neighbour that could still burn but
+ * has not yet (the advancing edge). Roads, water and rock inside the fire are not outlined, and
+ * neither is the grid border. Value = ring index + 1, later rings win; 0 = no ring.
+ */
+export function forecastRingCells(arrival: Float32Array, fuel: Uint8Array, width: number, rings: ForecastRing[]): Uint8Array {
+  const out = new Uint8Array(arrival.length);
+  const height = arrival.length / width;
+  rings.forEach((ring, k) => {
+    const open = (j: number): boolean => fuel[j] !== FuelClass.NONE && !(arrival[j] <= ring.t);
+    for (let i = 0; i < arrival.length; i++) {
+      if (!(arrival[i] <= ring.t)) continue;
+      const r = (i / width) | 0;
+      const c = i - r * width;
+      if ((c > 0 && open(i - 1)) || (c < width - 1 && open(i + 1)) || (r > 0 && open(i - width)) || (r < height - 1 && open(i + width))) out[i] = k + 1;
+    }
+  });
+  return out;
+}
+
+export function paintRingCells(data: Uint8ClampedArray, cells: Uint8Array, rings: ForecastRing[]): void {
+  for (let i = 0, p = 0; i < cells.length; i++, p += 4) {
+    const k = cells[i];
+    if (!k) continue;
+    const c = rings[k - 1].rgba;
+    data[p] = c[0];
+    data[p + 1] = c[1];
+    data[p + 2] = c[2];
+    data[p + 3] = c[3];
+  }
+}
+
+/** Alignment test pattern: 10-cell checkerboard with a red NW corner block and blue SE block. */
+export function paintCompareScaled(data: Uint8ClampedArray, arrival: Float32Array, width: number, height: number, scale: number, t: number, realMask: Uint8Array): void {
+  const W = width * scale;
+  for (let r = 0; r < height; r++) {
+    for (let c = 0; c < width; c++) {
+      const i = r * width + c;
+      const sim = arrival[i] !== NEVER_ARRIVES && arrival[i] <= t;
+      const real = realMask[i] === 1;
+      const col = sim && real ? COMPARE_RGBA.both : real ? COMPARE_RGBA.missed : sim ? COMPARE_RGBA.extra : null;
+      for (let dy = 0; dy < scale; dy++) {
+        let p = ((r * scale + dy) * W + c * scale) * 4;
+        for (let dx = 0; dx < scale; dx++, p += 4) {
+          data[p] = col ? col[0] : 0;
+          data[p + 1] = col ? col[1] : 0;
+          data[p + 2] = col ? col[2] : 0;
+          data[p + 3] = col ? col[3] : 0;
+        }
+      }
+    }
+  }
+}
+
+/** paintRingCells on a scaled canvas. */
+export function paintRingCellsScaled(data: Uint8ClampedArray, cells: Uint8Array, width: number, height: number, scale: number, rings: ForecastRing[]): void {
+  const W = width * scale;
+  for (let r = 0; r < height; r++) {
+    for (let c = 0; c < width; c++) {
+      const k = cells[r * width + c];
+      if (!k) continue;
+      const col = rings[k - 1].rgba;
+      for (let dy = 0; dy < scale; dy++) {
+        let p = ((r * scale + dy) * W + c * scale) * 4;
+        for (let dx = 0; dx < scale; dx++, p += 4) {
+          data[p] = col[0];
+          data[p + 1] = col[1];
+          data[p + 2] = col[2];
+          data[p + 3] = col[3];
+        }
+      }
+    }
+  }
+}

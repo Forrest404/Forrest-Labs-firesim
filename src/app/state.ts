@@ -10,6 +10,10 @@ import type { DemoId } from '../data/demo-scenarios';
 import type { Basemap, ViewerMode } from '../viewer/createViewer';
 import { DEFAULT_FILTERS } from '../data/firms';
 import type { FireRegion, Hotspot, HotspotFilters, LiveSource } from '../data/firms';
+import type { ContainOverrides, ContainPlan, ResponseLevel } from '../contain';
+import type { PlanState } from './planner';
+import type { ControlRun } from './realFire';
+import type { LiveFire } from '../data/liveFire';
 
 export type ToolId = 'ignite' | 'firebreak' | 'water';
 
@@ -86,6 +90,26 @@ export interface EffectsFlags {
   quality: 'low' | 'medium' | 'high';
 }
 
+/** Emergency response simulation (src/contain). The plan is recomputed by Simulate when enabled. */
+export interface ContainState {
+  enabled: boolean;
+  level: ResponseLevel;
+  /** Advanced-panel tweaks on top of the preset; null = preset as is. */
+  overrides: ContainOverrides | null;
+  planning: boolean;
+  /** 0-1 while planning. */
+  progress: number;
+  plan: ContainPlan | null;
+  /** Which run `result` currently holds when a plan exists. */
+  show: 'contained' | 'baseline';
+  /** Draw the other run's burned-area outline over the shown run. */
+  outline: boolean;
+  /** Moving unit markers in 3D. */
+  units3d: boolean;
+  /** Dispatch cards over the map. */
+  hud: boolean;
+}
+
 export interface AppState {
   areas: DemoAreaIndexEntry[];
   area: DemoArea | null;
@@ -102,6 +126,23 @@ export interface AppState {
   demoId: DemoId | null;
 
   result: SimResult | null;
+  /** The same run without any interventions, for "homes reached: before -> after". Equals `result` when there are none. */
+  baseline: SimResult | null;
+  /** Gemini (or built-in) plan suggestions and their verification. */
+  plan: PlanState | null;
+  /** Accuracy colours against the area's real fire instead of the fire colours. */
+  compare: boolean;
+  /** No-wind and reversed-wind re-runs from "Compare with real fire", for the current result. */
+  controls: ControlRun[] | null;
+  /** The "Real vs simulation" card: the real perimeter and our run side by side. */
+  sideBySide: boolean;
+  /** Ground view: the camera stays low in front of the fire front while it plays. */
+  groundFollow: boolean;
+  /** Fires reported now (NIFC), once loaded; null before the first load. */
+  liveFires: LiveFire[] | null;
+  liveLoading: boolean;
+  /** Draw the 1 h / 3 h / 6 h forecast rings on the overlay (live fires). */
+  forecast: boolean;
   /** True when inputs changed since `result` was computed. */
   resultStale: boolean;
   simRunning: boolean;
@@ -115,6 +156,7 @@ export interface AppState {
   advancedOpen: boolean;
   view: ViewId;
   live: LiveState;
+  contain: ContainState;
 }
 
 export type Listener = (state: AppState, prev: AppState) => void;
@@ -159,10 +201,19 @@ export function initialState(): AppState {
     interventions: [],
     demoId: null,
     result: null,
+    baseline: null,
+    plan: null,
+    compare: false,
+    controls: null,
+    sideBySide: false,
+    groundFollow: false,
+    liveFires: null,
+    liveLoading: false,
+    forecast: false,
     resultStale: false,
     simRunning: false,
     simError: null,
-    playback: { t: 0, playing: false, speed: 64 },
+    playback: { t: 0, playing: false, speed: 256 },
     tool: 'ignite',
     toolParams: { firebreakWidthCells: 3, waterRadiusCells: 3, preClear: false },
     debug: { outline: false, fuel: false, slope: false },
@@ -170,6 +221,7 @@ export function initialState(): AppState {
     advancedOpen: false,
     view: 'sim',
     live: initialLive(),
+    contain: { enabled: false, level: 'standard', overrides: null, planning: false, progress: 0, plan: null, show: 'contained', outline: true, units3d: true, hud: true },
   };
 }
 

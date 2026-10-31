@@ -28,6 +28,54 @@ Terrain range comes from the Open-Meteo elevation API (7 x 7 sample points per b
 Streams are not barriers in the plan's fuel table (only `waterway=river/canal`), so the high stream counts don't wall off the fire.
 Coverage is the share of a 60 x 60 sample grid inside forest/scrub/water polygons.
 
+## Real-fire comparison: Crozier Fire (El Dorado County, CA, Aug 2024)
+
+Run our sim from the real start point with the real weather, then overlay the real final burn area and report the overlap.
+Chosen because it fits a 6 km box, sits in Sierra foothill forest, had steady weather, and CAL FIRE reported **0 structures destroyed and 0 deaths** ([CAL FIRE incident updates](https://www.fire.ca.gov/incidents/2024/8/6/crozier-fire/updates/6fdcdb0d-48ce-49a7-ab74-0bd69263a3ba)), so it doesn't break plan.md's rule.
+
+| Field | Value | Source |
+|---|---|---|
+| Start | 2024-08-06, northwest side of Slate Mountain, near Mosquito. NIFC logs discovery as 2024-08-07 05:57 UTC (Aug 6, 22:57 PDT); CAL FIRE updates give Aug 6 early morning. Times conflict, so check before quoting | NIFC WFIGS, CAL FIRE |
+| Ignition point | 38.828893, -120.697385 | NIFC `attr_InitialLatitude/Longitude` |
+| Final area | 1,917 acres (7.8 km²) in NIFC; CAL FIRE final update says 1,960 acres | NIFC `poly_GISAcres`, CAL FIRE |
+| Perimeter extent | ~3.5 km x 3.9 km | computed from the GeoJSON |
+| Early growth | 182 acres and 5% contained by 11:30 a.m. on day one: a timing check for the sim | CAL FIRE |
+| Containment | 100% by 2024-09-11 | CAL FIRE |
+| **6 km box (S, W, N, E)** | **38.8116, -120.7245, 38.8655, -120.6554**, centred on the perimeter | computed |
+
+**Weather, Open-Meteo archive at the ignition point (local time).** The same pattern held every day:
+
+| Time | Temp | Humidity | Wind | Gusts | From |
+|---|---|---|---|---|---|
+| Afternoon (12:00–18:00) | 33–35 °C | 9–11 % | 9–13 km/h | 30–40 km/h | SW (225–250°) |
+| Night (21:00–06:00) | 20–27 °C | 14–25 % | 4–13 km/h | 7–28 km/h | ENE (70–100°) |
+
+So the sim inputs are: **dryness extreme, wind ~13 km/h from 225–230°** (pushes fire NE, upslope by day).
+
+**OSM check (overpass-turbo, 2026-10-31): weak.** Only 4 forest polygons, covering 15% of the box. 1% scrub, 23 streams, no rivers, no major roads. With OSM the rest defaults to grass, which would distort the comparison. **Use LANDFIRE `LF2023_FBFM40` (pre-fire) for this area**, since the fuel map decides the result.
+
+**Downloads:**
+
+```bash
+# Real final burn area (one MultiPolygon, ~40 KB), tested
+curl -s "https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Interagency_Perimeters/FeatureServer/0/query?where=poly_IncidentName%3D%27CROZIER%27+AND+attr_POOState%3D%27US-CA%27&outFields=poly_IncidentName,poly_GISAcres&returnGeometry=true&outSR=4326&f=geojson" -o crozier_perimeter.geojson
+
+# Fuel + terrain before the fire (LF2023 = pre-2024 fuels). Replace YOUR_EMAIL
+curl -s "https://lfps.usgs.gov/api/job/submit?Email=YOUR_EMAIL&Layer_List=LF2023_FBFM40;LF2020_Elev;LF2020_SlpD;LF2020_Asp&Area_of_Interest=-120.7245%2038.8116%20-120.6554%2038.8655&Output_Projection=4326"
+
+# Hourly weather for the first days
+curl -s "https://archive-api.open-meteo.com/v1/archive?latitude=38.829&longitude=-120.697&start_date=2024-08-06&end_date=2024-08-08&hourly=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m&timezone=America%2FLos_Angeles"
+```
+
+**How to compare (what we can honestly claim):**
+
+1. Ignite at the real point with the weather above. Run until the burned area is about 7.8 km² (the real size).
+2. Overlay the real perimeter as an outline in the 3D view.
+3. Report **overlap (IoU)** = cells burned in both / cells burned in either, plus the share of the real burn area the sim reached.
+4. On stage: "Our simulation matched X% of the real Crozier Fire." Say the limits: the real fire burned for days with firefighters on it; our run has fixed weather and no suppression.
+
+Backup fire if Crozier doesn't work out: **Lucas Fire**, Lake County, Sep 2026, 3,922 acres (~5.8 x 5.2 km), ignition 39.231856, -123.002756, box 39.1983, -123.0053, 39.2522, -122.9357. Its afternoons were ~32 °C, 17 % humidity, wind from the west. Impact not yet checked.
+
 ## Data sources
 
 | Data | Source | Access | Status (tested 2026-10-31) | License |

@@ -260,10 +260,10 @@ Everything in the prompt is done and tagged `v0`. Next work happens in the `FEAT
 - [x] Stage 0: worktree `../Forrest-Labs-firesim-demo`, baseline green, on-screen disclaimer removed (as requested).
 - [x] Stage 1: real **Surrey Hills (Leith Hill)** bundle built from OpenStreetMap + AWS terrain (Overpass answered on
   the second pass; it returns 502 or times out now and then). Found and fixed a builder bug: multipolygon
-  woodlands split across several ways were dropped (`assembleRings`, D26). Road-leak fuzz tests added; a 1-cell road
+  woodlands split across several ways were dropped (`assembleRings`, D29). Road-leak fuzz tests added; a 1-cell road
   cannot be crossed (no change needed).
 - [x] Stage 2: `npm run tune:demo`, `src/data/demo-scenarios.ts`, `src/app/demoEval.ts`, tests. Both scenarios pass all
-  checks: uncontained fire reaches the village, saved plan holds it, flipped wind reverses the fire (D27).
+  checks: uncontained fire reaches the village, saved plan holds it, flipped wind reverses the fire (D30).
 - [x] Stage 3: Demo card (Load demo scenario, Reset, Show contained version as one undo step, Demo tips),
   camera framing on the action, fallback to the offline backup if a bundle fails to load.
 - [x] Stage 4: backup scenario on the generated area (works with no network).

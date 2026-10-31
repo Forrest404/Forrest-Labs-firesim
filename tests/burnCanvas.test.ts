@@ -46,3 +46,29 @@ describe('burnCanvas painters', () => {
     expect(data[se]).toBe(0);
   });
 });
+
+describe('paintRing (outline of another run)', () => {
+  it('marks only burned cells with an unburned 4-neighbour, scaled', async () => {
+    const { paintRing } = await import('../src/viewer/burnCanvas');
+    const w = 5;
+    const h = 5;
+    const scale = 2;
+    const arrival = new Float32Array(w * h).fill(NEVER_ARRIVES);
+    // 3x3 burned block in the middle: 8 edge cells, 1 interior cell.
+    for (let r = 1; r <= 3; r++) for (let c = 1; c <= 3; c++) arrival[r * w + c] = 10;
+    const data = new Uint8ClampedArray(w * h * scale * scale * 4);
+    paintRing(data, arrival, w, h, scale, 100, [255, 70, 220, 235]);
+    const painted = (r: number, c: number): boolean => data[((r * scale) * w * scale + c * scale) * 4 + 3] === 235;
+    expect(painted(2, 2)).toBe(false);
+    expect(painted(1, 1)).toBe(true);
+    expect(painted(2, 1)).toBe(true);
+    expect(painted(0, 0)).toBe(false);
+    let n = 0;
+    for (let i = 3; i < data.length; i += 4) if (data[i] === 235) n++;
+    expect(n).toBe(8 * scale * scale);
+    // Before any cell burns nothing is drawn.
+    data.fill(0);
+    paintRing(data, arrival, w, h, scale, 5, [255, 70, 220, 235]);
+    expect(data.some((v) => v !== 0)).toBe(false);
+  });
+});

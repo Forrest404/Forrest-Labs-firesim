@@ -5,7 +5,7 @@
 
 import { NEVER_ARRIVES, cellAreaHa } from '../contract';
 import type { GridSpec, Intervention, SimResult, SimSettings } from '../contract';
-import { paintBurnScaled } from '../viewer/burnCanvas';
+import { FORECAST_RINGS, paintBurnScaled, paintCompareScaled, paintRing, paintRingCellsScaled } from '../viewer/burnCanvas';
 import type { GridLayer } from '../viewer/burnLayer';
 import { paintSmoke, upsampleBilinear, upsampleNearest } from '../viewer/smokeCanvas';
 
@@ -44,7 +44,7 @@ export class OverlayPainter {
   private dirty = false;
   private lastPaint = 0;
   private raf = 0;
-  private args: { result: SimResult | null; interventions: Intervention[]; t: number; settings: SimSettings; preview: Preview | null } | null = null;
+  private args: { result: SimResult | null; interventions: Intervention[]; t: number; settings: SimSettings; preview: Preview | null; compareMask: Uint8Array | null; ringCells: Uint8Array | null } | null = null;
   private smokeLayer: GridLayer | null = null;
   private timeline: SmokeTimeline | null = null;
   private readonly smokeBuf: Float32Array;
@@ -54,6 +54,7 @@ export class OverlayPainter {
   private fx: OverlayEffects = { glow: true, smooth: true };
   private smokeHi: Float32Array | null = null;
   private readonly flaming: Uint8Array;
+  private ring: Float32Array | null = null;
 
   constructor(
     private readonly layer: GridLayer,
@@ -84,6 +85,11 @@ export class OverlayPainter {
     this.fx = fx;
   }
 
+  /** Arrival field of another run whose burned-area outline is drawn over this one (null: none). */
+  setRing(arrival: Float32Array | null): void {
+    this.ring = arrival;
+  }
+
   get lastSmokeSample(): SmokeSample | null {
     return this.lastSmoke;
   }
@@ -92,9 +98,13 @@ export class OverlayPainter {
     return this.timeline;
   }
 
-  /** Request a repaint with the latest inputs (coalesced to one paint per frame). */
-  schedule(result: SimResult | null, interventions: Intervention[], t: number, settings: SimSettings, preview: Preview | null = null): void {
-    this.args = { result, interventions, t, settings, preview };
+  /**
+   * Request a repaint with the latest inputs (coalesced to one paint per frame). With a
+   * `compareMask` (a real fire's burned cells) the layer shows the accuracy view instead; with
+   * `ringCells` (from forecastRingCells) the 1 h / 3 h / 6 h forecast outlines are drawn on top.
+   */
+  schedule(result: SimResult | null, interventions: Intervention[], t: number, settings: SimSettings, preview: Preview | null = null, compareMask: Uint8Array | null = null, ringCells: Uint8Array | null = null): void {
+    this.args = { result, interventions, t, settings, preview, compareMask, ringCells };
     this.dirty = true;
     if (!this.raf) this.raf = requestAnimationFrame(this.tick);
   }
@@ -114,6 +124,13 @@ export class OverlayPainter {
   private paintNow(): void {
     const a = this.args;
     if (!a) return;
+    if (a.compareMask) {
+      const mask = a.compareMask;
+      const arrival = a.result?.arrivalTime ?? this.emptyArrival();
+      this.layer.paint((data) => paintCompareScaled(data, arrival, this.grid.width, this.grid.height, this.layer.scale, a.t, mask));
+      this.paintSmoke(a.t);
+      return;
+    }
     this.buildMasks(a.interventions, a.t, a.settings);
     if (a.preview) {
       if (a.preview.type === 'firebreak') for (const c of a.preview.cells) this.firebreak[c] = 1;
@@ -121,7 +138,7 @@ export class OverlayPainter {
     }
     const arrival = a.result?.arrivalTime ?? EMPTY;
     const flameWindowS = Math.max(300, Math.min(1800, a.settings.waterHalfLifeS * 1.5));
-    this.layer.paint((data) =>
+    this.layer.paint((data) => {
       paintBurnScaled(data, arrival.length ? arrival : this.emptyArrival(), this.grid.width, this.grid.height, this.layer.scale, a.t, {
         flameWindowS,
         burnoutAt: a.result && this.burnoutAt ? this.burnoutAt : undefined,
@@ -129,8 +146,10 @@ export class OverlayPainter {
         wetness: this.wetness,
         smooth: this.fx.smooth,
         glow: this.fx.glow && !!a.result,
-      }),
-    );
+      });
+      if (this.ring && a.result) paintRing(data, this.ring, this.grid.width, this.grid.height, this.layer.scale, a.t, RING_RGBA);
+      if (a.ringCells) paintRingCellsScaled(data, a.ringCells, this.grid.width, this.grid.height, this.layer.scale, FORECAST_RINGS);
+    });
     this.paintSmoke(a.t);
   }
 
@@ -214,6 +233,8 @@ export class OverlayPainter {
 }
 
 const EMPTY = new Float32Array(0);
+/** Magenta: distinct from fire (orange), firebreak (grey) and water (blue). */
+const RING_RGBA: [number, number, number, number] = [255, 70, 220, 235];
 
 export function liveStats(result: SimResult | null, grid: GridSpec, t: number): LiveStats {
   if (!result) return { burnedCells: 0, burnedAreaHa: 0 };

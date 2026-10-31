@@ -66,7 +66,8 @@ export const FUELS: Record<FuelClass, FuelSpec> = {
   },
   [FuelClass.SHRUB]: {
     name: 'Shrub',
-    baseRateMps: 0.045,
+    // Chaparral is among the fastest California fuels under wind, so not slower than grass.
+    baseRateMps: 0.06,
     extinctionMoisture: 0.3,
     burnDurationS: 900,
     color: 'rgba(170, 150, 60, 0.55)',
@@ -93,7 +94,8 @@ export const FUELS: Record<FuelClass, FuelSpec> = {
   },
   [FuelClass.FARMLAND]: {
     name: 'Farmland',
-    baseRateMps: 0.03,
+    // California orchards and vineyards are mostly irrigated and often act as fuel breaks.
+    baseRateMps: 0.015,
     extinctionMoisture: 0.3,
     burnDurationS: 400,
     color: 'rgba(220, 190, 120, 0.55)',

@@ -170,7 +170,7 @@ OpenStreetMap. 3D tiles (optional): Google. Rendering: CesiumJS.
 
 ## Deployment (GitHub Pages)
 
-Live site: <https://forrest404.github.io/Forrest-Labs-firesim/>
+Live site: <https://forrest404.github.io/Forrest-Labs-firesim/> (landing page; the simulator is `app.html`)
 
 `.github/workflows/pages.yml` builds and publishes on every push to `main` (or by hand via
 Actions -> "Deploy to GitHub Pages" -> Run workflow, from any branch). The build sets

@@ -14,13 +14,13 @@ checked headlessly (`npm run tune:demo`, `tests/demoScenario.test.ts`) and click
 | Dryness | High (8 % fuel moisture) | High |
 | Duration, seed | 4 h, 1 | 6 h, 1 |
 | Threatened | Coldharbour, 51.1757 N, -0.3719 E (disc of 240 m) | the generated village, 48.3392 N, 8.4266 E |
-| Playback speed | 256x (4 h in about 56 s) | 256x (6 h in about 84 s) |
+| Playback speed | 256x (4 h in about 56 s) | 256x (5.5 h in about 77 s) |
 | Camera | looks NE (heading 30), tilted 32 deg, 2.6 km out | looks ENE (heading 70), 2.8 km out |
 
-What happens (numbers from the headless run): **uncontained** Surrey burns 191 ha and reaches the
-village at 2h39 (66 % of the run); the head crosses the planned break line at 1h48. **Contained** burns
-118 ha (62 %) and never reaches the village, even if you run it to 6 h. With the wind flipped to the NE the
-fire turns round and runs the other way. Backup: 143 ha, village at 5h04; contained 95 ha (66 %).
+What happens (numbers from the headless run): **uncontained** Surrey burns 119 ha and reaches the
+village at 2h40 (67 % of the run); the head crosses the planned break line at 1h48. **Contained** burns
+69 ha (58 %) and never reaches the village, even if you run it to 6 h. With the wind flipped to the NE the
+fire turns round and runs the other way. Backup: 148 ha, village at 4h45; contained 93 ha (63 %).
 
 ## The 3-minute script
 
@@ -30,7 +30,7 @@ fire turns round and runs the other way. Backup: 143 ha, village at 5h04; contai
 | 0:15 (30 s) | **Ignite and run** | Press **Simulate** (big orange button). It plays at 256x. | "A fire starts low on the south-west slope. Wind from the south-west, 25 km/h, dry fuel." |
 | 0:45 (20 s) | **Uphill and downwind** | Keep playing. Point at the wind arrow in Conditions and at the head of the fire. | "It runs downwind and up the slope. The back barely moves." |
 | 1:05 (45 s) | **Pause and cut** | At about **1h30** on the clock press **Space** (pause). Tools card: **Firebreak**, drag across the front from the road on the west (51.1700 N, -0.3786 E) east to (51.1700 N, -0.3622 E). Then **Water**, radius 4, click-drag a short stroke at the east end (51.1707 N, -0.3601 E to 51.1696 N, -0.3601 E). | "Pause, and cut a line across the front, anchored on the road. Water on the open flank." |
-| 1:50 (30 s) | **Payoff and compare** | Press **Space** to play on to the end. The fire stops short of the village. Then press **Undo** in Tools (or Ctrl/Cmd+Z) twice, once per stroke, and play again to show the village burning; or press **Reset**, **Load demo scenario**, **Simulate**, then **Show contained version** to apply the saved plan in one step. | "Same fire, same wind. Without the line it reaches the village at 2h39. With it, never." |
+| 1:50 (30 s) | **Payoff and compare** | Press **Space** to play on to the end. The fire stops short of the village. Then press **Undo** in Tools (or Ctrl/Cmd+Z) twice, once per stroke, and play again to show the village burning; or press **Reset**, **Load demo scenario**, **Simulate**, then **Show contained version** to apply the saved plan in one step. | "Same fire, same wind. Without the line it reaches the village at 2h40. With it, never." |
 | 2:20 (20 s) | **Close** | Open the **Demo tips** (i) if you want the shortcuts on screen. | "Next: live data for any place, more tools (retardant, backburn, crews), calibration." |
 
 Total about 2:40, 20 s of slack. At 256x the fire reaches the break line about 25 s after Simulate.
@@ -45,8 +45,8 @@ Load demo scenario, Simulate, play to the end (village burns), **Reset**, **Load
 
 Pick "Backup: predictable test area" in the Demo card, **Load demo scenario**. The area is generated and
 labelled synthetic (the tag shows in the Demo area card). Run it the same way. Break: north-south line
-across the front at 48.3477 N, 8.4197 E down to 48.3353 N, 8.4197 E at about **2h18** (the head arrives at
-2h43); water at the two ends (48.3485 N, 8.4207 E and 48.3345 N, 8.4207 E). With no network the map
+across the front at 48.3477 N, 8.4197 E down to 48.3353 N, 8.4197 E at about **2h06** (the head arrives at
+2h21); water at the two ends (48.3485 N, 8.4207 E and 48.3345 N, 8.4207 E). With no network the map
 background has no tiles (a blank globe), but the fire overlay, tools and playback work.
 
 ## Pre-flight checklist (5 minutes before)
@@ -57,7 +57,7 @@ background has no tiles (a blank globe), but the fire overlay, tools and playbac
 3. Bundle loads: press **Load demo scenario**; the card says "...loaded. Press Simulate." If it shows a
    "Showing the offline backup instead" banner, the Surrey bundle failed to load: reload the page.
 4. Speed chip shows **256x** after loading (Load sets it).
-5. Press **Simulate**, check about 191 ha / 2120 cells at the end, then **Reset**.
+5. Press **Simulate**, check about 119 ha / 1,319 cells at the end, then **Reset**.
 6. Optional: `npm run tune:demo` (every line PASS) and `npm test`.
 7. Browser window at least 1200 px wide, panel open, zoom 100 %.
 
@@ -79,4 +79,4 @@ background has no tiles (a blank globe), but the fire overlay, tools and playbac
 `src/data/demo-scenarios.ts` (weather, ignition, duration, camera, the saved plan). To rebuild the Surrey
 area on a networked machine: `npm run build:demo-area -- --name surrey-hills --label "Surrey Hills (Leith Hill)" --center -0.376,51.175 --wind 225 --default GRASS`
 (Overpass can return 502 or time out: it tries three mirrors, so run it again if it fails). Reasoning and
-limits (why the fire is a teardrop, what "reaching the village" means): `DECISIONS.md` D26 and D27.
+limits (why the fire is a teardrop, what "reaching the village" means): `DECISIONS.md` D29 and D30.

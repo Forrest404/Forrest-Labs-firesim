@@ -3,6 +3,7 @@
  * Instantiated by src/app/simClient.ts via `new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })`.
  */
 
+import { planContainment } from '../contain/planner';
 import { simulate } from './index';
 import type { SimRequest, SimResponse } from './protocol';
 
@@ -18,6 +19,21 @@ ctx.onmessage = (event) => {
   const msg = event.data;
   if (msg.type === 'cancel') {
     cancelled.add(msg.id);
+    return;
+  }
+  if (msg.type === 'plan') {
+    try {
+      const plan = planContainment(msg.input, (fraction) => ctx.postMessage({ type: 'progress', id: msg.id, fraction }));
+      if (cancelled.has(msg.id)) {
+        cancelled.delete(msg.id);
+        return;
+      }
+      // With no orders the contained run is the baseline itself: never transfer a buffer twice.
+      const transfer = [...new Set<Transferable>([plan.baseline.arrivalTime.buffer, plan.contained.arrivalTime.buffer, plan.baseline.intensity?.buffer, plan.contained.intensity?.buffer].filter((b): b is ArrayBuffer => !!b))];
+      ctx.postMessage({ type: 'planResult', id: msg.id, plan }, transfer);
+    } catch (err) {
+      ctx.postMessage({ type: 'error', id: msg.id, message: err instanceof Error ? err.message : String(err) });
+    }
     return;
   }
   if (msg.type !== 'run') return;

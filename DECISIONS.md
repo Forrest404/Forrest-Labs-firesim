@@ -337,7 +337,86 @@ every sentence). The content was fine, so this pass changes only chrome and copy
 The overrides sit at the end of `styles.css` so the old rules can still be diffed; folding
 them in is a follow-up.
 
-## D25. Demo scenario work: base, disclaimer, fallbacks
+## D25. California first, real fire test, impact number, AI plan (Person B/C follow-up)
+
+- **Areas:** `index.json` now lists Boulder Creek first (opens by default), then `crozier`. Boulder
+  Creek's unmapped land is conifer, not grass (it's redwood forest; only OSM-mapped grassland stays
+  grass), and its suggested ignition is in the forest 1.2 km west of town (37.1221, -122.1347).
+  Built by `npm run build:california` from OSM extracts in `scripts/data/`. Overpass refuses
+  scripted requests, so those were fetched in overpass-turbo in a browser and rasterised there with
+  the same rules as `src/data/osm.ts`.
+- **Fuel numbers:** shrub 0.045 -> 0.06 m/s (chaparral is fast under wind), farmland 0.03 -> 0.015
+  (irrigated orchards/vineyards). `globalMultiplier` stays 1: on Crozier the sim already grows faster
+  than the real fire did early on.
+- **Real-fire test (`crozier`):** real perimeter (NIFC), ignition and afternoon weather (Open-Meteo).
+  The panel reports IoU at the moment the run reaches the real size, so the score measures where the
+  fire goes, not how fast. With the real wind: 63 % IoU; wrong wind direction 33 %; no wind 24 %.
+- **Homes reached:** bundles may carry per-cell building counts (`homesBase64`). A home counts as
+  reached when fire arrives in its cell or any neighbour. With interventions, the sim also runs the
+  same scenario without them on the main thread (~15 ms) to show "before -> after".
+- **AI plan:** Gemini (REST, `VITE_GEMINI_API_KEY`, `VITE_GEMINI_MODEL`) proposes up to 3 firebreak
+  lines within a 4.5 km budget, from 30 min. The sim re-runs each proposal; a plan is accepted only if
+  it cuts homes reached (or burned area) by 25 %. Rejected plans go back to Gemini with the numbers,
+  up to 3 attempts. Without a key a labelled built-in planner is used. The key is in the browser
+  bundle, so restrict it to the Generative Language API and the deploy domain.
+
+## D26. Water: keep every spray, and let the fire wait for the best moment (open question)
+
+Found by the fuzzed invariant in `tests/invariants.test.ts` once the branches were merged.
+
+- **Fixed: a later spray erased an earlier one.** Only the latest spray per cell was kept, so before
+  the second spray the cell counted as dry. Now every spray is kept and the wettest remaining one
+  counts (`src/sim/events.ts`, `tests/water.test.ts`).
+- **Fixed: spreading into a drying cell was not time-consistent.** Leaving a source later could
+  reach a sprayed cell sooner (it had dried more), which breaks Dijkstra's assumption and made a cell
+  burn up to ~80 s earlier when more interventions were added. The solver now searches for the best
+  moment to leave the source (ternary search; arrival vs leave time is unimodal for one spray).
+  Sim time on 200 x 200 went from ~18 ms to ~57 ms.
+- **Open, for the team:** the invariant still fails for seed 208 by ~15 s. Cause: the fire may only
+  wait while the source still burns (burnout). A delayed source burns later, so it can still be
+  burning when the water has dried. That's physical (water sprayed too early can dry before a late
+  fire arrives), but it contradicts "interventions never make any cell burn earlier". Removing the
+  burnout cap on waiting makes all 15 invariants pass. Choose: keep the cap and narrow the invariant
+  to firebreaks / no-burnout, or drop the cap.
+
+## D27. Emergency response simulation on the frozen contract
+
+PR #4 ("containment simulation") introduced dispatched units, a rollout optimizer and moving 3D
+markers, but its lines were 90-150 m wide, crossed roads and buildings, landed all at once at
+the unit's ETA, and the optimizer ran ~40 synchronous sims on the UI thread with hard-coded
+resources. The port in `src/contain/` keeps its structure (sector candidates perpendicular to the
+spread, re-simulate each option, greedy lock-in, baseline vs contained metrics, time-driven unit
+kinematics) and changes the model:
+
+- **No contract change.** Hand and dozer lines are `firebreak` interventions one cell wide; engine
+  wet lines, bucket drops and retardant are `water` with per-unit `moistureBoost`/`halfLifeS`
+  (retardant: 6 h half-life). The sim, validator and tools are untouched.
+- **Lines only touch burnable cells.** Roads, water and buildings (all `FuelClass.NONE`) are free
+  tie-ins, never "cleared" and never painted. With a homes layer (`DemoArea.homes`, the format
+  from feature/yariel) a line stops at a home, dozers keep three cells clear of one, and ground
+  units near homes switch to a wet line. Vegetation cleared is weighted by fuel (forest 1,
+  shrub 0.4, grass 0.15) and penalised in the score, so cutting is a last resort.
+- **Crews can be outrun.** A ground unit works its line cell by cell at a production rate
+  (hand crew 15 m/min, engine 12, dozer 40, scaled by fuel) from the moment it reaches the line
+  (base → entry at road speed, entry → line on foot or track). Every three cells become one
+  intervention stamped with its completion time, so the fire can reach the unfinished end first,
+  at which point the crew pulls back. Aircraft lay `dropCells` per drop, one per reload cycle
+  (helicopter 7 min, airtanker 45 min), never on cells already burning.
+- **Response level is a dial.** `LEVELS` fixes detection delay, roster, assignments per unit,
+  line budget, drops per sortie and the cut penalty for Minimal / Standard / Aggressive /
+  Maximum; the advanced panel overrides any of them (`ContainOverrides`). Units of one type
+  leave a minute apart; bases are placed 6 / 20 / 60 km outside the grid on the side where the
+  most roads leave it (no Overpass or OSRM: deterministic, offline, instant).
+- **With vs without in one job.** The planner runs inside the sim worker behind a `plan`
+  request and returns both runs. The UI flips `result` between them, draws the other run's
+  burned-area outline in magenta, and shows Without / With / Saved plus homes reached when the
+  area has a homes layer. The Gemini briefing, its dev-server endpoint and the voice callouts
+  were dropped: a static Pages site has no server, and the briefing's "guardrail" was dead code.
+- **Cost.** A full plan is 20-130 sims and finishes in well under a second on a 200×200 grid,
+  so candidates are evaluated per unit, not per unit type, and every level tries all eight
+  sectors each cycle.
+
+## D28. Demo scenario work: base, disclaimer, fallbacks
 
 - Branch `feature/demo-scenario` is cut from `main` in its own worktree (`../Forrest-Labs-firesim-demo`)
   because the shared directory had another session's uncommitted edits. It therefore does NOT have
@@ -349,7 +428,7 @@ them in is a follow-up.
   synthetic areas, labelled synthetic. Overpass was reachable when the Surrey bundle was built
   (it returns HTTP 502 or times out intermittently; a second pass worked).
 
-## D26. Surrey Hills data: multipolygon woodland was being dropped (fixed), class shares, road check
+## D29. Surrey Hills data: multipolygon woodland was being dropped (fixed), class shares, road check
 
 **Bug found by looking at the first Surrey build.** The builder only used a multipolygon relation's
 member ways that were already closed on their own. Large woodlands are usually split over several ways,
@@ -376,7 +455,7 @@ the far side). Removing the bridge makes three tests fail, so they would catch a
 to the rasteriser was needed. Consequence for the demo: with no spotting on this branch a road is an
 absolute barrier, so the fire can only reach what is in its own compartment of woodland.
 
-## D27. Demo scenarios: tuned values, and what the model can and cannot show
+## D30. Demo scenarios: tuned values, and what the model can and cannot show
 
 Values live in `src/data/demo-scenarios.ts`; `npm run tune:demo` prints the report and
 `tests/demoScenario.test.ts` guards the same checks (`src/app/demoEval.ts`). Only weather, ignition,
@@ -423,7 +502,7 @@ backup (118, 145)) 2.6-2.8 km out, looking along the fire, rather than framing t
 6 h = 84 s of real time). Camera heading 40 deg (Surrey) / 70 deg (backup), pitch -30, looking along the
 fire. A run takes about 5 ms, so re-simulation after every change is instant.
 
-## D28. Mobile: bottom sheet with three heights, 44 px touch targets
+## D31. Mobile: bottom sheet with three heights, 44 px touch targets
 
 - **Phones (≤720 px):** the panel is a bottom sheet. A 36 px handle steps it peek → mid → tall (tap, drag up/down, or
   arrow keys; `role="slider"`). Peek leaves almost the whole map visible. `100dvh`-based heights, safe-area insets
@@ -438,3 +517,10 @@ fire. A run takes about 5 ms, so re-simulation after every change is instant.
 - **Verified (headless Chrome, touch emulation):** a finger tap moves the ignition; a finger drag draws a firebreak
   (176 cells); no horizontal overflow in portrait or landscape. **Not verified:** a physical phone, iOS Safari
   specifics, pinch/tilt on the 3D globe, Google 3D tiles (no key).
+
+## D32. Demo re-tuned after merging the team's fuel-rate change
+Teammates raised shrub (0.045 → 0.06 m/s) and halved farmland (0.03 → 0.015 m/s) in `src/contract/fuels.ts` for
+California. That moved both demos. Surrey now burns 119 ha uncontained (was 191), reaches the village at 2h40, and the
+saved plan holds it at 69 ha (58 %). The backup's fire reached its break at 39 % of the run, below the 40-60 % target, so
+only demo data changed: duration 6 h → 5.5 h, break at 2.1 h (was 2.4), spray at 2.5 h (was 2.8), pause at 2.0 h. All 16
+checks pass again; no model code was touched. The `tune:demo` checks exist so a change like this is caught.
