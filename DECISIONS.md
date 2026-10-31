@@ -54,8 +54,9 @@ builder-side nodata, which must be filled before a scenario exists; the validato
 
 ## D5. Cesium integration
 
-- Static assets are copied to `/cesium/` with `vite-plugin-static-copy`; `CESIUM_BASE_URL` is a
-  Vite `define`.
+- Static assets are copied into the gitignored `public/cesium/` by `scripts/copy-cesium.mjs`
+  (postinstall / predev / prebuild) and `window.CESIUM_BASE_URL = '/cesium/'` is set in
+  `index.html`. (`vite-plugin-static-copy` was tried first and did not serve the files in dev.)
 - The viewer is created with an explicit OpenStreetMap base layer and an ellipsoid terrain
   provider, with every widget off. **Cesium ion is never called**; no ion token is read.
 - With `VITE_GOOGLE_MAPS_API_KEY` present, the Google Photorealistic 3D Tiles tileset is added

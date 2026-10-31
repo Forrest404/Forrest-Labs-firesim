@@ -9,7 +9,7 @@ Companion files: [DECISIONS.md](DECISIONS.md) (judgement calls), [FEATURES.md](F
 - [x] Stage 1: Scaffold and contract
 - [x] Stage 2: Sim core on the fixture
 - [x] Stage 3: Data (geo, raster, terrain, bundles, 2 real + 2 synthetic areas, build script)
-- [ ] Stage 4: Cesium viewer spike
+- [x] Stage 4: Cesium viewer spike
 - [ ] Stage 5: Overlay, playback, ignition (CRITICAL MILESTONE)
 - [ ] Stage 6: Tools and advanced settings
 - [ ] Stage 7: Effects, hardening, hand-off, tag `v0`
@@ -60,14 +60,35 @@ Companion files: [DECISIONS.md](DECISIONS.md) (judgement calls), [FEATURES.md](F
     `landuse=residential` wiped out 25 % of the grid. Barrier rules narrowed; see DECISIONS D13.
   - Synthetic ridge ignition was boxed in by a road; moved east of it.
 - Elevation nodata (`-9999`) never reached a bundle (0 cells filled for both real areas).
+- Follow-up for a teammate (`live-data`): OSM forest polygons are patchy around Boulder Creek, so
+  ~60 % of that grid is default fuel (grass) though it is redwood belt. The builder now has
+  `--default FOREST_CONIFER`; a rebuild with it hit Overpass 502s. Re-run:
+  `npm run build:demo-area -- --name boulder-creek --label "Boulder Creek, CA" --center -122.122,37.126 --wind 250 --default FOREST_CONIFER`
+
+### Stage 4 — Cesium viewer spike
+- `src/viewer/`: `createViewer.ts` (OSM base layer, ellipsoid terrain, no ion, widgets off),
+  `googleTiles.ts` (Google 3D Tiles when a key exists, automatic revert on failure),
+  `burnCanvas.ts` (pure painters + tests), `burnLayer.ts` (`GridLayer`: double-buffered canvas
+  draped as a ground rectangle, classification BOTH), `gridOutline.ts`, `camera.ts`.
+- **Alignment verified visually** (headless Chrome screenshot, fallback mode): the overlay's edges
+  sit on the four corner markers, row 0 is north, and the fuel grid lines up with the OSM basemap
+  (forest, Kinzig valley road, farmland). Clean console apart from a favicon 404.
+- **Google 3D Tiles draping NOT verified** (no API key on the build machine). Fallback mode is the
+  tested default; the Google path is coded and reverts to fallback on any load failure.
+- Bug found and fixed: `vite-plugin-static-copy` did not serve Cesium's assets in dev (every
+  `/cesium/*` request got `index.html`, so workers, `approximateTerrainHeights.json` and textures
+  failed and rendering stopped). Replaced by `scripts/copy-cesium.mjs` into gitignored
+  `public/cesium/` (postinstall / predev / prebuild). Plugin removed.
+- Visual verification method: Chrome extension was not connected, so a small CDP script drives
+  the installed Chrome headlessly (SwiftShader WebGL), captures console + screenshot.
 
 ## Current stage
 
-Stage 4: Cesium viewer spike.
+Stage 5: Overlay, playback, ignition (critical milestone).
 
 ## Next
 
-Stage 5: Overlay, playback, ignition (critical milestone).
+Stage 6: Tools and advanced settings.
 
 ## Known issues / not verified
 

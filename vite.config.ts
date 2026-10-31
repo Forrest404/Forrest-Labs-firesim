@@ -1,21 +1,12 @@
 import { defineConfig } from 'vite';
-import { viteStaticCopy } from 'vite-plugin-static-copy';
 
-// Cesium ships prebuilt static assets (web workers, widgets CSS, textures) that must be
-// served from a known URL. We copy them to /cesium/ in dev and in the build output and
-// tell Cesium where to find them via the CESIUM_BASE_URL global.
-const cesiumSource = 'node_modules/cesium/Build/Cesium';
-const cesiumStaticDirs = ['Workers', 'ThirdParty', 'Assets', 'Widgets'];
-
+// Cesium's prebuilt static assets (web workers, widget CSS, textures) are copied into
+// public/cesium/ by scripts/copy-cesium.mjs (postinstall / predev / prebuild), so Vite serves
+// them the same way in dev and in the build. index.html sets window.CESIUM_BASE_URL = '/cesium/'.
 export default defineConfig({
   define: {
     CESIUM_BASE_URL: JSON.stringify('/cesium/'),
   },
-  plugins: [
-    viteStaticCopy({
-      targets: cesiumStaticDirs.map((dir) => ({ src: `${cesiumSource}/${dir}`, dest: 'cesium' })),
-    }),
-  ],
   worker: {
     format: 'es',
   },
