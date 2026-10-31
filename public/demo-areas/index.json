@@ -2,6 +2,17 @@
   "version": 1,
   "areas": [
     {
+      "name": "boulder-creek",
+      "label": "Boulder Creek, CA",
+      "synthetic": false,
+      "file": "boulder-creek.json",
+      "center": {
+        "lon": -122.122,
+        "lat": 37.126
+      },
+      "description": "Real land cover (ESA WorldCover 2021 v200, with OpenStreetMap water, buildings and roads) and elevation (AWS Terrain Tiles) around 37.126, -122.122."
+    },
+    {
       "name": "alpirsbach",
       "label": "Alpirsbach, Black Forest",
       "synthetic": false,
@@ -11,17 +22,6 @@
         "lat": 48.345
       },
       "description": "Real land cover (OpenStreetMap) and elevation (AWS Terrain Tiles) around 48.345, 8.400."
-    },
-    {
-      "name": "boulder-creek",
-      "label": "Boulder Creek, CA",
-      "synthetic": false,
-      "file": "boulder-creek.json",
-      "center": {
-        "lon": -122.122,
-        "lat": 37.126
-      },
-      "description": "Real land cover (OpenStreetMap) and elevation (AWS Terrain Tiles) around 37.126, -122.122."
     },
     {
       "name": "synthetic-ridge",

@@ -265,3 +265,40 @@ the burned area at every hour, nested probability lines, the disclaimer. Mutatio
 saddles, no interpolation, a wrong edge id, holes as exteriors, lat/lon swapped and a dropped
 disclaimer are caught; un-normalised orientation survived until the fuzz over holes and islands was
 added (ordinary fire shapes happen to come out right by luck).
+
+## SIM-14. Satellite land cover for fuel (`src/data/landcover.ts`, `scripts/lib/landcover-io.ts`)
+
+OSM vegetation is patchy in many places (Boulder Creek: 61 % of the grid fell to the default grass
+although the area is a redwood belt). `build:demo-area` can now use ESA WorldCover 2021 (10 m, global,
+CC BY 4.0), read straight from the public AWS bucket as a Cloud-Optimized GeoTIFF (only the needed
+window is downloaded, about 0.9 s for a 6 km area), or a local GeoTIFF / ESRI ASCII grid, with the
+WorldCover or CORINE legend. `geotiff` (MIT) is a DEV dependency used only by the Node script; the
+browser bundle is unchanged.
+
+Mapping (placeholders, like the fuel table): tree cover -> conifer (`--tree-fuel` to change; WorldCover
+does not name the forest type), shrubland -> shrub, grassland -> grass, cropland -> farmland;
+built-up, bare/sparse, snow, water, wetland, mangrove and moss -> non-burnable. CORINE names its forest
+types. The 10 m pixels are reduced to 30 m cells by majority vote (ties to the lower code); every pixel
+inside the grid is used exactly once (tested with a read-counting proxy), and the whole resampler is
+fuzz-tested against an independent brute-force reference.
+
+Hybrid mode: satellite vegetation as the base, OSM drawn on top for what it maps well (water,
+buildings, roads, rivers, rail); `--osm none` skips Overpass entirely, which is useful because
+Overpass is the flakiest dependency. A real Boulder Creek bundle built this way is 92 % conifer forest
+(was 27 %), with 0 uncovered cells.
+
+Bug found and fixed on the way: the default ignition only looked near the grid centre and could land
+in a tiny walled-in patch or inside a town (13 cells burned in 6 h). It now picks a cell in the largest
+8-connected burnable region (the connectivity the solver spreads through), requires 85 % burnable land
+in a 13 x 13 window (summed-area table), prefers forest and shrub, and takes the nearest such cell to
+the centre. On Boulder Creek the 6 h Rothermel fire went from 13 cells to 389 ha.
+
+Not done: CORINE and other non-geographic rasters must be reprojected to EPSG:4326 first (the reader
+refuses them with the gdalwarp command); WorldCover is the only source fetched automatically (CORINE
+needs a Copernicus login); no live in-browser loading yet (`live-data` slot).
+
+Tests: `tests/landcover.test.ts` (15) and `tests/ignition.test.ts` (10). Mutation-checked: an off-by-one
+pixel range, tie-break reversed, flipped row order, forest mapped to non-burnable, OSM vegetation not
+skipped in hybrid mode, tile naming by the wrong corner, a lost GeoTIFF y offset, a dropped openness
+rule, the wrong region and a farthest-candidate pick are all caught (two mutants were equivalent code
+and one tie-break rule needed its own test).

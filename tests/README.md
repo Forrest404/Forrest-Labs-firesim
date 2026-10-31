@@ -17,6 +17,10 @@ Vitest, Node environment, pure modules only (no Cesium, no DOM). `npm test` runs
 - `tools.test.ts` — firebreak/water rasterisation, undo/redo, and "a tool-drawn firebreak stops
   the simulated fire".
 - `invariants.test.ts` — model invariants that hold for ANY parameters (causality, monotonicity in moisture/wind/slope, mirror and rotation symmetry, interventions never make fire arrive earlier, fuzzed over random scenarios). Every rate model in `MODELS` runs the same suite. Mutation-checked: injected sign bugs are caught.
+- `weather-timeline.test.ts`, `weather.test.ts`, `crossing-accuracy.test.ts`, `spray.test.ts` — time-varying weather, sprays and the FIFO-safe crossing integrators (brute-force accuracy).
+- `neighbourhood.test.ts`, `spotting.test.ts`, `intensity.test.ts`, `rothermel.test.ts` — the 16-direction stencil and its leak guards, ember spotting, Byram intensity, the Rothermel model.
+- `ensemble.test.ts` — burn-probability ensembles. `contours.test.ts`, `geojson.test.ts` — marching squares and the GeoJSON export.
+- `landcover.test.ts`, `ignition.test.ts` — satellite land cover (tables, resampler vs brute force, GeoTIFF/ASCII readers, hybrid OSM mode) and the default ignition.
 - `burnCanvas.test.ts` — overlay painters.
 
 The viewer and UI are verified by hand or headlessly (see `PROGRESS.md`), not by unit tests.

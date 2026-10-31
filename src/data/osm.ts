@@ -92,6 +92,17 @@ export interface OsmElement {
 export interface BuildFuelOptions {
   /** Fuel for land with no mapped polygon. Default GRASS (see DECISIONS.md D10). */
   defaultFuel?: FuelClass;
+  /**
+   * Starting fuel grid (e.g. from satellite land cover) instead of one flat default. OSM features are
+   * drawn on top of it.
+   */
+  baseFuel?: Uint8Array;
+  /**
+   * Draw OSM vegetation polygons (forest, scrub, grass, farmland)? Default true. Set false with a
+   * `baseFuel` to keep the satellite vegetation and use OSM only for what it maps well: water,
+   * buildings, roads, rivers and rails (all non-burnable).
+   */
+  vegetationFromOsm?: boolean;
 }
 
 interface Feature {
@@ -106,7 +117,10 @@ export function buildFuelGrid(
   grid: GridSpec,
   opts: BuildFuelOptions = {},
 ): { fuel: Uint8Array; stats: Record<string, number> } {
-  const fuel = new Uint8Array(grid.width * grid.height).fill(opts.defaultFuel ?? FuelClass.GRASS);
+  const cells = grid.width * grid.height;
+  if (opts.baseFuel && opts.baseFuel.length !== cells) throw new Error(`baseFuel has ${opts.baseFuel.length} cells but the grid has ${cells}`);
+  const fuel = opts.baseFuel ? Uint8Array.from(opts.baseFuel) : new Uint8Array(cells).fill(opts.defaultFuel ?? FuelClass.GRASS);
+  const vegetationFromOsm = opts.vegetationFromOsm ?? true;
   const toCell = (pts: OsmGeomPoint[]): Pt[] =>
     pts.map((p) => {
       const { x, y } = lonLatToCellFloat(grid, p.lon, p.lat);
@@ -118,6 +132,8 @@ export function buildFuelGrid(
   for (const el of elements) {
     const rule = classify(el.tags);
     if (!rule || !el.tags) continue;
+    // Vegetation polygons are burnable fuel; with satellite vegetation they are skipped.
+    if (!vegetationFromOsm && rule.kind === 'area' && rule.fuel(el.tags) !== FuelClass.NONE) continue;
     if (el.type === 'way' && el.geometry && el.geometry.length >= 2) {
       const pts = toCell(el.geometry);
       const closed = isClosed(el.geometry);
