@@ -7,5 +7,8 @@ export default defineConfig({
     include: ['tests/**/*.test.ts'],
     environment: 'node',
     reporters: 'default',
+    // Fuzzed invariants and the response planner run hundreds of full sims per test; CI runners
+    // are 3-4x slower than a laptop and tripped the default 5 s limit.
+    testTimeout: 30_000,
   },
 });
