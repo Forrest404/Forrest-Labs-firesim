@@ -564,3 +564,58 @@ Nine ForeFire-inspired sim features, the compass/flight camera and live weather 
 - **Phones:** the compass moves to the top-left under the sheet layout.
 - **Checked:** 450 tests, build, demos; in a browser the live wind edit (1 edit, result changed), a 50-run ensemble,
   compass and both layouts. Not checked: GeoJSON export in a browser download, WASD flight on a real keyboard.
+
+## D34. Visual design pass: a field instrument, not a dashboard
+
+Branch `feature/ui-craft` (off `feature/demo-scenario`). Markup and behaviour are unchanged except where
+listed; the look is almost entirely `src/ui/styles.css`. Nothing in `src/sim`, `src/data` or the contract changed.
+
+**What was removed, and why.** The first design had the usual generic tells: an orange-to-yellow
+gradient button with a coloured glow, a frosted-glass floating panel with backdrop blur, a gradient logo
+tile, a decorative icon on every card heading, boxed cards nested inside a rounded card, pill chips for
+every number, press-scaling and a pulsing "stale" button. All gone.
+
+**What replaced it.**
+- *Layout:* a docked full-height sidebar (336 px) with hairline rules between sections instead of boxes;
+  a bottom sheet on phones. Radius 3 px everywhere, 4 px spacing grid (`--s1..--s4`).
+- *Colour:* warm paper and ink by default, graphite when the OS asks for dark (`prefers-color-scheme`). One
+  ember accent, used only for the Simulate button, the wind needle and notice rules. "Load demo scenario" is an
+  ink fill, so there is one headline action on screen.
+- *Type:* IBM Plex Sans for words, IBM Plex Mono for everything measured (wind, moisture, clock, areas, cell
+  counts, coordinates, shortcut keys), tabular figures, thousands separators. Self-hosted through
+  `@fontsource` (latin 400/500/600 and mono 400/500, about 100 KB) so the offline backup demo looks the same;
+  no CDN.
+- *Controls:* joined segmented buttons that invert when selected; a 2 px hairline slider with a plain thumb;
+  a wind dial with eight tick marks and mono compass letters; flat switches; real keycap `kbd` elements in the tips.
+- *Motion:* only functional state changes at 120-180 ms; a stale result is marked with an outline instead of
+  a pulse; the draw options appear with a short reveal; everything is disabled under `prefers-reduced-motion`.
+- *Icons:* decorative ones removed (section headings, the Simulate and Load buttons); the rest are
+  functional and 1.75 px stroke.
+
+**Checked, not eyeballed.** Every text and control pair was computed against WCAG: body, secondary and
+tertiary text at least 4.8:1, primary button 5.8:1 (light) / 6.4:1 (dark), control borders at least 3:1 (the first
+light-theme border value measured 2.37 and was darkened), accent on panel 5.5:1 / 5.9:1. Verified in headless
+Chrome in light, dark, reduced-motion and 390 px phone width: no horizontal overflow, 44 px targets on coarse
+pointers, keyboard focus ring visible (also inside the inverted segments), every control has an accessible name,
+fonts actually load (`document.fonts.check`).
+
+**Bug fixed on the way.** The draw-tool options (brush size, "apply at t = 0") sat in a one-row grid
+with two children, so even when closed the second child reserved a 36 px blank gap under the tool hint. They are
+now not rendered when closed. The wind needle also leaked above the sticky header (missing stacking context).
+
+**Not done / limits.** The Cesium credit strip and the OSM basemap are not ours to style. The page title lost
+"(simplified demo)". Only the demo branch was restyled: `main` and `scaffold/v0` still have the older look and the
+other session's panel edits will conflict with `styles.css` on merge (nearly every rule changed; take this file
+wholesale and re-apply their additions). Not tested on a real phone or a projector; the dark theme is the OS
+setting only (no toggle).
+
+## D35. The paper/graphite restyle is now the app's look; landing page matches
+Decided by the owner: `feature/ui-craft` replaces Visual system v2 (D24 stays as history). To merge it onto a main that had
+since grown a live tab, planner, response popup, real-vs-sim, ensemble and a three-height phone sheet:
+- `styles.css` is the restyle plus compatibility tokens (`--fg`, `--muted`, `--border`, ... resolve to the new palette) and
+  the teammates' component rules ported onto it: underline tabs, live fires, planner, dispatch HUD, real-vs-sim, response
+  popup, mobile sheet. Frosted-glass blur in two of those blocks was made solid; the real-fire cyan is now `--info`.
+- `controls.ts` keeps the team's `section(icon, title, ...)` signature (many callers); the CSS hides section icons.
+- The landing page uses the same tokens and fonts, says it was built in 4 hours at a hackathon, and lists the Surrey demo.
+- Found while checking: tabs and the live note had no side padding (cards own the padding in this layout); on phones the
+  sheet padded twice. Both fixed. Not verified: a physical phone, Google 3D tiles (no key).
