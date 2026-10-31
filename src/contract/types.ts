@@ -63,6 +63,23 @@ export interface Weather {
   windVariabilityDeg?: number;
 }
 
+/**
+ * A weather change at a point in time. Each field is optional: a field a keyframe leaves out keeps
+ * following its own earlier keyframes. Values are linearly interpolated between keyframes (wind
+ * direction along the shorter arc) and held after the last one. Scenario.weather is the state at
+ * t = 0.
+ */
+export interface WeatherKeyframe {
+  /** Seconds from ignition; keyframes must be strictly increasing. */
+  tSeconds: number;
+  windSpeedMps?: number;
+  /** Direction the wind blows FROM, degrees clockwise from north. */
+  windFromDeg?: number;
+  temperatureC?: number;
+  /** 0-1 */
+  relativeHumidity?: number;
+}
+
 export type InterventionType = 'firebreak' | 'water';
 
 export interface InterventionParams {
@@ -101,6 +118,8 @@ export interface SimSettings {
   rateModel: RateModelId;
   /** 'iso' model only: constant spread speed in m/s. */
   isoSpeedMps: number;
+  /** Spread directions per cell: 8 (king moves) or 16 (adds knight moves, rounder fires). */
+  neighbourhood: 8 | 16;
   /** Scales every spread rate. */
   globalMultiplier: number;
   /** Magnitude of the wind effect (0 disables wind). */
@@ -115,8 +134,21 @@ export interface SimSettings {
   waterMoistureBoost: number;
   /** If true, a cell stops spreading after its fuel's burn duration (affects delayed ignition through drying cells). */
   burnoutEnabled: boolean;
-  /** Stub. Ember spotting is not implemented in v0; must be false. */
+  /**
+   * Time lag (seconds) with which dead fuel moisture follows the weather when a schedule is set:
+   * dm/dt = (equilibrium - m) / lag. 3600 is the classic 1-hour fine-fuel timelag; 0 = instant.
+   */
+  fuelMoistureLagS: number;
+  /** Ember spotting on/off. Off by default: with it off a firebreak is an absolute barrier. */
   spottingEnabled: boolean;
+  /** Spotting: potential head-fire intensity (kW/m) a burning cell needs before it throws embers. */
+  spottingIntensityKwM: number;
+  /** Spotting: embers per qualifying cell at the threshold; grows with sqrt(intensity / threshold), max 8. */
+  spottingEmbers: number;
+  /** Spotting: multiplier on the mean flight distance (1 = default). */
+  spottingRangeScale: number;
+  /** Spotting: chance that an ember landing on dry burnable fuel ignites it (before the moisture factor). */
+  spottingIgnitionProb: number;
 }
 
 export interface Scenario {
@@ -128,6 +160,14 @@ export interface Scenario {
   /** Optional hook for future fuel-load scaling. Unused in v0. Metres. */
   canopyHeight?: Float32Array;
   weather: Weather;
+  /** Optional weather changes after t = 0 (see WeatherKeyframe). Empty or missing = constant weather. */
+  weatherSchedule?: WeatherKeyframe[];
+  /**
+   * Time resolution of the weather inside the solver, seconds (default 600). Weather is piecewise
+   * constant on an absolute grid of this size, so a smaller value lets a weather change take effect
+   * sooner (the live-edit path uses 120) at the cost of run time. Only used with a weatherSchedule.
+   */
+  weatherStepS?: number;
   /** Ignition cells at t = 0. The UI uses exactly one. */
   ignition: CellRef[];
   interventions: Intervention[];
@@ -143,6 +183,12 @@ export interface SimStats {
   burnedAreaHa: number;
   /** Fastest cell-to-cell spread rate observed, m/s. */
   maxSpreadRateMps: number;
+  /** Number of cells ignited by embers (0 when spotting is off). */
+  spotFires: number;
+  /** Largest Byram fireline intensity, kW/m (indicative, see SimResult.firelineIntensityKwM). */
+  maxIntensityKwM: number;
+  /** Largest Byram flame length, m. */
+  maxFlameLengthM: number;
   runtimeMs: number;
 }
 
@@ -155,7 +201,68 @@ export interface SimResult {
   arrivalTime: Float32Array;
   /** Optional relative spread strength at ignition, 0-1. Not a physical intensity. */
   intensity?: Float32Array;
+  /**
+   * Byram fireline intensity at ignition, kW/m: heat content x fuel load x spread rate (H w R),
+   * using the fuel bed in the fuel table and the spread rate along the edge that ignited the cell
+   * (head > flank > back). Zero for cells that never burn. Indicative, not calibrated.
+   */
+  firelineIntensityKwM: Float32Array;
+  /** Byram (1959) flame length, m: 0.0775 I^0.46 with I in kW/m. Zero for cells that never burn. */
+  flameLengthM: Float32Array;
+  /**
+   * Cell that ignited each cell, -1 for ignition cells and cells that never burn. Within about two
+   * cells for ordinary spread; farther away for ember spot fires.
+   */
+  sourceCell: Int32Array;
+  /** 1 where the cell was ignited by an ember (a spot fire), else 0. */
+  ignitedByEmber: Uint8Array;
   stats: SimStats;
 }
 
 export type DrynessPreset = 'low' | 'medium' | 'high' | 'extreme';
+
+/**
+ * How an ensemble perturbs the scenario. Every run k draws its perturbations from a hash of
+ * (baseSeed, k, parameter), so an ensemble is exactly reproducible.
+ */
+export interface EnsembleSpec {
+  /** Number of runs (1-500). */
+  runs: number;
+  /** Relative sigma of wind speed (mean-preserving lognormal), e.g. 0.25 = about +-25 %. Also scales schedule keyframes. */
+  windSpeedRelSigma: number;
+  /** Sigma of wind direction, degrees (added to the starting direction and every schedule keyframe). */
+  windDirSigmaDeg: number;
+  /** Sigma added to dead fuel moisture, as a fraction (0.02 = 2 percentage points). */
+  moistureSigma: number;
+  /** Ignition cell is moved to a random burnable cell within this many cells (0 = exact). */
+  ignitionJitterCells: number;
+  /** Seed for all perturbations (and the per-run scenario seeds). */
+  baseSeed: number;
+}
+
+/** Number of equal time slices over the run in EnsembleResult.burnedByBin. */
+export const ENSEMBLE_TIME_BINS = 24;
+
+export interface EnsembleResult {
+  runs: number;
+  width: number;
+  height: number;
+  durationSeconds: number;
+  /** Fraction of runs in which each cell had burned by the end of the run, 0-1. */
+  burnProbability: Float32Array;
+  /**
+   * Per time slice and cell, the number of runs in which the cell ignited during that slice:
+   * index = bin * (width * height) + cell, slice b covers (b, b+1] * durationSeconds / ENSEMBLE_TIME_BINS.
+   * Use probabilityAt() to turn it into P(burned by time t).
+   */
+  burnedByBin: Uint16Array;
+  /** Mean arrival time over the runs that burned the cell (Infinity if none) and the earliest one. */
+  meanArrivalS: Float32Array;
+  earliestArrivalS: Float32Array;
+  /** Burned area (ha) of every run, in run order, and summary quantiles. */
+  areasHa: Float64Array;
+  area: { meanHa: number; minHa: number; p10Ha: number; p50Ha: number; p90Ha: number; maxHa: number };
+  /** Average number of ember spot fires per run (0 when spotting is off). */
+  meanSpotFires: number;
+  runtimeMs: number;
+}

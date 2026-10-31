@@ -11,6 +11,10 @@ import { iconButton, section, segmented, tabBar, toggle } from './controls';
 import { mountDebug } from './debug';
 import { mountDemoCard } from './demoCard';
 import type { DemoActions } from './demoCard';
+import { mountEnsemble } from './ensemble';
+import type { EnsembleActions } from './ensemble';
+import { mountExport } from './export';
+import type { ExportActions } from './export';
 import { mountLive } from './live';
 import { mountLiveFires } from './liveFires';
 import type { LiveFiresActions } from './liveFires';
@@ -21,7 +25,7 @@ import type { PlaybackActions } from './playback';
 import { mountSettingsSimple } from './settingsSimple';
 import { STR } from './strings';
 
-export interface PanelActions extends AreaPickerActions, PlaybackActions, LiveActions, LiveFiresActions {
+export interface PanelActions extends AreaPickerActions, PlaybackActions, LiveActions, LiveFiresActions, EnsembleActions, ExportActions {
   demo: DemoActions;
   topDown(): void;
   resetView(): void;
@@ -86,6 +90,8 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
   const area = section('map', STR.areaLabel);
   const settings = section('wind', STR.settingsTitle);
   const sim = section('flame', STR.simulateTitle, { class: 'sim' });
+  const ensemble = section('layers', STR.ensembleTitle);
+  const exportSec = section('target', STR.exportTitle);
   const planner = section('sparkles', STR.planTitle);
   const predict = section('globe', STR.predictTitle, { class: 'live' });
   const tools = section('axe', STR.toolsTitle);
@@ -138,7 +144,7 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
     (v) => actions.setView(v),
     { ariaLabel: STR.tabsLabel },
   );
-  const simPane = el('div', { class: 'pane', role: 'tabpanel' }, demo.root, area.root, settings.root, sim.root, planner.root, tools.root, advanced.root, view.root);
+  const simPane = el('div', { class: 'pane', role: 'tabpanel' }, demo.root, area.root, settings.root, sim.root, ensemble.root, planner.root, tools.root, advanced.root, view.root, exportSec.root);
   const livePane = el('div', { class: 'pane', role: 'tabpanel' });
   livePane.hidden = true;
   tabs.set('sim');
@@ -148,6 +154,8 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
   mountAreaPicker(area.body, store, actions);
   mountSettingsSimple(settings.body, store);
   mountPlayback(sim.body, store, actions);
+  mountEnsemble(ensemble.body, store, actions);
+  mountExport(exportSec.body, store, actions);
   mountDebug(debugBody, store);
   mountLive(livePane, store, actions);
   livePane.append(predict.root);

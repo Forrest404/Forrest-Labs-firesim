@@ -29,7 +29,11 @@ export function mountAreaPicker(container: HTMLElement, store: Store, actions: A
     select.disabled = s.areaLoading;
     container.classList.toggle('loading', s.areaLoading);
     if (s.areaLoading) info.textContent = STR.loadingArea;
-    else if (s.area) info.textContent = s.area.meta.description;
+    else if (s.area) {
+      const m = s.area.meta;
+      // Each bundle names its own data sources and licences (OSM, ESA WorldCover, ...): show those, not a fixed line.
+      info.textContent = `${m.description} ${m.synthetic ? '' : m.attribution.join(' · ')}`;
+    }
     tag.hidden = !(s.area?.meta.synthetic);
     tag.title = STR.syntheticNote;
   });

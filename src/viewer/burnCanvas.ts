@@ -48,6 +48,8 @@ export interface BurnPaintOptions {
   firebreak?: Uint8Array;
   /** 0..1 current wetness per cell (by time t). */
   wetness?: Float32Array;
+  /** 1 where the cell was ignited by an ember: shown as a pale flash while it is flaming. */
+  spot?: Uint8Array;
 }
 
 /**
@@ -66,7 +68,14 @@ export function paintBurn(data: Uint8ClampedArray, arrival: Float32Array, t: num
     let alpha = 0;
     if (a !== NEVER_ARRIVES && a <= t) {
       const age = t - a;
-      if (age < win) {
+      if (age < win && o.spot && o.spot[i]) {
+        // Ember spot fire: bright white-yellow, fading to the normal flame colours.
+        const k = age / win;
+        r = 255;
+        g = Math.round(255 - 60 * k);
+        b = Math.round(200 * (1 - k));
+        alpha = 245;
+      } else if (age < win) {
         const k = age / win; // 0 = just ignited
         r = 255;
         g = Math.round(230 * (1 - k) * (1 - k) + 40);
@@ -399,5 +408,35 @@ export function paintRingCellsScaled(data: Uint8ClampedArray, cells: Uint8Array,
         }
       }
     }
+  }
+}
+
+/** CSS gradient matching paintProbability, for the legend. */
+export const PROBABILITY_GRADIENT = 'linear-gradient(to right, rgb(255,235,120), rgb(255,140,0), rgb(180,0,40))';
+
+/**
+ * Burn-probability heat map. Cells with probability 0 stay transparent; low probabilities are pale
+ * yellow and faint, high ones deep red and strong. p is 0-1 per cell, row 0 = north.
+ */
+export function paintProbability(data: Uint8ClampedArray, p: Float32Array): void {
+  for (let i = 0, q = 0; i < p.length; i++, q += 4) {
+    const v = p[i];
+    if (!(v > 0.004)) {
+      data[q + 3] = 0;
+      continue;
+    }
+    const k = Math.min(1, v);
+    let r: number, g: number, b: number;
+    if (k < 0.5) {
+      const f = k / 0.5;
+      r = 255; g = Math.round(235 - 95 * f); b = Math.round(120 - 120 * f);
+    } else {
+      const f = (k - 0.5) / 0.5;
+      r = Math.round(255 - 75 * f); g = Math.round(140 - 140 * f); b = Math.round(40 * f);
+    }
+    data[q] = r;
+    data[q + 1] = g;
+    data[q + 2] = b;
+    data[q + 3] = Math.round(70 + 160 * Math.pow(k, 0.7));
   }
 }

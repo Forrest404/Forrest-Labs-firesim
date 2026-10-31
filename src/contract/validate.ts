@@ -7,7 +7,7 @@
 
 import { ELEVATION_NODATA, MAX_GRID_DIM, inGrid } from './conventions';
 import { FUEL_CLASS_COUNT } from './types';
-import type { Scenario } from './types';
+import type { EnsembleSpec, Scenario } from './types';
 
 export function validateScenario(s: Scenario): string[] {
   const errors: string[] = [];
@@ -75,8 +75,27 @@ export function validateScenario(s: Scenario): string[] {
   if (!(w.relativeHumidity >= 0 && w.relativeHumidity <= 1)) errors.push('relativeHumidity must be 0-1');
   if (!(w.baseFuelMoisture >= 0 && w.baseFuelMoisture <= 1)) errors.push('baseFuelMoisture must be 0-1');
   if (!['factors', 'rothermel', 'iso'].includes(s.settings.rateModel)) errors.push(`unknown rateModel ${String(s.settings.rateModel)}`);
+  if (s.settings.neighbourhood !== 8 && s.settings.neighbourhood !== 16) errors.push('neighbourhood must be 8 or 16');
   if (!(s.settings.isoSpeedMps >= 0)) errors.push('isoSpeedMps must be >= 0');
-  if (s.settings.spottingEnabled) errors.push('spottingEnabled is a stub and must be false in v0');
+  if (!(s.settings.fuelMoistureLagS >= 0)) errors.push('fuelMoistureLagS must be >= 0');
+  if (s.weatherStepS !== undefined && !(s.weatherStepS >= 30 && s.weatherStepS <= 3600)) errors.push('weatherStepS must be 30-3600');
+  const sched = s.weatherSchedule ?? [];
+  if (sched.length > 200) errors.push('weatherSchedule has more than 200 keyframes');
+  let lastT = -Infinity;
+  for (const k of sched) {
+    if (!Number.isFinite(k.tSeconds) || k.tSeconds < 0) errors.push(`weather keyframe time ${k.tSeconds} must be >= 0`);
+    else if (k.tSeconds <= lastT) errors.push(`weather keyframe times must be strictly increasing (at ${k.tSeconds})`);
+    lastT = Math.max(lastT, k.tSeconds);
+    if (k.windSpeedMps !== undefined && !(k.windSpeedMps >= 0 && k.windSpeedMps < 200)) errors.push(`weather keyframe wind speed ${k.windSpeedMps} out of range`);
+    if (k.windFromDeg !== undefined && !Number.isFinite(k.windFromDeg)) errors.push('weather keyframe wind direction must be finite');
+    if (k.temperatureC !== undefined && !(k.temperatureC > -60 && k.temperatureC < 70)) errors.push(`weather keyframe temperature ${k.temperatureC} out of range`);
+    if (k.relativeHumidity !== undefined && !(k.relativeHumidity >= 0 && k.relativeHumidity <= 1)) errors.push(`weather keyframe humidity ${k.relativeHumidity} must be 0-1`);
+  }
+  const st = s.settings;
+  if (!(st.spottingIntensityKwM > 0)) errors.push('spottingIntensityKwM must be > 0');
+  if (!(st.spottingEmbers >= 0 && st.spottingEmbers <= 8)) errors.push('spottingEmbers must be 0-8');
+  if (!(st.spottingRangeScale >= 0)) errors.push('spottingRangeScale must be >= 0');
+  if (!(st.spottingIgnitionProb >= 0 && st.spottingIgnitionProb <= 1)) errors.push('spottingIgnitionProb must be 0-1');
 
   return errors;
 }
@@ -84,4 +103,15 @@ export function validateScenario(s: Scenario): string[] {
 export function assertValidScenario(s: Scenario): void {
   const errors = validateScenario(s);
   if (errors.length > 0) throw new Error(`Invalid scenario: ${errors.join('; ')}`);
+}
+
+export function validateEnsembleSpec(e: EnsembleSpec): string[] {
+  const errors: string[] = [];
+  if (!Number.isInteger(e.runs) || e.runs < 1 || e.runs > 500) errors.push(`runs must be an integer 1-500, got ${e.runs}`);
+  if (!(e.windSpeedRelSigma >= 0 && e.windSpeedRelSigma <= 2)) errors.push('windSpeedRelSigma must be 0-2');
+  if (!(e.windDirSigmaDeg >= 0 && e.windDirSigmaDeg <= 180)) errors.push('windDirSigmaDeg must be 0-180');
+  if (!(e.moistureSigma >= 0 && e.moistureSigma <= 0.3)) errors.push('moistureSigma must be 0-0.3');
+  if (!(e.ignitionJitterCells >= 0 && e.ignitionJitterCells <= 50)) errors.push('ignitionJitterCells must be 0-50');
+  if (!Number.isInteger(e.baseSeed)) errors.push('baseSeed must be an integer');
+  return errors;
 }

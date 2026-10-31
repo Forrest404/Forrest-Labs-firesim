@@ -1,12 +1,14 @@
 /** Big Simulate button, hint line, transport controls (icons), speed chips, scrubber, clock, stats. */
 
 import type { Store } from '../app/state';
+import { currentWeather } from '../app/weatherEdit';
 import { homesReached, overlapAt, overlapAtRealSize, totalHomes } from '../app/impact';
 import type { Overlap } from '../app/impact';
 import { liveStats } from '../app/overlayPainter';
 import type { SimResult } from '../contract';
 import { COMPARE_RGBA } from '../viewer/burnCanvas';
 import { chip, iconButton, segmented, slider } from './controls';
+import { intensityClass } from '../sim/intensity';
 import { el, formatClock } from './el';
 import { icon } from './icons';
 import { STR } from './strings';
@@ -37,6 +39,7 @@ export function mountPlayback(container: HTMLElement, store: Store, actions: Pla
   const area = chip('', 'stat');
   const cells = chip('', 'stat');
   const stats = el('div', { class: 'stats' }, area, cells);
+  const fireInfo = el('div', { class: 'muted fire-info' });
   const transport = el('div', { class: 'transport' },
     el('div', { class: 'row tight' }, playBtn, restartBtn, clock),
     speed.root,
@@ -60,6 +63,7 @@ export function mountPlayback(container: HTMLElement, store: Store, actions: Pla
     transport,
     scrub,
     stats,
+    fireInfo,
     impact,
     realFire,
   );
@@ -94,10 +98,16 @@ export function mountPlayback(container: HTMLElement, store: Store, actions: Pla
     if (document.activeElement !== scrub) scrub.value = String(s.playback.t);
     clock.textContent = formatClock(s.playback.t);
     stats.hidden = !has;
+    fireInfo.hidden = !has;
     if (has && s.area) {
       const st = liveStats(s.result, s.area.grid, s.playback.t);
       area.textContent = `${st.burnedAreaHa.toFixed(0)} ha`;
       cells.textContent = `${st.burnedCells} ${STR.cellsBurned}`;
+      const now = currentWeather(s);
+      const fire = st.maxIntensityKwM > 0
+        ? `${STR.peakIntensity} ${st.maxIntensityKwM.toFixed(0)} kW/m (${STR.intensityClass[intensityClass(st.maxIntensityKwM)]}), ${STR.flameLength} ${st.maxFlameLengthM.toFixed(1)} m · `
+        : '';
+      fireInfo.textContent = `${fire}${STR.windNow} ${Math.round(now.windSpeedMps * 3.6)} km/h from ${Math.round(now.windFromDeg)}°`;
     }
 
     const homes = s.area?.homes;

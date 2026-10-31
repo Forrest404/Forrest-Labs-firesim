@@ -6,7 +6,7 @@
  * Weather object the advanced panel edits, so there is no separate preset logic anywhere.
  */
 
-import type { DrynessPreset, SimSettings, Weather } from './types';
+import type { DrynessPreset, EnsembleSpec, SimSettings, Weather, WeatherKeyframe } from './types';
 
 export interface DrynessPresetValues {
   label: string;
@@ -60,6 +60,8 @@ export const DEFAULT_WEATHER: Weather = {
 export const DEFAULT_SETTINGS: SimSettings = {
   rateModel: 'factors',
   isoSpeedMps: 0.1,
+  neighbourhood: 8, // main's calibrated behaviour; 16 (rounder fires) is a UI choice
+  fuelMoistureLagS: 3600,
   globalMultiplier: 1,
   windStrength: 1,
   windExponent: 0.8,
@@ -68,7 +70,79 @@ export const DEFAULT_SETTINGS: SimSettings = {
   waterMoistureBoost: 0.5,
   burnoutEnabled: true,
   spottingEnabled: false,
+  spottingIntensityKwM: 2000,
+  spottingEmbers: 2,
+  spottingRangeScale: 1,
+  // Chosen so spotting is clearly visible in a 3 h demo (about 2-5x the area at 10 m/s) without
+  // engulfing the map; the real value is highly uncertain and far smaller per ember.
+  spottingIgnitionProb: 0.02,
 };
 
 /** 6 simulated hours. */
 export const DEFAULT_DURATION_SECONDS = 6 * 3600;
+
+/**
+ * "Weather over time" presets are DATA: changes relative to the starting weather, so they apply to
+ * whatever conditions the user set. Times in hours. scheduleFromPreset() turns one into keyframes.
+ */
+export type WeatherPresetId = 'steady' | 'windShift' | 'windRise' | 'frontPassage' | 'eveningCooling';
+
+export interface WeatherPresetStep {
+  tHours: number;
+  /** Multiplies the starting wind speed. */
+  windSpeedFactor?: number;
+  /** Added to the starting wind-from direction, degrees. */
+  windFromDeltaDeg?: number;
+  temperatureDeltaC?: number;
+  /** Added to the starting relative humidity (fraction). */
+  humidityDelta?: number;
+}
+
+export const WEATHER_PRESETS: Record<WeatherPresetId, { label: string; steps: WeatherPresetStep[] }> = {
+  steady: { label: 'Steady (no change)', steps: [] },
+  windShift: { label: 'Wind shifts 90° after 2 h', steps: [{ tHours: 2 }, { tHours: 3, windFromDeltaDeg: 90 }] },
+  windRise: { label: 'Wind doubles by hour 3', steps: [{ tHours: 0.5 }, { tHours: 3, windSpeedFactor: 2 }] },
+  frontPassage: {
+    label: 'Front passage: wind shift, gusts, then damp air',
+    steps: [{ tHours: 1.5 }, { tHours: 2.5, windFromDeltaDeg: 90, windSpeedFactor: 2 }, { tHours: 5, windFromDeltaDeg: 90, windSpeedFactor: 1, humidityDelta: 0.45, temperatureDeltaC: -8 }],
+  },
+  eveningCooling: { label: 'Evening cooling and humidity recovery', steps: [{ tHours: 1 }, { tHours: 5, temperatureDeltaC: -12, humidityDelta: 0.4 }] },
+};
+
+export const WEATHER_PRESET_ORDER: WeatherPresetId[] = ['steady', 'windShift', 'windRise', 'frontPassage', 'eveningCooling'];
+
+export function scheduleFromPreset(id: WeatherPresetId, weather: Weather): WeatherKeyframe[] {
+  return WEATHER_PRESETS[id].steps.map((st) => ({
+    tSeconds: st.tHours * 3600,
+    windSpeedMps: weather.windSpeedMps * (st.windSpeedFactor ?? 1),
+    windFromDeg: (((weather.windFromDeg + (st.windFromDeltaDeg ?? 0)) % 360) + 360) % 360,
+    temperatureC: weather.temperatureC + (st.temperatureDeltaC ?? 0),
+    relativeHumidity: Math.min(1, Math.max(0.02, weather.relativeHumidity + (st.humidityDelta ?? 0))),
+  }));
+}
+
+/** Default ensemble: moderate uncertainty in wind and moisture, exact ignition. */
+export const DEFAULT_ENSEMBLE_SPEC: EnsembleSpec = {
+  runs: 50,
+  windSpeedRelSigma: 0.25,
+  windDirSigmaDeg: 15,
+  moistureSigma: 0.02,
+  ignitionJitterCells: 0,
+  baseSeed: 1,
+};
+
+/** "How uncertain are the conditions?" as data: sigmas for the ensemble perturbations. */
+export type UncertaintyLevel = 'low' | 'medium' | 'high';
+
+export const UNCERTAINTY_PRESETS: Record<UncertaintyLevel, { label: string; windSpeedRelSigma: number; windDirSigmaDeg: number; moistureSigma: number }> = {
+  low: { label: 'Low (wind ±10 %, ±6°)', windSpeedRelSigma: 0.1, windDirSigmaDeg: 6, moistureSigma: 0.01 },
+  medium: { label: 'Medium (wind ±25 %, ±15°)', windSpeedRelSigma: 0.25, windDirSigmaDeg: 15, moistureSigma: 0.02 },
+  high: { label: 'High (wind ±40 %, ±30°)', windSpeedRelSigma: 0.4, windDirSigmaDeg: 30, moistureSigma: 0.04 },
+};
+export const UNCERTAINTY_ORDER: UncertaintyLevel[] = ['low', 'medium', 'high'];
+export const ENSEMBLE_RUN_OPTIONS = [25, 50, 100, 200];
+
+export function ensembleSpecFrom(runs: number, level: UncertaintyLevel, ignitionJitterCells: number, baseSeed: number): EnsembleSpec {
+  const u = UNCERTAINTY_PRESETS[level];
+  return { runs, windSpeedRelSigma: u.windSpeedRelSigma, windDirSigmaDeg: u.windDirSigmaDeg, moistureSigma: u.moistureSigma, ignitionJitterCells, baseSeed };
+}

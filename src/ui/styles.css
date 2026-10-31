@@ -651,3 +651,18 @@ ul.interventions li { border-radius: 4px; }
 @media (prefers-reduced-motion: reduce) {
   #panel { transition: none; }
 }
+
+/* Long preset names must not push a select out of the panel. */
+#panel label select { min-width: 0; max-width: 190px; flex: 1; }
+
+#panel progress { width: 100%; height: 8px; accent-color: var(--accent); }
+#panel .prob-legend { margin-top: 6px; }
+#panel .prob-legend .bar { height: 10px; border-radius: 5px; border: 1px solid var(--border); }
+#panel .prob-legend .ticks { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+/* Live weather changes */
+#panel .live-row { margin: 4px 0 8px; }
+#panel .live-row .row { align-items: center; gap: 8px; }
+#panel .live-row .live-info { font-size: 12px; flex: 1; }
+#panel .live-row.editing .live-info { color: var(--accent, #ff7a1a); }
+#panel button.small { padding: 2px 8px; font-size: 12px; }

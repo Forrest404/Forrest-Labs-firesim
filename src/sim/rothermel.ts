@@ -2,7 +2,7 @@
  * Rothermel (1972) surface-fire rate of spread with the Albini (1976) revisions, for a single-size
  * dead fuel bed. Written from the published equations (Rothermel 1972, USDA Forest Service
  * INT-115; Albini 1976, INT-30; wind limit from Andrews, Cruz & Rothermel 2013). Public-domain
- * science; no third-party code was copied (ForeFire is GPL, see DECISIONS.md D17).
+ * science; no third-party code was copied (ForeFire is GPL, see docs/sim-realism.md SIM-1).
  *
  * Internals use the paper's US units (ft, lb, Btu, min); the public functions take and return SI.
  * Fuel parameters are placeholders (see src/contract/fuels.ts). NOT validated against BehavePlus

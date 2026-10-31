@@ -6,8 +6,19 @@
  *          --default GRASS (fuel for land with no OSM land-cover polygon: GRASS, SHRUB,
  *          FOREST_CONIFER, FOREST_DECIDUOUS, FARMLAND)
  *
- * Sources: OpenStreetMap via Overpass (ODbL) for land cover, AWS Terrain Tiles (Terrarium) for
- * elevation. Google tiles are never used as a data source.
+ * Land cover (vegetation):
+ *   --landcover worldcover      ESA WorldCover 2021 (10 m, global, CC BY 4.0) fetched from AWS
+ *   --landcover-file f.tif|.asc a local raster in EPSG:4326 (GeoTIFF or ESRI ASCII grid); with
+ *   --landcover-kind worldcover|corine (default worldcover). Reproject first: gdalwarp -t_srs EPSG:4326
+ *   --tree-fuel FOREST_CONIFER|FOREST_DECIDUOUS   fuel for WorldCover tree cover (default conifer)
+ *   --osm full|barriers|none    how much OpenStreetMap to use (default full without --landcover,
+ *                               barriers with it). barriers = water, buildings, roads, rivers, rail,
+ *                               vegetation from the satellite; none = no Overpass call at all
+ *                               (useful when Overpass is down; the satellite classes still mark
+ *                               built-up land and water)
+ *
+ * Sources: OpenStreetMap via Overpass (ODbL), ESA WorldCover (CC BY 4.0) or a CORINE raster you
+ * supply, AWS Terrain Tiles (Terrarium) for elevation. Google tiles are never a data source.
  */
 import { mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -16,8 +27,11 @@ import { ELEVATION_NODATA, FuelClass } from '../src/contract';
 import { encodeBundle, indexEntryFor } from '../src/data/bundle';
 import type { DemoArea, DemoAreaIndex } from '../src/data/bundle';
 import { makeGridSpec } from '../src/data/geo';
+import { WORLDCOVER_ATTRIBUTION, landcoverToFuel, resampleCategorical } from '../src/data/landcover';
+import type { LandcoverKind, SourceRaster } from '../src/data/landcover';
 import { buildFuelGrid, overpassQuery } from '../src/data/osm';
 import type { OsmElement } from '../src/data/osm';
+import { parseAsciiGrid, readLocalGeoTiff, readWorldCoverWindow } from './lib/landcover-io';
 import { decodeTerrariumTile, fillNodata, sampleElevationGrid, tileUrl, tilesForGrid } from '../src/data/terrain';
 
 const OVERPASS_ENDPOINTS = [
@@ -98,19 +112,64 @@ async function main(): Promise<void> {
   const filled = fillNodata(elevation, grid.width, grid.height, ELEVATION_NODATA);
   if (filled > 0) console.warn(`  filled ${filled} nodata cells`);
 
-  const elements = await fetchOverpass(overpassQuery(grid.bounds));
-  const { fuel, stats } = buildFuelGrid(elements, grid, { defaultFuel });
-  console.log('Fuel stats', stats, `default=${defaultName}`);
+  // Satellite land cover (optional): the base vegetation layer.
+  const lcMode = arg('landcover', '');
+  const lcFile = arg('landcover-file', '');
+  const lcKind = arg('landcover-kind', 'worldcover') as LandcoverKind;
+  if (lcKind !== 'worldcover' && lcKind !== 'corine') throw new Error('--landcover-kind must be worldcover or corine');
+  const treeName = arg('tree-fuel', 'FOREST_CONIFER').toUpperCase();
+  const treeFuel = FuelClass[treeName as keyof typeof FuelClass];
+  if (treeFuel === undefined || treeFuel === FuelClass.NONE) throw new Error(`--tree-fuel must be a burnable FuelClass name, got ${treeName}`);
+  let baseFuel: Uint8Array | undefined;
+  let landcoverUsed = '';
+  if (lcMode || lcFile) {
+    let raster: SourceRaster;
+    if (lcFile) {
+      console.log(`Land cover: ${lcFile} (${lcKind})`);
+      raster = /\.(asc|txt)$/i.test(lcFile) ? parseAsciiGrid(readFileSync(resolve(process.cwd(), lcFile), 'utf8')) : await readLocalGeoTiff(resolve(process.cwd(), lcFile), grid.bounds);
+      landcoverUsed = lcKind === 'worldcover' ? `ESA WorldCover raster supplied by the builder (${lcFile})` : `CORINE Land Cover raster supplied by the builder (${lcFile})`;
+    } else {
+      if (lcMode !== 'worldcover') throw new Error('--landcover must be worldcover (or use --landcover-file)');
+      console.log('Land cover: ESA WorldCover 2021 from AWS');
+      raster = await readWorldCoverWindow(grid.bounds, console.log);
+      landcoverUsed = 'ESA WorldCover 2021 v200';
+    }
+    const { classes, uncovered } = resampleCategorical(raster, grid);
+    const lc = landcoverToFuel(classes, lcMode ? 'worldcover' : lcKind, { treeFuel });
+    baseFuel = lc.fuel;
+    console.log('Land-cover fuel counts', Object.fromEntries(Object.entries(lc.fuelCounts).map(([k, v]) => [FuelClass[Number(k)], v])), `uncovered cells ${uncovered}`, lc.unknown.size ? `unknown codes ${JSON.stringify([...lc.unknown])}` : '');
+    if (uncovered > grid.width * grid.height * 0.05) console.warn('  WARNING: more than 5 % of the grid is not covered by the raster');
+  }
+  const osmMode = arg('osm', baseFuel ? 'barriers' : 'full');
+  if (!['full', 'barriers', 'none'].includes(osmMode)) throw new Error('--osm must be full, barriers or none');
+  let fuel: Uint8Array;
+  if (osmMode === 'none') {
+    if (!baseFuel) throw new Error('--osm none needs a land-cover source (--landcover or --landcover-file)');
+    fuel = baseFuel;
+    console.log('OpenStreetMap not used (--osm none)');
+  } else {
+    const elements = await fetchOverpass(overpassQuery(grid.bounds));
+    const built = buildFuelGrid(elements, grid, { defaultFuel, baseFuel, vegetationFromOsm: osmMode === 'full' });
+    fuel = built.fuel;
+    console.log('Fuel stats', built.stats, baseFuel ? `base=${landcoverUsed}, osm=${osmMode}` : `default=${defaultName}`);
+  }
+  const usesOsm = osmMode !== 'none';
 
   const area: DemoArea = {
     meta: {
       name,
       label,
       synthetic: false,
-      description: `Real land cover (OpenStreetMap) and elevation (AWS Terrain Tiles) around ${centerLat.toFixed(3)}, ${centerLon.toFixed(3)}. Land without an OSM land-cover polygon is assumed to be ${defaultName.toLowerCase().replace('_', ' ')}.`,
+      description: baseFuel
+        ? `Real land cover (${landcoverUsed}${usesOsm ? `, with OpenStreetMap ${osmMode === 'full' ? 'features' : 'water, buildings and roads'}` : ''}) and elevation (AWS Terrain Tiles) around ${centerLat.toFixed(3)}, ${centerLon.toFixed(3)}.`
+        : `Real land cover (OpenStreetMap) and elevation (AWS Terrain Tiles) around ${centerLat.toFixed(3)}, ${centerLon.toFixed(3)}. Land without an OSM land-cover polygon is assumed to be ${defaultName.toLowerCase().replace('_', ' ')}.`,
       source: 'scripts/build-demo-area.ts',
-      attribution: ['© OpenStreetMap contributors (ODbL)', 'Elevation: AWS Terrain Tiles (Mapzen Terrarium), sources per https://registry.opendata.aws/terrain-tiles/'],
-      license: 'ODbL for OSM-derived land cover; see data/README.md',
+      attribution: [
+        ...(usesOsm ? ['© OpenStreetMap contributors (ODbL)'] : []),
+        ...(baseFuel && lcMode === 'worldcover' ? [WORLDCOVER_ATTRIBUTION] : baseFuel ? [`Land cover: ${landcoverUsed}`] : []),
+        'Elevation: AWS Terrain Tiles (Mapzen Terrarium), sources per https://registry.opendata.aws/terrain-tiles/',
+      ],
+      license: `${usesOsm ? 'ODbL for OSM-derived features. ' : ''}${baseFuel && lcMode === 'worldcover' ? 'CC BY 4.0 for ESA WorldCover. ' : ''}See data/README.md`.trim(),
       createdAt: new Date().toISOString(),
       defaultWindFromDeg: windFromDeg,
     },

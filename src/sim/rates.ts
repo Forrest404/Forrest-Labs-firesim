@@ -7,9 +7,16 @@
 
 import type { SimSettings } from '../contract';
 
-const SQRT2 = Math.SQRT2;
-
-/** The 8 neighbour offsets with their unit direction (east, north components) and distance factor. */
+/**
+ * Neighbour stencil. The first 8 entries are the king moves (4 edge + 4 diagonal); entries 8-15
+ * are the knight moves (1 x 2 cells). 8-neighbour shortest paths overestimate straight-line
+ * distance by up to 8.2 %, which makes a fire on uniform ground octagonal; adding knight moves
+ * cuts that to 2.7 %.
+ *
+ * A knight move hops over two cells (m1 and m2, given as offsets from the SOURCE cell), so the
+ * solver only allows it when both are the same fuel as the target, unsprayed and not firebroken by
+ * the arrival time. That keeps barriers, wet bands and fuel changes from being skipped.
+ */
 export interface NeighborOffset {
   dr: number;
   dc: number;
@@ -18,16 +25,28 @@ export interface NeighborOffset {
   uy: number;
   /** Multiply by cell size to get centre-to-centre distance. */
   distFactor: number;
+  /** Knight moves only: the two cells the segment passes through, as offsets from the source. */
+  m1r: number;
+  m1c: number;
+  m2r: number;
+  m2c: number;
 }
+
+export const KING_MOVES = 8;
+export const ALL_MOVES = 16;
 
 export const NEIGHBOR_OFFSETS: readonly NeighborOffset[] = (() => {
   const out: NeighborOffset[] = [];
-  for (let dr = -1; dr <= 1; dr++) {
-    for (let dc = -1; dc <= 1; dc++) {
-      if (dr === 0 && dc === 0) continue;
-      const len = Math.hypot(dr, dc);
-      // Row increases southward, so "north" is -dr.
-      out.push({ dr, dc, ux: dc / len, uy: -dr / len, distFactor: len === 1 ? 1 : SQRT2 });
+  const push = (dr: number, dc: number, m1r = 0, m1c = 0, m2r = 0, m2c = 0): void => {
+    const len = Math.hypot(dr, dc);
+    // Row increases southward, so "north" is -dr.
+    out.push({ dr, dc, ux: dc / len, uy: -dr / len, distFactor: len, m1r, m1c, m2r, m2c });
+  };
+  for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) if (dr || dc) push(dr, dc);
+  for (const sr of [-1, 1]) {
+    for (const sc of [-2, 2]) {
+      push(sr, sc, 0, sc / 2, sr, sc / 2); // 1 row, 2 columns: passes (0, +-1) and (+-1, +-1)
+      push(sc, sr, sc / 2, 0, sc / 2, sr); // 2 rows, 1 column: passes (+-1, 0) and (+-1, +-1)
     }
   }
   return out;

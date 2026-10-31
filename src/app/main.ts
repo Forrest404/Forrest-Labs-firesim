@@ -7,7 +7,9 @@ import { mountResponsePopup } from '../ui/responsePopup';
 import { createNotices } from '../ui/notices';
 import { mountPanel } from '../ui/panel';
 import { STR } from '../ui/strings';
+import { mountCompass } from '../viewer/compass';
 import { createViewer } from '../viewer/createViewer';
+import { startFlight } from '../viewer/flight';
 import { mountSettingsAdvanced } from '../ui/settingsAdvanced';
 import { mountPlanner } from '../ui/planner';
 import { mountRealVsSim } from '../ui/realVsSim';
@@ -52,6 +54,10 @@ async function main(): Promise<void> {
     compareWithRealFire: () => void wiringRef?.compareWithRealFire(),
     realVsSim: () => void wiringRef?.realVsSim(),
     cancel: () => wiringRef?.cancel(),
+    runEnsemble: () => void wiringRef?.runEnsemble(),
+    cancelEnsemble: () => wiringRef?.cancelEnsemble(),
+    exportPerimeters: () => wiringRef?.exportPerimeters(),
+    exportProbability: () => wiringRef?.exportProbability(),
     topDown: () => wiringRef?.topDown(),
     resetView: () => wiringRef?.resetView(),
     demo: {
@@ -81,6 +87,8 @@ async function main(): Promise<void> {
   if (handle.mode === 'fallback') notices.show(`${STR.fallbackBanner} ${handle.fallbackReason}`, 'warn', 8000);
 
   const wiring = wire(handle.viewer, store, notices, { setBackdrop: handle.setBackdrop, setBasemap: handle.setBasemap });
+  mountCompass(handle.viewer); // north-pointing compass, turn and tilt
+  startFlight(handle.viewer); // WASD / QE / RF free flight
   wiringRef = wiring;
   mountPlanner(slots.planner, store, wiring);
   const toolsController = createToolsController(store, wiring);

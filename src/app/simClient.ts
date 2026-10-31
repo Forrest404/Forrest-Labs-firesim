@@ -3,7 +3,7 @@
  * cancels the previous one. A crashed worker is replaced automatically.
  */
 
-import type { Scenario, SimResult } from '../contract';
+import type { EnsembleResult, EnsembleSpec, Scenario, SimResult } from '../contract';
 import type { ContainPlan, PlanInput } from '../contain/planner';
 import type { SimRequest, SimResponse } from '../sim/protocol';
 
@@ -15,7 +15,7 @@ export class SimCancelledError extends Error {
 }
 
 interface Pending {
-  resolve: (r: SimResult) => void;
+  resolve: (r: SimResult | EnsembleResult) => void;
   resolvePlan?: (p: ContainPlan) => void;
   reject: (e: Error) => void;
   onProgress?: (fraction: number) => void;
@@ -36,7 +36,7 @@ export class SimClient {
       const msg = ev.data;
       const p = this.pending.get(msg.id);
       if (!p) return;
-      if (msg.type === 'result') {
+      if (msg.type === 'result' || msg.type === 'ensembleResult') {
         this.pending.delete(msg.id);
         p.resolve(msg.result);
       } else if (msg.type === 'planResult') {
@@ -64,7 +64,7 @@ export class SimClient {
     const id = this.nextId++;
     const msg: SimRequest = { type: 'run', id, scenario };
     return new Promise<SimResult>((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+      this.pending.set(id, { resolve: resolve as Pending['resolve'], reject });
       // Scenario arrays are shared with the loaded area, so they are copied (structured clone), not transferred.
       this.worker.postMessage(msg);
     });
@@ -77,6 +77,17 @@ export class SimClient {
     const msg: SimRequest = { type: 'plan', id, input };
     return new Promise<ContainPlan>((resolve, reject) => {
       this.pending.set(id, { resolve: () => undefined, resolvePlan: resolve, reject, onProgress });
+      this.worker.postMessage(msg);
+    });
+  }
+
+  /** Runs an ensemble (many perturbed simulations). Cancels anything in flight first. */
+  runEnsemble(scenario: Scenario, spec: EnsembleSpec, onProgress?: (fraction: number) => void): Promise<EnsembleResult> {
+    this.cancelAll();
+    const id = this.nextId++;
+    const msg: SimRequest = { type: 'ensemble', id, scenario, spec };
+    return new Promise<EnsembleResult>((resolve, reject) => {
+      this.pending.set(id, { resolve: resolve as Pending['resolve'], reject, onProgress });
       this.worker.postMessage(msg);
     });
   }

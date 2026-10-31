@@ -5,7 +5,7 @@
  * Water: each spray adds `boost * 2^(-(t - tSpray) / halfLife)` to the cell's fuel moisture from
  * tSpray on. A cell can carry several sprays; the WETTEST one dominates (max, not sum). Max keeps
  * the model monotone: adding a spray can never make a cell drier or a fire faster, and a later,
- * weaker spray can never cancel an earlier, stronger one. See DECISIONS.md D18.
+ * weaker spray can never cancel an earlier, stronger one. See docs/sim-realism.md SIM-5.
  */
 
 import { NEVER_ARRIVES } from '../contract';
@@ -112,4 +112,22 @@ export function timeUntilMoisture(
     }
   }
   return T;
+}
+
+/**
+ * The latest spray start at or before t (lo, -Infinity if none) and the earliest spray start after t
+ * (hi, Infinity if none) on a cell. The crossing integrators use them as extra breakpoints so a spray
+ * never starts in the middle of an interval, where evaluating at the midpoint would miss it.
+ */
+export function sprayStartsAround(layers: EventLayers, cell: number, t: number, out: { lo: number; hi: number }): void {
+  let lo = -Infinity;
+  let hi = Infinity;
+  for (let k = layers.sprayHead[cell]; k >= 0; k = layers.sprayNext[k]) {
+    const ts = layers.sprayT[k];
+    if (ts <= t) {
+      if (ts > lo) lo = ts;
+    } else if (ts < hi) hi = ts;
+  }
+  out.lo = lo;
+  out.hi = hi;
 }

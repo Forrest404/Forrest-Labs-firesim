@@ -1,14 +1,17 @@
 /**
  * Conditions: wind speed (filled slider), wind direction (draggable compass dial + slider),
- * dryness preset (chips, data from presets.ts), duration (chips). Writes SI into the store.
+ * dryness preset (chips, data from presets.ts), weather over time, duration (chips). Writes SI into
+ * the store. Every wind/dryness change goes through app/weatherEdit.ts, so while Live is on and a
+ * result exists it takes effect from the current playback time on and re-runs by itself.
  */
 
-import { DRYNESS_PRESETS, DRYNESS_PRESET_ORDER, applyDrynessPreset, deriveFuelMoisture, windTowardDeg } from '../contract';
-import type { DrynessPreset } from '../contract';
+import { DRYNESS_PRESETS, DRYNESS_PRESET_ORDER, WEATHER_PRESETS, WEATHER_PRESET_ORDER, deriveFuelMoisture, windTowardDeg } from '../contract';
+import type { DrynessPreset, WeatherPresetId } from '../contract';
 import { staleIfResult } from '../app/state';
 import type { Store } from '../app/state';
-import { chip, row, segmented, slider } from './controls';
-import { compass, el, formatDuration } from './el';
+import { clearLiveEdits, currentWeather, isLiveEditing, setDryness, setLive, setWeatherPreset, setWindFrom, setWindSpeed } from '../app/weatherEdit';
+import { chip, row, segmented, slider, toggle } from './controls';
+import { compass, el, formatClock, formatDuration } from './el';
 import { icon } from './icons';
 import { STR } from './strings';
 
@@ -16,11 +19,10 @@ const DURATIONS = [3600, 3 * 3600, 6 * 3600, 12 * 3600, 24 * 3600];
 const RED_FLAG_WIND_KMH = 40;
 
 export function mountSettingsSimple(container: HTMLElement, store: Store): void {
-  const speed = slider({ min: 0, max: 80, step: 1, ariaLabel: STR.windSpeed }, (v) =>
-    store.update((s) => ({ weather: { ...s.weather, windSpeedMps: v / 3.6 }, ...staleIfResult(s) })));
+  const speed = slider({ min: 0, max: 80, step: 1, ariaLabel: STR.windSpeed }, (v) => setWindSpeed(store, v / 3.6));
   const speedVal = chip('', 'value');
 
-  const setDir = (deg: number) => store.update((s) => ({ weather: { ...s.weather, windFromDeg: ((deg % 360) + 360) % 360 }, ...staleIfResult(s) }));
+  const setDir = (deg: number) => setWindFrom(store, ((deg % 360) + 360) % 360);
   const dir = slider({ min: 0, max: 359, step: 1, ariaLabel: STR.windFrom }, setDir);
   const dirVal = chip('', 'value');
   const needle = el('span', { class: 'needle' }, icon('arrow', 14));
@@ -48,12 +50,16 @@ export function mountSettingsSimple(container: HTMLElement, store: Store): void 
 
   const dryness = segmented(
     [...DRYNESS_PRESET_ORDER.map((p) => ({ value: p as string, label: DRYNESS_PRESETS[p].label })), { value: 'custom', label: STR.drynessCustom }],
-    (p) => { if (p !== 'custom') store.update((s) => ({ weather: applyDrynessPreset(s.weather, p as DrynessPreset), ...staleIfResult(s) })); },
+    (p) => { if (p !== 'custom') setDryness(store, p as DrynessPreset); },
     { ariaLabel: STR.dryness, class: 'grow' },
   );
   const customBtn = dryness.root.lastElementChild as HTMLButtonElement;
   customBtn.classList.add('ghost');
   const drynessVal = chip('', 'value');
+
+  const weatherOverTime = el('select', { 'aria-label': STR.weatherOverTime }) as HTMLSelectElement;
+  for (const id of WEATHER_PRESET_ORDER) weatherOverTime.append(el('option', { value: id }, WEATHER_PRESETS[id].label));
+  weatherOverTime.onchange = () => setWeatherPreset(store, weatherOverTime.value as WeatherPresetId);
 
   const duration = segmented(
     DURATIONS.map((d) => ({ value: d, label: formatDuration(d) })),
@@ -65,22 +71,42 @@ export function mountSettingsSimple(container: HTMLElement, store: Store): void 
   const redFlag = el('button', {
     type: 'button',
     title: STR.redFlagTitle,
-    onclick: () => store.update((s) => ({ weather: { ...applyDrynessPreset(s.weather, 'extreme'), windSpeedMps: RED_FLAG_WIND_KMH / 3.6 }, ...staleIfResult(s) })),
+    onclick: () => {
+      setDryness(store, 'extreme');
+      setWindSpeed(store, RED_FLAG_WIND_KMH / 3.6);
+    },
   }, icon('flame', 16), el('span', {}, STR.redFlag));
 
+  // Live mode: edits made while a result exists apply from the current time on and re-run automatically.
+  const live = toggle(STR.liveLabel, (on) => setLive(store, on), { title: STR.liveEditTitle });
+  const liveInfo = el('span', { class: 'muted live-info' });
+  const liveClear = el('button', { type: 'button', class: 'small', onclick: () => clearLiveEdits(store) }, STR.liveEditClear) as HTMLButtonElement;
+  const liveRow = el('div', { class: 'live-row', title: STR.liveEditTitle }, live.root, el('div', { class: 'row' }, liveInfo, liveClear));
+
   container.append(
+    liveRow,
     row(STR.windSpeed, speed, speedVal),
     el('div', { class: 'ctl-row wind' },
       el('span', { class: 'ctl-label' }, STR.windFrom),
       el('div', { class: 'ctl' }, dial, el('div', { class: 'stack' }, dir, dirVal)),
     ),
     el('div', { class: 'ctl-row stacked' }, el('div', { class: 'ctl-label-row' }, el('span', { class: 'ctl-label' }, STR.dryness), drynessVal), dryness.root),
+    el('div', { class: 'ctl-row stacked' }, el('span', { class: 'ctl-label' }, STR.weatherOverTime), el('div', { class: 'select-wrap' }, weatherOverTime, icon('chevron', 16))),
     el('div', { class: 'ctl-row stacked' }, el('span', { class: 'ctl-label' }, STR.duration), duration.root),
     el('div', { class: 'row' }, redFlag),
   );
 
   store.subscribe((s) => {
-    const w = s.weather;
+    // While live (a result exists and the clock is past 0) the controls show the weather in force now.
+    const liveView = s.liveEdit && !!s.result && s.playback.t > 0;
+    const now = currentWeather(s);
+    const w = liveView
+      ? { ...s.weather, ...now, baseFuelMoisture: s.weather.baseFuelMoisture - deriveFuelMoisture(s.weather.temperatureC, s.weather.relativeHumidity) + deriveFuelMoisture(now.temperatureC, now.relativeHumidity) }
+      : s.weather;
+    live.input.checked = s.liveEdit;
+    liveInfo.textContent = !s.liveEdit ? STR.liveOffHint : s.liveEdits.length ? STR.liveEdits(s.liveEdits.length, formatClock(s.liveEdits[s.liveEdits.length - 1].tSeconds)) : s.result ? STR.liveIdle : '';
+    liveClear.style.display = s.liveEdit && s.liveEdits.length ? '' : 'none';
+    liveRow.classList.toggle('editing', isLiveEditing(s));
     const kmh = Math.round(w.windSpeedMps * 3.6);
     if (document.activeElement !== speed) speed.value = String(kmh);
     speedVal.textContent = `${kmh} km/h`;
@@ -96,5 +122,6 @@ export function mountSettingsSimple(container: HTMLElement, store: Store): void 
     customBtn.hidden = preset !== undefined;
     drynessVal.textContent = `${Math.round(w.baseFuelMoisture * 100)}% moisture`;
     duration.set(s.durationSeconds);
+    weatherOverTime.value = s.weatherPreset;
   });
 }

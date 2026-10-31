@@ -545,3 +545,22 @@ one readability problem, fixed here:
 Not changed: the response popup and dispatch cards stay hidden under 720 px (the demo runs on a
 laptop), and the NASA FIRMS live tab depends on a server that answered slowly on the day.
 
+
+## D33. Merging scaffold/v0 (sim-realism, compass, live weather) into main
+Nine ForeFire-inspired sim features, the compass/flight camera and live weather edits came in from `scaffold/v0`
+(`docs/sim-realism.md`). 29 files conflicted; the rules used:
+- **Behaviour stays the team's by default.** `neighbourhood` defaults to **8**, not 16, and spotting stays off, so every
+  existing result (Crozier comparison, response planner, both demos) is unchanged: `tune:demo` gives the same 119/69 ha
+  and 148/93 ha. The 16-direction stencil and ember spotting are options in Advanced settings.
+- **Solver and contract:** took `scaffold/v0` for `sim/index`, `events`, `crossing`, `rothermel` and the contract (teammates
+  had not changed those files since the snapshot). The worker and protocol now carry `run`, `ensemble` and `plan`.
+- **UI:** kept the team's card layout, dial and controls; the Uncertainty and Export sections are new cards, and the wind /
+  dryness controls call the live-edit functions. Their `particles.ts` rewrite replaced mine (Byram-sized flames dropped).
+- **Name clash:** the live-weather flag `live` collided with the live-fires `live` state; it is now `liveEdit`, and its
+  two strings are `liveEditTitle` / `liveEditClear`.
+- **Boulder Creek** keeps the team's bundle (OSM land cover); the WorldCover builder script is available but not applied.
+- **Tests changed:** the 16-direction tests now ask for 16 explicitly; the "spray just before the front" test compares
+  against brute-force integration instead of hard-coded seconds, because farmland's spread rate was halved on main.
+- **Phones:** the compass moves to the top-left under the sheet layout.
+- **Checked:** 450 tests, build, demos; in a browser the live wind edit (1 edit, result changed), a 50-run ensemble,
+  compass and both layouts. Not checked: GeoJSON export in a browser download, WASD flight on a real keyboard.

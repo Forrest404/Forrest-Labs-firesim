@@ -3,7 +3,7 @@
  * viewer objects are created in response to state changes.
  */
 
-import { DEFAULT_SETTINGS, FuelClass, validateScenario, windTowardDeg } from '../contract';
+import { DEFAULT_SETTINGS, FuelClass, ensembleSpecFrom, validateScenario, windTowardDeg } from '../contract';
 import type { CellRef, GridSpec, Scenario, SimResult } from '../contract';
 import { simulate as runSimulation } from '../sim';
 import type { DemoArea } from '../data/bundle';
@@ -15,8 +15,10 @@ import { overlapAtRealSize } from './impact';
 import { controlRuns } from './realFire';
 import type { ContainPlan } from '../contain';
 import { createDispatchOverlay } from '../viewer/dispatchOverlay';
+import { LIVE_STEP_S } from '../sim/live';
 import { scenarioFromArea } from '../data/bundle';
 import { loadDemoArea } from '../data/demoAreas';
+import { perimetersToGeoJSON, probabilityToGeoJSON } from '../export/geojson';
 import { defaultIgnition } from '../data/ignition';
 import { computeSlopeAspect } from '../data/terrain';
 import { FORECAST_RINGS, forecastRingCells, paintFuel, paintSlope } from '../viewer/burnCanvas';
@@ -35,11 +37,14 @@ import { createPicker } from '../viewer/picking';
 import type { PickedCell, Picker } from '../viewer/picking';
 import type { Notices } from '../ui/notices';
 import { STR } from '../ui/strings';
+import { downloadJson, exportFilename } from './download';
 import { OVERLAY_SCALE, OverlayPainter } from './overlayPainter';
+import { ProbabilityPainter } from './probabilityPainter';
 import { SmokeTimeline } from './smoke';
 import type { Preview } from './overlayPainter';
 import { SimCancelledError, SimClient } from './simClient';
 import type { AppState, Store } from './state';
+import { currentWeather, scheduleFor } from './weatherEdit';
 
 /** Playback speed for "Real vs simulation": Crozier reaches real size (~11 h) in about 20 s. */
 const REAL_VS_SIM_SPEED = 2048;
@@ -50,14 +55,19 @@ const GROUND_FRONT_WINDOW_S = 1800;
 /** Ground view re-aims at most this often while playing, gliding between poses. */
 const GROUND_FOLLOW_INTERVAL_MS = 700;
 
+/** Wait this long after the last live change before re-running (ms). */
+const AUTO_RUN_DEBOUNCE_MS = 150;
+
 interface AreaContext {
   burn: GridLayer;
   smoke: GridLayer;
   fuel: GridLayer;
   slope: GridLayer;
+  prob: GridLayer;
   outline: GridOutline;
   reference: ReferenceOutline | null;
   painter: OverlayPainter;
+  probPainter: ProbabilityPainter;
 }
 
 export interface Wiring {
@@ -76,6 +86,10 @@ export interface Wiring {
   /** Builds the area around a live fire and forecasts the next hours. */
   predictLiveFire(fire: LiveFire): Promise<void>;
   cancel(): void;
+  runEnsemble(): Promise<void>;
+  cancelEnsemble(): void;
+  exportPerimeters(): void;
+  exportProbability(): void;
   topDown(): void;
   resetView(): void;
   /** Flies the camera to look at `focus` from `rangeM` away along `headingDeg` (used by the demo loader). */
@@ -159,6 +173,8 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
   function disposeArea(): void {
     if (!ctx) return;
     ctx.painter.destroy();
+    ctx.probPainter.destroy();
+    ctx.prob.destroy();
     ctx.burn.destroy();
     ctx.smoke.destroy();
     ctx.fuel.destroy();
@@ -194,7 +210,9 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
       }
       : undefined;
     const reference = area.reference ? createReferenceOutline(viewer, area.reference.rings, { groundAt }) : null;
-    ctx = { burn, smoke, fuel, slope, outline, reference, painter };
+    // The ensemble probability map sits above the burn and smoke layers.
+    const prob = new GridLayer(viewer, grid, { zIndex: 5 });
+    ctx = { burn, smoke, fuel, slope, prob, outline, reference, painter, probPainter: new ProbabilityPainter(prob, grid.width * grid.height) };
     applyDebug();
     repaint();
     marker.set(grid, s.ignition);
@@ -244,9 +262,14 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
     ctx.painter.setRing(plan && s.contain.outline && s.result ? (s.contain.show === 'contained' ? plan.baseline.arrivalTime : plan.contained.arrivalTime) : null);
     const compareMask = s.compare ? s.area?.reference?.mask ?? null : null;
     ctx.painter.schedule(s.result, interventions, s.playback.t, s.settings, preview, compareMask, s.forecast ? ringCellsFor(s.result, s.area?.fuel) : null);
+    // The probability map sits above the single run; the single run fades back so it stays readable.
+    const showProb = s.showProbability && !!s.ensemble.result;
+    ctx.burn.setAlpha(showProb ? 0.3 : 1);
+    ctx.probPainter.schedule(showProb ? s.ensemble.result : null, s.playback.t);
     dispatch.updateTime(s.playback.t);
     if (s.area) {
-      const toward = (windTowardDeg(s.weather.windFromDeg) * Math.PI) / 180;
+      const now = currentWeather(s);
+      const toward = (windTowardDeg(now.windFromDeg) * Math.PI) / 180;
       const sample = ctx.painter.lastSmokeSample;
       effects.update({
         grid: s.area.grid,
@@ -255,7 +278,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
         t: s.playback.t,
         windX: Math.sin(toward),
         windY: Math.cos(toward),
-        windSpeedMps: s.weather.windSpeedMps,
+        windSpeedMps: now.windSpeedMps,
         useElevation: s.viewerMode === 'google',
         playbackSpeed: s.playback.speed,
         fuel: s.area.fuel,
@@ -287,8 +310,16 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
     if (s.contain.plan !== prev.contain.plan || s.area !== prev.area) dispatch.setOrders(s.area?.grid ?? null, s.contain.plan?.orders ?? []);
     if (s.contain !== prev.contain || s.view !== prev.view) dispatch.setVisible(s.view === 'sim' && !!s.contain.plan && s.contain.show === 'contained' && s.contain.units3d);
     if (s.result !== prev.result && s.result && lastScenario && s.contain.plan && (s.result === s.contain.plan.contained || s.result === s.contain.plan.baseline)) attachSmoke(lastScenario, s.result);
-    if (s.result !== prev.result || s.playback.t !== prev.playback.t || s.interventions !== prev.interventions || s.settings !== prev.settings || s.contain.show !== prev.contain.show || s.contain.outline !== prev.contain.outline || s.compare !== prev.compare || s.forecast !== prev.forecast) repaint();
+    if (s.result !== prev.result || s.playback.t !== prev.playback.t || s.interventions !== prev.interventions || s.settings !== prev.settings || s.contain.show !== prev.contain.show || s.contain.outline !== prev.contain.outline || s.compare !== prev.compare || s.forecast !== prev.forecast
+      || s.weather !== prev.weather || s.liveEdits !== prev.liveEdits || s.weatherPreset !== prev.weatherPreset) repaint();
     if (s.groundFollow && s.playback.t !== prev.playback.t) followFront(false);
+    if (s.ensemble.result !== prev.ensemble.result || s.showProbability !== prev.showProbability) repaint();
+    // An ensemble describes the inputs it was run with: flag it stale when any of them change.
+    if (s.ensemble.result && !s.ensemble.stale && (s.weather !== prev.weather || s.weatherPreset !== prev.weatherPreset || s.liveEdits !== prev.liveEdits || s.settings !== prev.settings
+      || s.durationSeconds !== prev.durationSeconds || s.ignition !== prev.ignition || s.interventions !== prev.interventions || s.seed !== prev.seed)) {
+      store.set({ ensemble: { ...s.ensemble, stale: true } });
+    }
+    if (s.autoRun !== prev.autoRun) scheduleAutoRun();
     if (s.tool !== prev.tool) picker.setDragMode(s.tool !== 'ignite');
     if (s.effects !== prev.effects) {
       applyEffects(s);
@@ -345,6 +376,17 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
     flyToGround(viewer, pose, immediate ? 1.8 : GROUND_FOLLOW_INTERVAL_MS / 1000);
   }
 
+  // Live changes re-run the simulation by themselves, a moment after the last change (a slider
+  // drag is many changes). A newer run cancels one still in flight.
+  let autoTimer: ReturnType<typeof setTimeout> | undefined;
+  function scheduleAutoRun(): void {
+    clearTimeout(autoTimer);
+    autoTimer = setTimeout(() => {
+      const s = store.get();
+      if (s.result && s.area && s.ignition && !s.ensemble.running) void simulate(true);
+    }, AUTO_RUN_DEBOUNCE_MS);
+  }
+
   async function selectArea(name: string): Promise<void> {
     const entry = store.get().areas.find((a) => a.name === name);
     if (!entry) {
@@ -365,6 +407,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
         areaLoading: false,
         ignition: defaultIgnition(area),
         interventions: [],
+        liveEdits: [],
         result: null,
         baseline: null,
         plan: null,
@@ -375,6 +418,8 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
         forecast: false,
         resultStale: false,
         simRunning: false,
+        ensemble: { ...store.get().ensemble, running: false, progress: 0, result: null, stale: false, error: null },
+        showProbability: false,
         playback: { ...store.get().playback, t: 0, playing: false },
         contain: { ...store.get().contain, plan: null, planning: false, show: 'contained' },
         weather: {
@@ -415,7 +460,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
     store.set({ forecast: true, playback: { t: 0, playing: true, speed: LIVE_FORECAST_SPEED } });
   }
 
-  function buildScenario(): Scenario | string {
+  function buildScenario(forEnsemble = false): Scenario | string {
     const s = store.get();
     if (!s.area) return STR.loadError;
     if (!s.ignition) return STR.placeIgnitionHint;
@@ -428,6 +473,9 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
       seed: s.seed,
     });
     scenario.interventions = s.interventions;
+    scenario.weatherSchedule = scheduleFor(s, forEnsemble);
+    // Single live runs use a finer weather grid so a change made now takes effect within minutes.
+    if (s.liveEdit && !forEnsemble) scenario.weatherStepS = LIVE_STEP_S;
     const errors = validateScenario(scenario);
     return errors.length ? errors[0] : scenario;
   }
@@ -449,7 +497,8 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
     ctx.painter.setBurnout(timeline.burnoutAt);
   }
 
-  async function simulate(): Promise<void> {
+  /** `quiet`: an automatic re-run after a live change: no spinner state, the current result keeps playing until the new one lands. */
+  async function simulate(quiet = false): Promise<void> {
     const scenario = buildScenario();
     if (typeof scenario === 'string') {
       store.set({ simError: scenario });
@@ -457,7 +506,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
     }
     const s0 = store.get();
     const respond = s0.contain.enabled;
-    store.set({ simRunning: true, simError: null, controls: null, contain: { ...s0.contain, planning: respond, progress: 0 } });
+    store.set(quiet ? { simError: null } : { simRunning: true, simError: null, controls: null, contain: { ...s0.contain, planning: respond, progress: 0 } });
     try {
       let plan: ContainPlan | null = null;
       let result: SimResult;
@@ -538,6 +587,32 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
     flyTopDown(viewer, run.grid);
   }
 
+  async function runEnsemble(): Promise<void> {
+    const scenario = buildScenario(true);
+    if (typeof scenario === 'string') {
+      store.set({ ensemble: { ...store.get().ensemble, error: scenario } });
+      return;
+    }
+    const e0 = store.get().ensemble;
+    const spec = ensembleSpecFrom(e0.runs, e0.uncertainty, e0.ignitionJitterCells, store.get().seed);
+    store.set({ ensemble: { ...e0, running: true, progress: 0, error: null }, simRunning: false });
+    try {
+      const result = await sim.runEnsemble(scenario, spec, (fraction) => store.set({ ensemble: { ...store.get().ensemble, progress: fraction } }));
+      store.set({ ensemble: { ...store.get().ensemble, running: false, progress: 1, result, stale: false, error: null }, showProbability: true });
+    } catch (err) {
+      if (err instanceof SimCancelledError) {
+        store.set({ ensemble: { ...store.get().ensemble, running: false, progress: 0 } });
+        return;
+      }
+      store.set({ ensemble: { ...store.get().ensemble, running: false, error: `${STR.ensembleFailed} ${err instanceof Error ? err.message : String(err)}` } });
+    }
+  }
+
+  function exportContext(): { grid: NonNullable<ReturnType<Store['get']>['area']>['grid']; areaName: string; areaIsSynthetic: boolean; attribution: string[] } | null {
+    const a = store.get().area;
+    return a ? { grid: a.grid, areaName: a.meta.label, areaIsSynthetic: a.meta.synthetic, attribution: a.meta.attribution } : null;
+  }
+
   return {
     selectArea,
     loadLiveFires,
@@ -546,6 +621,24 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
     compareWithRealFire,
     realVsSim,
     buildScenario,
+    runEnsemble,
+    exportPerimeters: () => {
+      const s = store.get();
+      const ctxe = exportContext();
+      if (!ctxe || !s.result) return;
+      const fc = perimetersToGeoJSON(ctxe, s.result, { durationSeconds: s.durationSeconds, ignition: s.ignition ? [s.ignition] : [], interventions: s.interventions });
+      downloadJson(exportFilename('perimeters', s.area!.meta.name), fc);
+    },
+    exportProbability: () => {
+      const s = store.get();
+      const ctxe = exportContext();
+      if (!ctxe || !s.ensemble.result) return;
+      downloadJson(exportFilename('probability', s.area!.meta.name), probabilityToGeoJSON(ctxe, s.ensemble.result));
+    },
+    cancelEnsemble: () => {
+      sim.cancelAll();
+      store.set({ ensemble: { ...store.get().ensemble, running: false, progress: 0 } });
+    },
     cancel: () => {
       sim.cancelAll();
       store.set({ simRunning: false });

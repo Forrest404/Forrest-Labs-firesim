@@ -12,7 +12,11 @@ import { makeSyntheticArea } from '../src/data/synthetic';
 const grid = makeGridSpec({ centerLon: 0, centerLat: 0, width: 4, height: 4, cellSizeM: 30 });
 const result = (arrival: number[]): SimResult => ({
   arrivalTime: Float32Array.from(arrival),
-  stats: { burnedCells: 0, burnedAreaHa: 0, maxSpreadRateMps: 0, runtimeMs: 0 },
+  firelineIntensityKwM: new Float32Array(arrival.length),
+  flameLengthM: new Float32Array(arrival.length),
+  sourceCell: new Int32Array(arrival.length).fill(-1),
+  ignitedByEmber: new Uint8Array(arrival.length),
+  stats: { burnedCells: 0, burnedAreaHa: 0, maxSpreadRateMps: 0, spotFires: 0, maxIntensityKwM: 0, maxFlameLengthM: 0, runtimeMs: 0 },
 });
 const I = NEVER_ARRIVES;
 

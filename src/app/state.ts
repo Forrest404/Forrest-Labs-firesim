@@ -4,7 +4,7 @@
  */
 
 import { DEFAULT_DURATION_SECONDS, DEFAULT_SETTINGS, DEFAULT_WEATHER } from '../contract';
-import type { CellRef, Intervention, SimResult, SimSettings, Weather } from '../contract';
+import type { CellRef, EnsembleResult, Intervention, SimResult, SimSettings, UncertaintyLevel, Weather, WeatherPresetId } from '../contract';
 import type { DemoArea, DemoAreaIndexEntry } from '../data/bundle';
 import type { DemoId } from '../data/demo-scenarios';
 import type { Basemap, ViewerMode } from '../viewer/createViewer';
@@ -14,6 +14,7 @@ import type { ContainOverrides, ContainPlan, ResponseLevel } from '../contain';
 import type { PlanState } from './planner';
 import type { ControlRun } from './realFire';
 import type { LiveFire } from '../data/liveFire';
+import type { LiveEdit } from '../sim/live';
 
 export type ToolId = 'ignite' | 'firebreak' | 'water';
 
@@ -110,6 +111,20 @@ export interface ContainState {
   hud: boolean;
 }
 
+export interface EnsembleState {
+  /** Choices for the next run. */
+  runs: number;
+  uncertainty: UncertaintyLevel;
+  ignitionJitterCells: number;
+  running: boolean;
+  /** 0-1 while running. */
+  progress: number;
+  result: EnsembleResult | null;
+  /** Inputs changed since the result was computed. */
+  stale: boolean;
+  error: string | null;
+}
+
 export interface AppState {
   areas: DemoAreaIndexEntry[];
   area: DemoArea | null;
@@ -117,8 +132,19 @@ export interface AppState {
   viewerMode: ViewerMode;
 
   weather: Weather;
+  /** How the weather changes during the run (applied relative to `weather` when simulating). */
+  weatherPreset: WeatherPresetId;
   settings: SimSettings;
   durationSeconds: number;
+  /**
+   * Live mode: wind and dryness changes made while a result exists take effect from the current
+   * playback time on (the past stays as it was) and re-run the simulation automatically.
+   */
+  liveEdit: boolean;
+  /** The live changes made so far (see src/sim/live.ts); `weather` stays the weather at t = 0. */
+  liveEdits: LiveEdit[];
+  /** Bumped whenever something asks for an automatic re-run (wiring debounces and runs it). */
+  autoRun: number;
   seed: number;
   ignition: CellRef | null;
   interventions: Intervention[];
@@ -147,6 +173,10 @@ export interface AppState {
   resultStale: boolean;
   simRunning: boolean;
   simError: string | null;
+
+  ensemble: EnsembleState;
+  /** Show the burn-probability map (from the ensemble) instead of the single run's colours. */
+  showProbability: boolean;
 
   playback: PlaybackState;
   tool: ToolId;
@@ -194,8 +224,12 @@ export function initialState(): AppState {
     areaLoading: false,
     viewerMode: 'fallback',
     weather: { ...DEFAULT_WEATHER },
+    weatherPreset: 'steady',
     settings: { ...DEFAULT_SETTINGS },
     durationSeconds: DEFAULT_DURATION_SECONDS,
+    liveEdit: true,
+    liveEdits: [],
+    autoRun: 0,
     seed: 1,
     ignition: null,
     interventions: [],
@@ -213,6 +247,8 @@ export function initialState(): AppState {
     resultStale: false,
     simRunning: false,
     simError: null,
+    ensemble: { runs: 50, uncertainty: 'medium', ignitionJitterCells: 0, running: false, progress: 0, result: null, stale: false, error: null },
+    showProbability: false,
     playback: { t: 0, playing: false, speed: 256 },
     tool: 'ignite',
     toolParams: { firebreakWidthCells: 3, waterRadiusCells: 3, preClear: false },
