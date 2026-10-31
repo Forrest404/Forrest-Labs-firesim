@@ -26,7 +26,7 @@ export const STR = {
   windFrom: 'Wind from',
   windArrowTitle: 'Arrow shows where the wind blows toward',
   dryness: 'Dryness',
-  drynessCustom: 'Custom (advanced)',
+  drynessCustom: 'Custom',
   duration: 'Duration',
 
   simulateTitle: 'Simulate',

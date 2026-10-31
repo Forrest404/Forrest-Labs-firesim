@@ -162,6 +162,7 @@ button.primary.running .icon-loader { animation: spin 1s linear infinite; }
 .seg.grow { display: flex; }
 .seg.grow > button { flex: 1; }
 .seg > button {
+  white-space: nowrap; min-width: 0;
   background: transparent; border: 0; min-height: 30px; padding: 4px 10px; border-radius: 7px; color: var(--muted); font-weight: 600; font-size: 12px;
   transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease), box-shadow var(--t-fast);
 }
@@ -276,6 +277,12 @@ details[open] > summary::before { transform: rotate(45deg); }
 details > *:not(summary) { animation: fade-in var(--t-med) var(--ease) both; }
 .card.adv .section-body { gap: 2px; }
 .card.adv details > summary { display: none; }
+.card.adv .section-head { cursor: pointer; margin: -10px -12px -2px; padding: 10px 12px 2px; border-radius: var(--radius-sm) var(--radius-sm) 0 0; }
+.card.adv .section-head:hover { background: rgba(255, 255, 255, 0.03); }
+.card.adv .chev { display: inline-grid; place-items: center; color: var(--muted); transition: transform var(--t-med) var(--ease); }
+.card.adv.open .chev { transform: rotate(180deg); }
+.card.adv:not(.open) .section-body { display: none; }
+.card.adv.open .section-body { padding-top: 6px; }
 .card.adv label { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 34px; font-size: 13px; }
 .card.adv label.disabled { opacity: 0.45; }
 .card.adv .num { display: inline-flex; align-items: center; gap: 6px; }

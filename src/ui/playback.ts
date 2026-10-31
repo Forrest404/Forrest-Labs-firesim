@@ -45,12 +45,15 @@ export function mountPlayback(container: HTMLElement, store: Store, actions: Pla
     stats,
   );
 
+  let lastSimIcon = '';
+  let lastPlaying: boolean | null = null;
   store.subscribe((s) => {
     const hasArea = !!s.area;
     const stale = !!s.result && s.resultStale;
     simulateBtn.disabled = !hasArea || !s.ignition || s.simRunning;
     simLabel.textContent = s.simRunning ? STR.simulating : stale ? STR.reSimulate : STR.simulate;
-    simIcon.replaceChildren(icon(s.simRunning ? 'loader' : stale ? 'restart' : 'flame'));
+    const simIconName = s.simRunning ? 'loader' : stale ? 'restart' : 'flame';
+    if (simIconName !== lastSimIcon) { lastSimIcon = simIconName; simIcon.replaceChildren(icon(simIconName)); }
     simulateBtn.classList.toggle('stale', stale);
     simulateBtn.classList.toggle('running', s.simRunning);
     cancelBtn.hidden = !s.simRunning;
@@ -61,9 +64,12 @@ export function mountPlayback(container: HTMLElement, store: Store, actions: Pla
     transport.classList.toggle('off', !has);
     playBtn.disabled = restartBtn.disabled = scrub.disabled = !has;
     speed.setDisabled(!has);
-    playBtn.replaceChildren(icon(s.playback.playing ? 'pause' : 'play'));
-    playBtn.setAttribute('aria-label', s.playback.playing ? STR.pause : STR.play);
-    playBtn.title = s.playback.playing ? STR.pause : STR.play;
+    if (s.playback.playing !== lastPlaying) {
+      lastPlaying = s.playback.playing;
+      playBtn.replaceChildren(icon(s.playback.playing ? 'pause' : 'play'));
+      playBtn.setAttribute('aria-label', s.playback.playing ? STR.pause : STR.play);
+      playBtn.title = s.playback.playing ? STR.pause : STR.play;
+    }
     speed.set(s.playback.speed);
     scrub.max = String(s.durationSeconds);
     if (document.activeElement !== scrub) scrub.value = String(s.playback.t);

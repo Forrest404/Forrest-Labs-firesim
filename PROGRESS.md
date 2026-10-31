@@ -158,6 +158,16 @@ Companion files: [DECISIONS.md](DECISIONS.md) (judgement calls), [FEATURES.md](F
   was built and then reverted the same day because the team's credential is a Google Maps key;
   commits bdde0a6 / d2c0c65 hold it if ion is wanted later (D18).
 
+### UI/UX pass (`feature/google-tiles`)
+
+- Panel rebuilt: brand header with viewer-mode pill and collapse-to-rail, honesty pill, card
+  sections (Area, Conditions, Simulate, Tools, Advanced, View), chips for dryness / duration /
+  speed / quality, filled sliders, draggable wind dial, switches, icon transport controls,
+  animated notices, phone bottom-sheet layout, reduced-motion support. See D19.
+- Verified headlessly on 1400x900 and 390x844: chips, dial drag (sets wind from 270 when
+  dragged east), switches, simulate, speed, play, collapse, advanced toggle and a firebreak
+  stroke all update the store; no exceptions or console errors.
+
 ## Known issues / not verified
 
 - **Google Photorealistic 3D Tiles path verified headlessly** (2026-10-31, real key in
