@@ -164,7 +164,15 @@ Cost: `maximumScreenSpaceError` 20 (default 16), `preloadFlightDestinations` off
 `cullRequestsWhileMoving` on, `dynamicScreenSpaceError` on, cache 512 MB. No geocoder exists, so
 `onlyUsingWithGoogleGeocoder` is set to silence Cesium's warning.
 
-Draping and picking on tiles: `ClassificationType.BOTH` (D5) is the right setting for classifying
-onto 3D Tiles, and `scene.pickPosition` (D6) is the tile-aware path. Neither has been exercised
-with a real key on the build machine (no key available). If the overlay does not drape, keep the
-fallback as default and revisit per PROGRESS.md "Known issues".
+Draping and picking on tiles: `ClassificationType.BOTH` (D5) classifies onto the 3D Tiles and
+`scene.pickPosition` (D6) is the tile-aware path. Both verified headlessly with a real key on
+2026-10-31: overlay drapes on the tiles, synthetic click lands the marker within 1 px.
+
+## D18. Stay on the Google Maps key; Cesium ion variant shelved
+
+An ion-based variant (asset 2275207 "Google Photorealistic 3D Tiles" via `IonResource.fromAssetId`
+with `VITE_CESIUM_ION_TOKEN`, token passed per asset and never set on `Ion.defaultAccessToken`)
+was built in bdde0a6 and reverted in d2c0c65: the credential the team actually holds is a Google
+Maps key (`AIza...` shape), which ion rejects with 401. One credential, one path. If the team
+later gets an ion account, cherry-pick bdde0a6; its redaction also covers `access_token=`,
+Bearer headers and JWTs, which is worth keeping either way.
