@@ -146,3 +146,26 @@ constantly and the `| undefined` noise would hurt more than help. TypeScript pin
 Branch `scaffold/v0` from `main`. `plan.md` (untracked, written earlier this session) is committed
 with the Stage 1 docs because `DECISIONS.md` references it. One commit per stage. Nothing pushed.
 A teammate branch `feature/gemini-agent` exists on the remote (adds `docs/research/eaton-fire-data.md`); untouched.
+
+## D14. California first, real fire test, impact number, AI plan (Person B/C follow-up)
+
+- **Areas:** `index.json` now lists Boulder Creek first (opens by default), then `crozier`. Boulder
+  Creek's unmapped land is conifer, not grass (it's redwood forest; only OSM-mapped grassland stays
+  grass), and its suggested ignition is in the forest 1.2 km west of town (37.1221, -122.1347).
+  Built by `npm run build:california` from OSM extracts in `scripts/data/`. Overpass refuses
+  scripted requests, so those were fetched in overpass-turbo in a browser and rasterised there with
+  the same rules as `src/data/osm.ts`.
+- **Fuel numbers:** shrub 0.045 -> 0.06 m/s (chaparral is fast under wind), farmland 0.03 -> 0.015
+  (irrigated orchards/vineyards). `globalMultiplier` stays 1: on Crozier the sim already grows faster
+  than the real fire did early on.
+- **Real-fire test (`crozier`):** real perimeter (NIFC), ignition and afternoon weather (Open-Meteo).
+  The panel reports IoU at the moment the run reaches the real size, so the score measures where the
+  fire goes, not how fast. With the real wind: 63 % IoU; wrong wind direction 33 %; no wind 24 %.
+- **Homes reached:** bundles may carry per-cell building counts (`homesBase64`). A home counts as
+  reached when fire arrives in its cell or any neighbour. With interventions, the sim also runs the
+  same scenario without them on the main thread (~15 ms) to show "before -> after".
+- **AI plan:** Gemini (REST, `VITE_GEMINI_API_KEY`, `VITE_GEMINI_MODEL`) proposes up to 3 firebreak
+  lines within a 4.5 km budget, from 30 min. The sim re-runs each proposal; a plan is accepted only if
+  it cuts homes reached (or burned area) by 25 %. Rejected plans go back to Gemini with the numbers,
+  up to 3 attempts. Without a key a labelled built-in planner is used. The key is in the browser
+  bundle, so restrict it to the Generative Language API and the deploy domain.

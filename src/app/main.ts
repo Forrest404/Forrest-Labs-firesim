@@ -7,6 +7,7 @@ import { mountPanel } from '../ui/panel';
 import { STR } from '../ui/strings';
 import { createViewer } from '../viewer/createViewer';
 import { mountSettingsAdvanced } from '../ui/settingsAdvanced';
+import { mountPlanner } from '../ui/planner';
 import { mountTools } from '../ui/tools';
 import { startClock } from './clock';
 import { createStore } from './state';
@@ -56,6 +57,7 @@ async function main(): Promise<void> {
 
   const wiring = wire(handle.viewer, store, notices);
   wiringRef = wiring;
+  mountPlanner(slots.planner, store, wiring);
   mountTools(slots.tools, store, createToolsController(store, wiring));
   startClock(store);
 

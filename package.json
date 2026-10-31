@@ -15,7 +15,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build:demo-area": "tsx scripts/build-demo-area.ts",
-    "make:synthetic": "tsx scripts/make-synthetic.ts"
+    "make:synthetic": "tsx scripts/make-synthetic.ts",
+    "build:california": "tsx scripts/build-california-areas.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

@@ -1,11 +1,14 @@
 /** Simulate button, play/pause, speed, scrubber, simulated clock and live stats. */
 
 import type { Store } from '../app/state';
+import { homesReached, overlapAt, overlapAtRealSize, totalHomes } from '../app/impact';
+import type { Overlap } from '../app/impact';
 import { liveStats } from '../app/overlayPainter';
+import type { SimResult } from '../contract';
 import { el, formatClock } from './el';
 import { STR } from './strings';
 
-const SPEEDS = [1, 4, 16, 64, 256];
+const SPEEDS = [1, 4, 16, 64, 256, 1024];
 
 export interface PlaybackActions {
   simulate(): void;
@@ -27,6 +30,9 @@ export function mountPlayback(container: HTMLElement, store: Store, actions: Pla
   scrub.oninput = () => store.update((s) => ({ playback: { ...s.playback, t: Number(scrub.value), playing: false } }));
   const clock = el('span', { class: 'value clock' });
   const stats = el('div', { class: 'stats' });
+  const impact = el('div', { class: 'impact' });
+  const realFire = el('div', { class: 'real-fire' });
+  const realSize = new WeakMap<SimResult, Overlap | null>();
 
   container.append(
     el('h2', {}, STR.simulateTitle),
@@ -36,6 +42,8 @@ export function mountPlayback(container: HTMLElement, store: Store, actions: Pla
     el('div', { class: 'row' }, playBtn, restartBtn, ...speedBtns),
     el('label', {}, scrub, clock),
     stats,
+    impact,
+    realFire,
   );
 
   store.subscribe((s) => {
@@ -59,5 +67,29 @@ export function mountPlayback(container: HTMLElement, store: Store, actions: Pla
       const st = liveStats(s.result, s.area.grid, s.playback.t);
       stats.textContent = `${st.burnedAreaHa.toFixed(0)} ha · ${st.burnedCells} cells burned · ${STR.simTime} ${s.result!.stats.runtimeMs.toFixed(0)} ms`;
     } else stats.textContent = '';
+
+    const homes = s.area?.homes;
+    if (has && s.area && homes) {
+      const now = homesReached(s.result!, homes, s.area.grid, s.playback.t);
+      const without = s.baseline && s.baseline !== s.result ? homesReached(s.baseline, homes, s.area.grid, s.playback.t) : null;
+      impact.replaceChildren(
+        el('strong', {}, without !== null ? `${STR.homesReached} ${without} → ${now} ${STR.withYourPlan}` : `${STR.homesReached} ${now}`),
+        el('span', { class: 'muted' }, ` ${STR.of} ${totalHomes(homes)} ${STR.inThisArea}`),
+      );
+    } else impact.replaceChildren();
+
+    const ref = s.area?.reference;
+    if (has && ref) {
+      if (!realSize.has(s.result!)) realSize.set(s.result!, overlapAtRealSize(s.result!, ref));
+      const fair = realSize.get(s.result!);
+      const live = overlapAt(s.result!, ref, s.playback.t);
+      realFire.replaceChildren(
+        el('div', {}, el('strong', {}, `${STR.realFire} ${ref.name}: `), `${ref.areaHa.toFixed(0)} ha ${STR.whiteOutline}`),
+        fair
+          ? el('div', {}, el('strong', {}, `${STR.matchAtRealSize} ${Math.round(fair.iou * 100)} %`), el('span', { class: 'muted' }, ` (IoU, ${STR.reached} ${(fair.t / 3600).toFixed(1)} h; ${STR.covers} ${Math.round(fair.covered * 100)} % ${STR.ofRealBurn})`))
+          : el('div', { class: 'muted' }, STR.neverRealSize),
+        el('div', { class: 'muted' }, `${STR.overlapNow} ${Math.round(live.iou * 100)} %`),
+      );
+    } else realFire.replaceChildren();
   });
 }

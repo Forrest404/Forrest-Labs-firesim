@@ -6,6 +6,7 @@
 import { FuelClass, validateScenario, windTowardDeg } from '../contract';
 import type { Scenario } from '../contract';
 import { scenarioFromArea } from '../data/bundle';
+import { simulate as runSimulation } from '../sim';
 import { loadDemoArea } from '../data/demoAreas';
 import { defaultIgnition } from '../data/ignition';
 import { computeSlopeAspect } from '../data/terrain';
@@ -14,6 +15,8 @@ import { GridLayer } from '../viewer/burnLayer';
 import { flyToGrid, flyTopDown } from '../viewer/camera';
 import type { Viewer } from 'cesium';
 import { createGridOutline } from '../viewer/gridOutline';
+import { createReferenceOutline } from '../viewer/referenceOutline';
+import type { ReferenceOutline } from '../viewer/referenceOutline';
 import type { GridOutline } from '../viewer/gridOutline';
 import { createIgnitionMarker } from '../viewer/ignitionMarker';
 import { createFireEffects } from '../viewer/particles';
@@ -31,12 +34,15 @@ interface AreaContext {
   fuel: GridLayer;
   slope: GridLayer;
   outline: GridOutline;
+  reference: ReferenceOutline | null;
   painter: OverlayPainter;
 }
 
 export interface Wiring {
   selectArea(name: string): Promise<void>;
   simulate(): Promise<void>;
+  /** The scenario the current inputs describe, or a user-facing reason why there isn't one. */
+  buildScenario(): Scenario | string;
   cancel(): void;
   topDown(): void;
   resetView(): void;
@@ -84,6 +90,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     ctx.fuel.destroy();
     ctx.slope.destroy();
     ctx.outline.destroy();
+    ctx.reference?.destroy();
     ctx = null;
   }
 
@@ -99,7 +106,8 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     slope.paint((d) => paintSlope(d, slopeDeg));
     const burn = new GridLayer(viewer, grid, { zIndex: 3 });
     const outline = createGridOutline(viewer, grid);
-    ctx = { burn, fuel, slope, outline, painter: new OverlayPainter(burn, grid) };
+    const reference = s.area.reference ? createReferenceOutline(viewer, s.area.reference.rings) : null;
+    ctx = { burn, fuel, slope, outline, reference, painter: new OverlayPainter(burn, grid) };
     applyDebug();
     repaint();
     marker.set(grid, s.ignition);
@@ -163,10 +171,17 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
         ignition: defaultIgnition(area),
         interventions: [],
         result: null,
+        baseline: null,
+        plan: null,
         resultStale: false,
         simRunning: false,
         playback: { ...store.get().playback, t: 0, playing: false },
-        weather: { ...store.get().weather, windFromDeg: area.meta.defaultWindFromDeg ?? store.get().weather.windFromDeg },
+        weather: {
+          ...store.get().weather,
+          windFromDeg: area.meta.defaultWindFromDeg ?? store.get().weather.windFromDeg,
+          ...area.meta.defaultWeather,
+        },
+        durationSeconds: area.meta.defaultDurationSeconds ?? store.get().durationSeconds,
       });
     } catch (err) {
       store.set({ areaLoading: false });
@@ -200,11 +215,15 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     store.set({ simRunning: true, simError: null });
     try {
       const result = await sim.run(scenario);
+      // A run without the firefighting actions, so the panel can say what the plan changed.
+      // The solver takes ~15 ms on a 200 x 200 grid, so the main thread is fine.
+      const baseline = scenario.interventions.length ? runSimulation({ ...scenario, interventions: [] }) : result;
       const s = store.get();
       const firstRun = !s.result;
       const t = Math.min(s.playback.t, s.durationSeconds);
       store.set({
         result,
+        baseline,
         resultStale: false,
         simRunning: false,
         playback: { ...s.playback, t: firstRun ? 0 : t, playing: firstRun ? true : s.playback.playing },
@@ -218,6 +237,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
   return {
     selectArea,
     simulate,
+    buildScenario,
     cancel: () => {
       sim.cancelAll();
       store.set({ simRunning: false });

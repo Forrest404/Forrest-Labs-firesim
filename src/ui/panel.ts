@@ -20,6 +20,8 @@ export interface PanelSlots {
   tools: HTMLElement;
   /** Section for the advanced settings (filled in Stage 6). */
   advanced: HTMLElement;
+  /** Section for "Suggest a plan" (Gemini + simulator check). */
+  planner: HTMLElement;
 }
 
 export function mountPanel(root: HTMLElement, store: Store, actions: PanelActions): PanelSlots {
@@ -32,6 +34,7 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
   const settings = el('section');
   const advanced = el('section');
   const sim = el('section');
+  const planner = el('section');
   const tools = el('section');
   const camera = el('section', {},
     el('h2', {}, STR.cameraTitle),
@@ -56,7 +59,7 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
   );
   const debug = el('section');
   const footer = el('div', { class: 'muted footer' }, STR.footer);
-  root.append(header, modeLine, area, settings, advanced, sim, tools, camera, effects, debug, footer);
+  root.append(header, modeLine, area, settings, advanced, sim, planner, tools, camera, effects, debug, footer);
 
   mountAreaPicker(area, store, actions);
   mountSettingsSimple(settings, store);
@@ -69,5 +72,5 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
     quality.value = s.effects.quality;
     quality.disabled = !s.effects.particles;
   });
-  return { tools, advanced };
+  return { tools, advanced, planner };
 }

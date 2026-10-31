@@ -61,6 +61,15 @@ html, body { margin: 0; height: 100%; background: #0b0d10; overflow: hidden; }
 #panel .num input { width: 72px; }
 #panel .unit { color: var(--muted); font-size: 12px; min-width: 24px; }
 
+#panel .impact { margin-top: 8px; font-size: 15px; }
+#panel .impact strong { color: var(--accent); }
+#panel .real-fire { margin-top: 8px; font-size: 12px; border-left: 3px solid #fff; padding-left: 8px; }
+#panel .real-fire:empty, #panel .impact:empty { display: none; }
+#panel ul.plan-attempts { list-style: none; padding: 0; margin: 6px 0 0; font-size: 12px; }
+#panel ul.plan-attempts li { padding: 6px 0; border-top: 1px dashed var(--border); }
+#panel ul.plan-attempts li.ok strong { color: var(--ok); }
+#panel ul.plan-attempts li.rejected strong { color: var(--muted); }
+
 #notices { position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
 #notices .banner { background: rgba(18, 20, 24, 0.92); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 8px; padding: 8px 12px; pointer-events: auto; }
 #notices .banner.error { border-left-color: var(--danger); }

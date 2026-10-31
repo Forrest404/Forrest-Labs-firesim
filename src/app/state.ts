@@ -7,6 +7,7 @@ import { DEFAULT_DURATION_SECONDS, DEFAULT_SETTINGS, DEFAULT_WEATHER } from '../
 import type { CellRef, Intervention, SimResult, SimSettings, Weather } from '../contract';
 import type { DemoArea, DemoAreaIndexEntry } from '../data/bundle';
 import type { ViewerMode } from '../viewer/createViewer';
+import type { PlanState } from './planner';
 
 export type ToolId = 'ignite' | 'firebreak' | 'water';
 
@@ -50,6 +51,10 @@ export interface AppState {
   interventions: Intervention[];
 
   result: SimResult | null;
+  /** The same run without any interventions, for "homes reached: before -> after". Equals `result` when there are none. */
+  baseline: SimResult | null;
+  /** Gemini (or built-in) plan suggestions and their verification. */
+  plan: PlanState | null;
   /** True when inputs changed since `result` was computed. */
   resultStale: boolean;
   simRunning: boolean;
@@ -85,6 +90,8 @@ export function initialState(): AppState {
     ignition: null,
     interventions: [],
     result: null,
+    baseline: null,
+    plan: null,
     resultStale: false,
     simRunning: false,
     simError: null,
