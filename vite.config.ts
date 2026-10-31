@@ -17,6 +17,8 @@ export default defineConfig({
     format: 'es',
   },
   build: {
+    // Two pages: index.html is the landing page, app.html the simulator.
+    rollupOptions: { input: { index: 'index.html', app: 'app.html' } },
     // Cesium is a large single dependency; the warning is expected.
     chunkSizeWarningLimit: 6000,
     sourcemap: false,
