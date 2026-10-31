@@ -21,6 +21,16 @@ async function main(): Promise<void> {
   const notices = createNotices(noticesEl);
   const store = createStore();
 
+  // Surface anything unexpected instead of failing silently (teammates will see it immediately).
+  let lastErr = '';
+  const report = (msg: string): void => {
+    if (msg === lastErr) return;
+    lastErr = msg;
+    notices.show(`${STR.unexpectedError} ${msg}`, 'error', 10000);
+  };
+  window.addEventListener('error', (e) => report(e.message));
+  window.addEventListener('unhandledrejection', (e) => report(e.reason instanceof Error ? e.reason.message : String(e.reason)));
+
   // Panel first so the honesty notice is visible even if the viewer fails.
   let wiringRef: ReturnType<typeof wire> | null = null;
   const slots = mountPanel(panelEl, store, {
@@ -56,6 +66,7 @@ async function main(): Promise<void> {
     const wanted = params.get('area');
     const first = index.areas.find((a) => a.name === wanted) ?? index.areas[0];
     if (first) await wiring.selectArea(first.name);
+    else notices.show(STR.noAreas, 'error', 0);
   } catch (err) {
     notices.show(`${STR.indexError} (${err instanceof Error ? err.message : String(err)})`, 'error', 0);
   } finally {

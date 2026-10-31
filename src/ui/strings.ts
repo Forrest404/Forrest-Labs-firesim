@@ -45,6 +45,15 @@ export const STR = {
   scrubber: 'Simulated time',
   simTime: 'computed in',
 
+  effectsTitle: 'Effects',
+  effectsParticles: 'Flames and smoke',
+  effectsQuality: 'Quality',
+  qualityLow: 'Low',
+  qualityMedium: 'Medium',
+  qualityHigh: 'High',
+  unexpectedError: 'Something went wrong:',
+  noAreas: 'No demo areas are listed. Run `npm run make:synthetic` and reload.',
+
   cameraTitle: 'Camera',
   cameraTopDown: 'Top-down',
   cameraReset: 'Reset view',

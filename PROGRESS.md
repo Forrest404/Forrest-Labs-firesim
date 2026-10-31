@@ -12,7 +12,7 @@ Companion files: [DECISIONS.md](DECISIONS.md) (judgement calls), [FEATURES.md](F
 - [x] Stage 4: Cesium viewer spike
 - [x] Stage 5: Overlay, playback, ignition (CRITICAL MILESTONE)
 - [x] Stage 6: Tools and advanced settings
-- [ ] Stage 7: Effects, hardening, hand-off, tag `v0`
+- [x] Stage 7: Effects, hardening, hand-off, tag `v0`
 
 ## Environment (Stage 0 recon)
 
@@ -117,18 +117,56 @@ Companion files: [DECISIONS.md](DECISIONS.md) (judgement calls), [FEATURES.md](F
 - Not verified: real mouse drags in Cesium (no interactive browser available); the pick/drag code
   path is exercised only through `debugStroke()`.
 
-## Current stage
+### Stage 7 — Effects, hardening, hand-off
+- `src/viewer/particles.ts`: flame + smoke `ParticleSystem`s on up to 20/45/80 front cells (stable
+  hash sampling), smoke drifts downwind; "Effects" section in the panel (toggle + quality).
+- Hardening: global `error` / `unhandledrejection` banner, empty-index banner, non-burnable
+  ignition rejected before simulating, favicon (no more 404), worker auto-respawn (Stage 5),
+  area-load and tile-load failures already banner-ed.
+- README rewritten (install, env, usage, model in plain words, limitations, layout, adding areas,
+  attribution). FEATURES.md finalised against the real `TODO(<slot>)` markers (17 across 7 slots).
+  DECISIONS D14-D16. `tests/README.md` updated.
+- **Final verification:** `npm run typecheck` ✓, `npm test` 53/53 ✓, `npm run build` ✓ (dist 14 MB
+  incl. Cesium assets), from-scratch `rm -rf node_modules && npm install` ✓ (postinstall copies
+  Cesium assets), headless run with particles at "high" playing at 256× on Alpirsbach: clean console,
+  165 ha at 4 h 18 m (`stage7.png`). No "exact"/"accurate" in user-facing copy; no key fragments
+  tracked; only `.env.example` tracked; all source files < 250 lines.
 
-Stage 7: Effects, hardening, hand-off.
+## Definition of Done (prompt §12)
 
-## Next
-
-Tag `v0`, hand off.
+- [x] `npm install && npm run dev` starts clean; `build`, `typecheck`, `test` pass
+- [x] Viewer loads (fallback verified; Google path coded, reverts on failure) and the user can fly around
+- [x] Click places ignition; Simulate runs in a worker; fire animates with play/pause/speed/scrubber
+- [x] Wind, slope and dryness visibly and correctly change the spread (fixture tests + screenshots)
+- [x] Firebreak and water tools work in 3D, change the outcome, support undo/redo (verified via dev hook)
+- [x] Advanced settings wired; unfinished items labelled "coming soon"
+- [x] Honesty notice always visible; no "exact"/"accurate" in user-facing copy
+- [x] No keys committed; Google tiles never used as a data source
+- [x] Works with no network apart from map tiles (bundles are static); synthetic areas labelled
+- [x] PROGRESS / DECISIONS / FEATURES / README complete; branch tagged `v0`
 
 ## Known issues / not verified
 
-- (none yet)
+- **Google Photorealistic 3D Tiles path not exercised** (no key on the build machine): draping of
+  the overlay on 3D tiles, picking on tiles, and particle heights on tiles are untested. First
+  teammate with a key: put it in `.env.local`, load the app, check the overlay aligns with the
+  corner markers (Debug layers -> Grid outline). If classification on tiles fails, set
+  `classificationType: ClassificationType.TERRAIN` in `src/viewer/burnLayer.ts` and keep the globe.
+- **Real mouse drags** on the Cesium canvas were not exercised (no interactive browser); the
+  pick/drag path runs only through `wiring.debugStroke()`. Click-to-ignite and drag-to-draw should
+  be the first things a human checks.
+- Boulder Creek has patchy OSM forest polygons, so much of it is default grass; rebuild with
+  `--default FOREST_CONIFER` when Overpass is healthy (see Stage 3 follow-up).
+- Default ignition for the real areas is the nearest forest cell to the grid centre (Alpirsbach's is
+  next to the town). `demo-ship` should set `suggestedIgnition` per area in the bundles.
+- Water sprayed on cells that are already burning has no effect by design (see D3).
+- The Vite production bundle is one 4.2 MB chunk (Cesium); fine for a demo, split later if needed.
 
 ## Cuts taken
 
-- (none yet)
+- None of the cut list was needed. Follow-fire camera was never planned beyond a stub (TODO in `camera.ts`).
+
+## Resume here
+
+Everything in the prompt is done and tagged `v0`. Next work happens in the `FEATURES.md` slots on
+`feature/<slot>` branches off `main` (after `scaffold/v0` is merged).

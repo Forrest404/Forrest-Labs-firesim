@@ -102,6 +102,27 @@ absolute. To avoid turning real areas into mazes:
   have removed a quarter of the Boulder Creek grid. They fall through to the default fuel (D10).
 Teammates on `sim-realism` / `live-data` can revisit once spotting exists.
 
+## D14. Particle effects and heights
+
+Flames and smoke are Cesium `ParticleSystem`s on up to 20/45/80 (low/medium/high) front cells,
+chosen by a stable per-cell hash so emitters do not jump between frames. Smoke drifts with the
+wind. Heights: on the fallback ellipsoid globe everything sits at 0 m; with Google 3D tiles the
+elevation grid is used, which is orthometric and can be off by the geoid offset (tens of metres).
+`scene.sampleHeight` would be right but needs a rendered frame; left to `3d-polish`.
+
+## D15. Dev hook
+
+In dev builds only, `window.__firesim = { store, wiring }`. `wiring.debugStroke(points)` feeds a
+cell-space stroke through the active drawing tool. This is how the headless tests exercise the
+tools without a real mouse; it is also handy for teammates. Not present in production builds.
+
+## D16. Verification method
+
+The Chrome extension was not connected during the build, so a small CDP script drives the
+installed Chrome headlessly (SwiftShader WebGL): navigate, run a JS scenario, capture console and
+a screenshot. Everything visual reported in `PROGRESS.md` comes from those screenshots. Real
+mouse drags on the 3D view were not exercised.
+
 ## D9. Legal boundary for Google tiles
 
 Google 3D Tiles and imagery are display only. Nothing extracts data from them. All simulation

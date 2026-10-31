@@ -41,9 +41,22 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
     ),
     el('div', { class: 'muted' }, STR.cameraHelp),
   );
+  const particles = el('input', { type: 'checkbox' }) as HTMLInputElement;
+  particles.onchange = () => store.update((s) => ({ effects: { ...s.effects, particles: particles.checked } }));
+  const quality = el('select', {},
+    el('option', { value: 'low' }, STR.qualityLow),
+    el('option', { value: 'medium' }, STR.qualityMedium),
+    el('option', { value: 'high' }, STR.qualityHigh),
+  ) as HTMLSelectElement;
+  quality.onchange = () => store.update((s) => ({ effects: { ...s.effects, quality: quality.value as 'low' | 'medium' | 'high' } }));
+  const effects = el('section', {},
+    el('h2', {}, STR.effectsTitle),
+    el('label', {}, el('span', {}, STR.effectsParticles), particles),
+    el('label', {}, el('span', {}, STR.effectsQuality), quality),
+  );
   const debug = el('section');
   const footer = el('div', { class: 'muted footer' }, STR.footer);
-  root.append(header, modeLine, area, settings, advanced, sim, tools, camera, debug, footer);
+  root.append(header, modeLine, area, settings, advanced, sim, tools, camera, effects, debug, footer);
 
   mountAreaPicker(area, store, actions);
   mountSettingsSimple(settings, store);
@@ -52,6 +65,9 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
 
   store.subscribe((s) => {
     modeLine.textContent = STR.viewerMode[s.viewerMode];
+    particles.checked = s.effects.particles;
+    quality.value = s.effects.quality;
+    quality.disabled = !s.effects.particles;
   });
   return { tools, advanced };
 }

@@ -3,7 +3,7 @@
  * viewer objects are created in response to state changes.
  */
 
-import { FuelClass, validateScenario } from '../contract';
+import { FuelClass, validateScenario, windTowardDeg } from '../contract';
 import type { Scenario } from '../contract';
 import { scenarioFromArea } from '../data/bundle';
 import { loadDemoArea } from '../data/demoAreas';
@@ -16,6 +16,7 @@ import type { Viewer } from 'cesium';
 import { createGridOutline } from '../viewer/gridOutline';
 import type { GridOutline } from '../viewer/gridOutline';
 import { createIgnitionMarker } from '../viewer/ignitionMarker';
+import { createFireEffects } from '../viewer/particles';
 import { createPicker } from '../viewer/picking';
 import type { PickedCell, Picker } from '../viewer/picking';
 import type { Notices } from '../ui/notices';
@@ -51,6 +52,9 @@ export interface Wiring {
 export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
   const sim = new SimClient();
   const marker = createIgnitionMarker(viewer, STR.ignitionLabel);
+  const effects = createFireEffects(viewer);
+  effects.setEnabled(store.get().effects.particles);
+  effects.setQuality(store.get().effects.quality);
   let ctx: AreaContext | null = null;
   let draw: { start(c: PickedCell): void; move(c: PickedCell): void; end(): void } | null = null;
   let preview: Preview | null = null;
@@ -114,6 +118,19 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     if (!ctx) return;
     const s = store.get();
     ctx.painter.schedule(s.result, s.interventions, s.playback.t, s.settings, preview);
+    if (s.area) {
+      const toward = (windTowardDeg(s.weather.windFromDeg) * Math.PI) / 180;
+      effects.update({
+        grid: s.area.grid,
+        arrival: s.result?.arrivalTime ?? null,
+        elevation: s.area.elevation,
+        t: s.playback.t,
+        windX: Math.sin(toward),
+        windY: Math.cos(toward),
+        windSpeedMps: s.weather.windSpeedMps,
+        useElevation: s.viewerMode === 'google',
+      });
+    }
   }
 
   store.subscribe((s, prev) => {
@@ -123,6 +140,11 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     if (s.ignition !== prev.ignition && s.area) marker.set(s.area.grid, s.ignition);
     if (s.result !== prev.result || s.playback.t !== prev.playback.t || s.interventions !== prev.interventions || s.settings !== prev.settings) repaint();
     if (s.tool !== prev.tool) picker.setDragMode(s.tool !== 'ignite');
+    if (s.effects !== prev.effects) {
+      effects.setEnabled(s.effects.particles);
+      effects.setQuality(s.effects.quality);
+      repaint();
+    }
   });
 
   async function selectArea(name: string): Promise<void> {
@@ -156,6 +178,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     const s = store.get();
     if (!s.area) return STR.loadError;
     if (!s.ignition) return STR.placeIgnitionHint;
+    if (s.area.fuel[s.ignition.row * s.area.grid.width + s.ignition.col] === FuelClass.NONE) return STR.ignitionNonBurnable;
     const scenario = scenarioFromArea(s.area, {
       weather: s.weather,
       settings: s.settings,
