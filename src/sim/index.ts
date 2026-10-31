@@ -12,17 +12,14 @@ import {
   windTowardDeg,
 } from '../contract';
 import type { Scenario, SimResult } from '../contract';
-import { buildEventLayers, moistureAt, timeUntilMoisture } from './events';
+import { crossWetEdge } from './crossing';
+import type { Crossing } from './crossing';
+import { buildEventLayers } from './events';
 import { MinHeap } from './heap';
+import { createRateFn } from './models';
+import type { EdgeInput } from './models';
 import { mulberry32 } from './prng';
-import {
-  NEIGHBOR_OFFSETS,
-  combineRate,
-  cosAgainstWind,
-  moistureFactor,
-  slopeFactor,
-  windFactor,
-} from './rates';
+import { NEIGHBOR_OFFSETS, cosAgainstWind } from './rates';
 
 const DEG = Math.PI / 180;
 
@@ -57,15 +54,17 @@ export function simulate(scenario: Scenario): SimResult {
   }
 
   // Per-fuel lookups as flat arrays indexed by class id.
-  const baseRate = new Float32Array(FUELS_COUNT);
-  const extinction = new Float32Array(FUELS_COUNT);
-  const burnDuration = new Float32Array(FUELS_COUNT);
+  const extinction = new Float64Array(FUELS_COUNT);
+  const burnDuration = new Float64Array(FUELS_COUNT);
   for (let c = 0; c < FUELS_COUNT; c++) {
     const spec = FUELS[c as FuelClass];
-    baseRate[c] = spec.baseRateMps;
     extinction[c] = spec.extinctionMoisture;
     burnDuration[c] = spec.burnDurationS;
   }
+
+  // The rate-of-spread model (settings.rateModel) and a reusable edge record for it.
+  const rateFn = createRateFn(scenario);
+  const edge: EdgeInput = { fuel: 0, moisture: 0, cosTheta: 0, windSpeedMps: weather.windSpeedMps, dz: 0, dist: 0 };
 
   const heap = new MinHeap(Math.max(1024, n >> 2));
   for (const ig of scenario.ignition) {
@@ -76,7 +75,7 @@ export function simulate(scenario: Scenario): SimResult {
     }
   }
 
-  const windSpeed = weather.windSpeedMps;
+  const crossing: Crossing = { t: Infinity, rate: 0 };
   let maxRate = 0;
 
   while (heap.size > 0) {
@@ -106,41 +105,25 @@ export function simulate(scenario: Scenario): SimResult {
       if (mx <= baseMoisture) continue;
 
       const dist = cellSizeM * off.distFactor;
-      const wind = windFactor(cosAgainstWind(off, wx, wy), windSpeed, settings);
-      const slope = slopeFactor(elevation[j] - ei, dist, settings);
 
-      // Arrival if the fire leaves the source at time tLeave, given the cell's moisture then.
-      const arriveIfLeaving = (tLeave: number): { tArr: number; rate: number } => {
-        const m = events.hasWater ? moistureAt(events, j, tLeave, baseMoisture) : baseMoisture;
-        const r = m < mx ? combineRate(baseRate[fj], wind, slope, moistureFactor(m, mx), settings) : 0;
-        return { tArr: r > 0 ? tLeave + dist / r : NEVER_ARRIVES, rate: r };
-      };
-      let { tArr, rate } = arriveIfLeaving(t);
-      // A sprayed cell dries over time, so leaving later can mean arriving sooner. The fire may
-      // wait at the source (while it still burns) for the best moment. Taking that minimum makes
-      // arrival non-decreasing in t, which keeps Dijkstra correct and means more water or a later
-      // source can never make a cell burn earlier. Approximation, see DECISIONS.md D3.
-      if (events.hasWater && events.sprays.has(j)) {
-        const nearlyDry = baseMoisture + 1e-3 * (mx - baseMoisture);
-        const tDry = timeUntilMoisture(events, j, baseMoisture, nearlyDry, t);
-        let lo = t;
-        let hi = Math.min(tDry === NEVER_ARRIVES ? duration : tDry, burnout, duration);
-        if (hi > lo) {
-          // Arrival vs leave time is unimodal (infinite while too wet, then falling, then rising
-          // once the cell is dry), so a ternary search finds the best leave time.
-          for (let it = 0; it < 60 && hi - lo > 1e-3; it++) {
-            const a = lo + (hi - lo) / 3;
-            const b = hi - (hi - lo) / 3;
-            if (arriveIfLeaving(a).tArr <= arriveIfLeaving(b).tArr && Number.isFinite(arriveIfLeaving(a).tArr)) hi = b;
-            else lo = a;
-          }
-          for (const cand of [lo, hi]) {
-            const o = arriveIfLeaving(cand);
-            if (o.tArr < tArr) ({ tArr, rate } = o);
-          }
-        }
+      edge.fuel = fj;
+      edge.cosTheta = cosAgainstWind(off, wx, wy);
+      edge.dz = elevation[j] - ei;
+      edge.dist = dist;
+      let tArr: number;
+      let rate: number;
+      if (events.hasWater && events.sprayHead[j] >= 0) {
+        // Sprayed target: integrate over its changing moisture (FIFO-safe), see crossing.ts.
+        crossWetEdge(events, j, t, dist, baseMoisture, mx, burnout, duration, rateFn, edge, crossing);
+        tArr = crossing.t;
+        rate = crossing.rate;
+        if (!(tArr < Infinity)) continue;
+      } else {
+        edge.moisture = baseMoisture;
+        rate = rateFn(edge);
+        if (!(rate > 0) || !Number.isFinite(rate)) continue;
+        tArr = t + dist / rate;
       }
-      if (!(rate > 0)) continue;
       if (tArr >= events.breakT[j] || tArr > duration) continue;
       if (tArr < arrival[j]) {
         arrival[j] = tArr;

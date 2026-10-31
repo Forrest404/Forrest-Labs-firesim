@@ -6,7 +6,8 @@
 import { decodeBundle } from './bundle';
 import type { DemoArea, DemoAreaBundle, DemoAreaIndex, DemoAreaIndexEntry } from './bundle';
 
-export const DEMO_AREAS_BASE = '/demo-areas/';
+// Prefixed with Vite's BASE_URL so the app also works when served under a sub-path (GitHub Pages).
+export const DEMO_AREAS_BASE = `${import.meta.env.BASE_URL}demo-areas/`;
 export const LIVE_AREA_NAME = 'live';
 
 export async function loadDemoAreaIndex(base = DEMO_AREAS_BASE): Promise<DemoAreaIndex> {

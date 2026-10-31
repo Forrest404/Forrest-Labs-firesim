@@ -1,6 +1,7 @@
-/** Debug toggles: grid outline, fuel classes, slope. */
+/** Overlay layer switches: grid outline, fuel classes (with legend), slope. */
 
 import type { DebugFlags, Store } from '../app/state';
+import { toggle } from './controls';
 import { el } from './el';
 import { STR } from './strings';
 
@@ -11,20 +12,19 @@ export function mountDebug(container: HTMLElement, store: Store): void {
     ['slope', STR.debugSlope],
   ];
   const inputs = new Map<keyof DebugFlags, HTMLInputElement>();
-  const details = el('details', {}, el('summary', {}, STR.debugTitle));
+  const details = el('details', { class: 'layers' }, el('summary', {}, STR.debugTitle)) as HTMLDetailsElement;
   for (const [key, label] of toggles) {
-    const input = el('input', { type: 'checkbox' }) as HTMLInputElement;
-    input.onchange = () => store.update((s) => ({ debug: { ...s.debug, [key]: input.checked } }));
-    inputs.set(key, input);
-    details.append(el('label', {}, el('span', {}, label), input));
+    const t = toggle(label, (on) => store.update((s) => ({ debug: { ...s.debug, [key]: on } })));
+    inputs.set(key, t.input);
+    details.append(t.root);
   }
-  details.append(
-    el('div', { class: 'muted legend' },
-      ...Object.entries(STR.fuelLegend).map(([name, color]) => el('span', { class: 'swatch' }, el('i', { style: `background:${color}` }), name)),
-    ),
+  const legend = el('div', { class: 'legend' },
+    ...Object.entries(STR.fuelLegend).map(([name, color]) => el('span', { class: 'swatch' }, el('i', { style: `background:${color}` }), name)),
   );
+  details.append(legend);
   container.append(details);
   store.subscribe((s) => {
     for (const [key, input] of inputs) input.checked = s.debug[key];
+    legend.hidden = !s.debug.fuel;
   });
 }

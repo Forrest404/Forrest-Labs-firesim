@@ -1,23 +1,29 @@
 /**
- * Preprocesses timestamped interventions into flat per-cell arrays the solver can read in O(1),
- * and implements time-dependent moisture (water spray with exponential decay).
+ * Timestamped interventions turned into flat per-cell structures the solver can query cheaply.
+ *
+ * Firebreak: a cell becomes non-burnable from breakT[cell] on (earliest event wins).
+ * Water: each spray adds `boost * 2^(-(t - tSpray) / halfLife)` to the cell's fuel moisture from
+ * tSpray on. A cell can carry several sprays; the WETTEST one dominates (max, not sum). Max keeps
+ * the model monotone: adding a spray can never make a cell drier or a fire faster, and a later,
+ * weaker spray can never cancel an earlier, stronger one. See DECISIONS.md D18.
  */
 
 import { NEVER_ARRIVES } from '../contract';
 import type { Intervention, SimSettings } from '../contract';
 
-/** One water spray on a cell: moisture `boost` added at time `t`, halving every `half` seconds. */
-export interface Spray {
-  t: number;
-  boost: number;
-  half: number;
-}
-
 export interface EventLayers {
   /** Time at which each cell becomes non-burnable (firebreak), NEVER_ARRIVES if never. */
   breakT: Float32Array;
-  /** Every spray per sprayed cell. A cell's extra moisture is the largest remaining boost of its sprays. */
-  sprays: Map<number, Spray[]>;
+  /** Head of each cell's spray list (index into the spray arrays), -1 if the cell was never sprayed. */
+  sprayHead: Int32Array;
+  /** Earliest and latest spray start per sprayed cell. */
+  sprayFirst: Float64Array;
+  sprayLast: Float64Array;
+  /** Flat spray records: start time (s), moisture boost (fraction), half-life (s), next record index. */
+  sprayT: number[];
+  sprayBoost: number[];
+  sprayHalf: number[];
+  sprayNext: number[];
   hasWater: boolean;
 }
 
@@ -27,67 +33,83 @@ export function buildEventLayers(
   settings: SimSettings,
 ): EventLayers {
   const breakT = new Float32Array(cellCount).fill(NEVER_ARRIVES);
-  const sprays = new Map<number, Spray[]>();
+  const sprayHead = new Int32Array(cellCount).fill(-1);
+  const sprayFirst = new Float64Array(cellCount).fill(Infinity);
+  const sprayLast = new Float64Array(cellCount).fill(-Infinity);
+  const layers: EventLayers = {
+    breakT, sprayHead, sprayFirst, sprayLast,
+    sprayT: [], sprayBoost: [], sprayHalf: [], sprayNext: [], hasWater: false,
+  };
 
   for (const iv of interventions) {
     if (iv.type === 'firebreak') {
       for (const c of iv.cells) if (iv.tSeconds < breakT[c]) breakT[c] = iv.tSeconds;
     } else if (iv.type === 'water') {
-      const spray: Spray = {
-        t: iv.tSeconds,
-        boost: iv.params?.moistureBoost ?? settings.waterMoistureBoost,
-        half: iv.params?.halfLifeS ?? settings.waterHalfLifeS,
-      };
-      // Keep every spray: a later one must not erase an earlier one's water before it happens,
-      // otherwise adding a spray could make a cell drier and the fire arrive earlier.
+      const boost = iv.params?.moistureBoost ?? settings.waterMoistureBoost;
+      const half = iv.params?.halfLifeS ?? settings.waterHalfLifeS;
+      if (!(boost > 0) || !(half > 0)) continue; // a spray with no boost or no persistence does nothing
       for (const c of iv.cells) {
-        const list = sprays.get(c);
-        if (list) list.push(spray);
-        else sprays.set(c, [spray]);
+        const idx = layers.sprayT.length;
+        layers.sprayT.push(iv.tSeconds);
+        layers.sprayBoost.push(boost);
+        layers.sprayHalf.push(half);
+        layers.sprayNext.push(sprayHead[c]);
+        sprayHead[c] = idx;
+        if (iv.tSeconds < sprayFirst[c]) sprayFirst[c] = iv.tSeconds;
+        if (iv.tSeconds > sprayLast[c]) sprayLast[c] = iv.tSeconds;
+        layers.hasWater = true;
       }
     }
     // TODO(sim-realism): ember spotting would be a new event source here (settings.spottingEnabled).
   }
-  return { breakT, sprays, hasWater: sprays.size > 0 };
+  return layers;
 }
 
-function remaining(s: Spray, t: number): number {
-  if (t < s.t) return 0;
-  return s.half > 0 ? s.boost * Math.pow(2, -(t - s.t) / s.half) : 0;
+/** Moisture added by sprays at time t (the wettest active spray), 0 if none are active. */
+export function sprayContribution(layers: EventLayers, cell: number, t: number): number {
+  let best = 0;
+  for (let k = layers.sprayHead[cell]; k >= 0; k = layers.sprayNext[k]) {
+    const ts = layers.sprayT[k];
+    if (t < ts) continue;
+    const c = layers.sprayBoost[k] * Math.pow(2, -(t - ts) / layers.sprayHalf[k]);
+    if (c > best) best = c;
+  }
+  return best;
 }
 
-/** Fuel moisture of a cell at simulated time t: base plus the wettest decaying spray. */
+/** Fuel moisture of a cell at simulated time t: base plus decaying spray. */
 export function moistureAt(layers: EventLayers, cell: number, t: number, baseMoisture: number): number {
-  const list = layers.sprays.get(cell);
-  if (!list) return baseMoisture;
-  let extra = 0;
-  for (const s of list) extra = Math.max(extra, remaining(s, t));
-  return baseMoisture + extra;
+  return baseMoisture + sprayContribution(layers, cell, t);
 }
 
 /**
- * Earliest time at or after `from` when a sprayed cell's moisture is at or below `targetMoisture`,
- * or NEVER_ARRIVES. Uses the closed form of each spray's decay; a spray that starts while waiting
- * for an earlier one to dry pushes the time further out.
+ * Earliest time T >= tFrom at which the cell's moisture is at or below `targetMoisture` and stays
+ * that way for every spray already started by T (a spray that starts later re-wets the cell, but
+ * the fire only needs the cell to be dry at the moment it arrives). Returns NEVER_ARRIVES if the
+ * target is at or below the base moisture.
  */
 export function timeUntilMoisture(
   layers: EventLayers,
   cell: number,
   baseMoisture: number,
   targetMoisture: number,
-  from = 0,
+  tFrom: number,
 ): number {
-  if (targetMoisture <= baseMoisture) return NEVER_ARRIVES;
-  const list = layers.sprays.get(cell);
-  if (!list) return from;
-  const room = targetMoisture - baseMoisture;
-  const dryAt = (s: Spray): number => (s.boost <= room || !(s.half > 0) ? s.t : s.t + s.half * Math.log2(s.boost / room));
-  let t = from;
-  for (let guard = 0; guard <= list.length; guard++) {
-    let next = t;
-    for (const s of list) if (s.t <= t) next = Math.max(next, dryAt(s));
-    if (next === t) return t;
-    t = next;
+  const thr = targetMoisture - baseMoisture;
+  if (!(thr > 0)) return NEVER_ARRIVES;
+  let T = tFrom;
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (let k = layers.sprayHead[cell]; k >= 0; k = layers.sprayNext[k]) {
+      const ts = layers.sprayT[k];
+      if (ts > T) continue;
+      const boost = layers.sprayBoost[k];
+      const dry = boost <= thr ? ts : ts + layers.sprayHalf[k] * Math.log2(boost / thr);
+      if (dry > T) {
+        T = dry;
+        changed = true;
+      }
+    }
   }
-  return t;
+  return T;
 }

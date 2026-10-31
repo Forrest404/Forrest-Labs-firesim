@@ -5,6 +5,7 @@ import type { PlanAttempt } from '../app/planner';
 import type { Store } from '../app/state';
 import type { Wiring } from '../app/wiring';
 import { el } from './el';
+import { icon } from './icons';
 import { STR } from './strings';
 
 const env = import.meta.env as Record<string, string | undefined>;
@@ -12,12 +13,13 @@ const env = import.meta.env as Record<string, string | undefined>;
 export function mountPlanner(container: HTMLElement, store: Store, wiring: Wiring): void {
   const apiKey = env.VITE_GEMINI_API_KEY || undefined;
   const model = env.VITE_GEMINI_MODEL || undefined;
-  const button = el('button', { class: 'primary', onclick: () => void run() }, apiKey ? STR.planButtonGemini : STR.planButtonBuiltin) as HTMLButtonElement;
+  const button = el('button', { type: 'button', class: 'primary', onclick: () => void run() }, icon('sparkles', 16), el('span', {}, apiKey ? STR.planButtonGemini : STR.planButtonBuiltin)) as HTMLButtonElement;
   const note = el('div', { class: 'muted' }, apiKey ? STR.planNoteGemini : STR.planNoteBuiltin);
   const status = el('div', { class: 'muted' });
   const list = el('ul', { class: 'plan-attempts' });
 
-  container.append(el('h2', {}, STR.planTitle), button, note, status, list);
+  // The section card already carries the "AI plan" heading.
+  container.append(button, note, status, list);
 
   async function run(): Promise<void> {
     const scenario = wiring.buildScenario();

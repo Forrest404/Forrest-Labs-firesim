@@ -60,6 +60,8 @@ export interface AppState {
   compare: boolean;
   /** No-wind and reversed-wind re-runs from "Compare with real fire", for the current result. */
   controls: ControlRun[] | null;
+  /** The "Real vs simulation" card: the real perimeter and our run side by side. */
+  sideBySide: boolean;
   /** True when inputs changed since `result` was computed. */
   resultStale: boolean;
   simRunning: boolean;
@@ -99,6 +101,7 @@ export function initialState(): AppState {
     plan: null,
     compare: false,
     controls: null,
+    sideBySide: false,
     resultStale: false,
     simRunning: false,
     simError: null,

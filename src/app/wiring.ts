@@ -4,7 +4,7 @@
  */
 
 import { FuelClass, validateScenario, windTowardDeg } from '../contract';
-import type { Scenario } from '../contract';
+import type { GridSpec, Scenario, SimResult } from '../contract';
 import { scenarioFromArea } from '../data/bundle';
 import { simulate as runSimulation } from '../sim';
 import { loadDemoArea } from '../data/demoAreas';
@@ -31,6 +31,9 @@ import type { Preview } from './overlayPainter';
 import { SimCancelledError, SimClient } from './simClient';
 import type { Store } from './state';
 
+/** Playback speed for "Real vs simulation": Crozier reaches real size (~11 h) in about 20 s. */
+const REAL_VS_SIM_SPEED = 2048;
+
 interface AreaContext {
   burn: GridLayer;
   fuel: GridLayer;
@@ -45,6 +48,8 @@ export interface Wiring {
   simulate(): Promise<void>;
   /** Re-runs the area's real fire (recorded weather and ignition), jumps to real size, shows accuracy colours. */
   compareWithRealFire(): Promise<void>;
+  /** Re-runs the real fire from ignition with the real perimeter and our run side by side. */
+  realVsSim(): Promise<void>;
   /** The scenario the current inputs describe, or a user-facing reason why there isn't one. */
   buildScenario(): Scenario | string;
   cancel(): void;
@@ -180,6 +185,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
         plan: null,
         compare: false,
         controls: null,
+        sideBySide: false,
         resultStale: false,
         simRunning: false,
         playback: { ...store.get().playback, t: 0, playing: false },
@@ -241,11 +247,11 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     }
   }
 
-  async function compareWithRealFire(): Promise<void> {
+  /** Runs the area's real fire: recorded weather and ignition, no firefighting actions. */
+  async function runRealFire(): Promise<{ result: SimResult; grid: GridSpec; fairT: number | null } | null> {
     const s = store.get();
     const ref = s.area?.reference;
-    if (!s.area || !ref) return;
-    // The real day: recorded weather and ignition, no firefighting actions.
+    if (!s.area || !ref) return null;
     store.set({
       weather: { ...s.weather, windFromDeg: s.area.meta.defaultWindFromDeg ?? s.weather.windFromDeg, ...s.area.meta.defaultWeather },
       ignition: defaultIgnition(s.area),
@@ -255,21 +261,34 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     await simulate();
     const after = store.get();
     const scenario = buildScenario();
-    if (!after.result || !after.area || typeof scenario === 'string') return;
-    // Jump to the moment the run is as big as the real fire: the fair point to compare shapes.
+    if (!after.result || !after.area || typeof scenario === 'string') return null;
+    store.set({ controls: controlRuns(scenario, ref) });
     const fair = overlapAtRealSize(after.result, ref);
-    store.set({
-      compare: true,
-      controls: controlRuns(scenario, ref),
-      playback: { ...after.playback, playing: false, t: fair ? fair.t : after.durationSeconds },
-    });
-    flyTopDown(viewer, after.area.grid);
+    return { result: after.result, grid: after.area.grid, fairT: fair ? fair.t : null };
+  }
+
+  async function compareWithRealFire(): Promise<void> {
+    const run = await runRealFire();
+    if (!run) return;
+    // Jump to the moment the run is as big as the real fire: the fair point to compare shapes.
+    const s = store.get();
+    store.set({ compare: true, playback: { ...s.playback, playing: false, t: run.fairT ?? s.durationSeconds } });
+    flyTopDown(viewer, run.grid);
+  }
+
+  async function realVsSim(): Promise<void> {
+    const run = await runRealFire();
+    if (!run) return;
+    // Play from ignition so the right-hand map grows live; the card pauses itself at real size.
+    store.set({ sideBySide: true, compare: false, playback: { t: 0, playing: true, speed: REAL_VS_SIM_SPEED } });
+    flyTopDown(viewer, run.grid);
   }
 
   return {
     selectArea,
     simulate,
     compareWithRealFire,
+    realVsSim,
     buildScenario,
     cancel: () => {
       sim.cancelAll();

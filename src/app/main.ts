@@ -8,6 +8,7 @@ import { STR } from '../ui/strings';
 import { createViewer } from '../viewer/createViewer';
 import { mountSettingsAdvanced } from '../ui/settingsAdvanced';
 import { mountPlanner } from '../ui/planner';
+import { mountRealVsSim } from '../ui/realVsSim';
 import { mountTools } from '../ui/tools';
 import { startClock } from './clock';
 import { createStore } from './state';
@@ -38,11 +39,13 @@ async function main(): Promise<void> {
     selectArea: (name) => void wiringRef?.selectArea(name),
     simulate: () => void wiringRef?.simulate(),
     compareWithRealFire: () => void wiringRef?.compareWithRealFire(),
+    realVsSim: () => void wiringRef?.realVsSim(),
     cancel: () => wiringRef?.cancel(),
     topDown: () => wiringRef?.topDown(),
     resetView: () => wiringRef?.resetView(),
   });
   mountSettingsAdvanced(slots.advanced, store);
+  mountRealVsSim(document.getElementById('app') as HTMLElement, store);
 
   notices.persistent('loading', STR.loadingArea, 'info');
   const handle = await createViewer({
