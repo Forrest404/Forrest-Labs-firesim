@@ -67,8 +67,21 @@ export interface DebugFlags {
   slope: boolean;
 }
 
+/** Every visual extra is independently switchable (D21). */
 export interface EffectsFlags {
-  particles: boolean;
+  /** Flame particles on flaming cells. */
+  flames: boolean;
+  /** Ember sparks lofted from flaming cells. */
+  embers: boolean;
+  /** Smoke puff particles near the fire. */
+  smokeParticles: boolean;
+  /** Draped smoke-concentration layer (cosmetic model, see DECISIONS.md D20). */
+  smoke: boolean;
+  /** Flickering ground glow around flaming cells on the overlay. */
+  glow: boolean;
+  /** Sub-cell smoothing of the burn and smoke overlays (2x canvas, bilinear). */
+  smooth: boolean;
+  /** Particle budget. */
   quality: 'low' | 'medium' | 'high';
 }
 
@@ -149,7 +162,7 @@ export function initialState(): AppState {
     tool: 'ignite',
     toolParams: { firebreakWidthCells: 3, waterRadiusCells: 3, preClear: false },
     debug: { outline: false, fuel: false, slope: false },
-    effects: { particles: true, quality: 'medium' },
+    effects: { flames: true, embers: true, smokeParticles: true, smoke: true, glow: true, smooth: true, quality: 'medium' },
     advancedOpen: false,
     view: 'sim',
     live: initialLive(),

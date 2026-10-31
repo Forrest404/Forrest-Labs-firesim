@@ -196,7 +196,65 @@ no icon font, no network font). Rules that follow from it:
 - Copy is shorter everywhere (hints are one line, "display only" wording lives in the mode pill
   tooltip and README); the honesty notice text itself is unchanged.
 
-## D20. Live fires tab: NASA FIRMS detections next to the simulator
+## D20. Cosmetic smoke field (deterministic, not a dispersion model)
+
+Smoke is app/viewer code only (`src/app/smoke/`, `src/viewer/smokeCanvas.ts`); the contract
+and the spread model are untouched and nothing feeds back. The field is column-integrated
+particulate per cell on the sim grid, stepped on a 60 s lattice: closed-form per-fuel emission
+(uniform flaming over the fuel's `burnDurationS`, exponential smoldering tail per fuel, nominal
+emission factors 0.010 / 0.025 kg per kg fuel weighted 0.5-1.5 by the sim's relative intensity),
+semi-Lagrangian advection, three-box Gaussian diffusion (K = 15 + 10 u + 30 per km of plume
+top), 4 h first-order loss. A Briggs bent-over final rise from the summed flaming heat release
+gives one global plume top that scales transport speed (power-law profile) and diffusivity;
+column mass is not diluted by height. Wind is the scenario snapshot that produced the result
+(not the live, possibly edited weather) plus a seeded meander from `windVariabilityDeg` via
+mulberry32; no `Math.random` in the model. Checkpoints every 20 steps make scrubbing back a
+bitwise-identical replay; forward jumps catch up on a budgeted per-frame loop (12 ms).
+
+Terrain does not steer the drift: a column at plume height is not channelled by 30 m terrain
+and, with one wind vector and no boundary layer, an up-valley bias would be invented. Terrain is
+used only for particle emitter heights (D14).
+
+Particles are now driven by the field (emission weight, local plume rise, buoyancy decay, wind
+profile, hash turbulence) but Cesium's emitters still use their own randomness, so particle
+visuals are not reproducible; only the draped field is. Both the burn overlay and the smoke
+follow per-fuel burnout (`arrival + burnDurationS`, what the sim uses); the old
+`waterHalfLifeS * 1.5` window was never physically related to burning and remains only as the
+no-result fallback. With `burnoutEnabled = false` the sim spreads forever but visuals still use
+the per-fuel duration.
+
+Honesty: this is not a dispersion model validated against observations. No boundary layer, no
+terrain channelling, no chemistry; emission factors and extinction (4000 m^2/kg) are
+order-of-magnitude placeholders and opacity is illustrative.
+
+## D21. Fire visuals: every extra is a switch
+
+The View card lists six independent switches (`EffectsFlags`): Flames, Embers, Smoke puffs,
+Smoke plume (the D20 layer), Ground glow, Smooth edges, plus the particle Quality chips. Each
+flag is read in exactly one place (particles for the first three, the overlay painter for glow
+and smoothing, layer visibility for the plume) so turning one off removes only that cost.
+
+- **Flames** are Cesium particle systems with a teardrop sprite; their height comes from Byram
+  flame length `L = 0.0775 (H w R)^0.46` using the fuel's heat and load and the cell's spread
+  rate (`intensity x maxSpreadRateMps`), exaggerated x4 and clamped 3-16 m so they read at
+  30 m cells. They lean downwind and flicker; 'low' quality skips the per-particle update.
+- **Embers** are small hot sprites lofted for the first third of their life, then pulled down
+  by gravity while the wind profile and hash turbulence carry them; rate scales with the local
+  smoke emission weight.
+- **Ground glow** is painted on the burn overlay: a flickering orange halo (deterministic per
+  cell and 20 s slot) onto unburned pixels within 2.5 cells of a flaming cell.
+- **Smooth edges**: the burn and smoke layers are 2 canvas pixels per cell (`GridLayer.scale`);
+  with the switch on, the burn painter bilinearly interpolates burned fraction and age across
+  the four nearest cells (anti-aliased front, soft ramp) and the smoke field is upsampled
+  bilinearly; off, both are nearest-neighbour so the cell structure is honest and visible.
+- Smoke drawn over cells that are flaming right now is dimmed to 30 % so the fire is never
+  hidden under its own plume.
+
+None of this changes the simulation; the particle visuals remain non-reproducible (Cesium
+emitter randomness), the overlay pixels are deterministic and unit-tested
+(`tests/burnCanvasScaled.test.ts`).
+
+## D22. Live fires tab: NASA FIRMS detections next to the simulator
 
 The panel now has two tabs, **Simulation** (everything that existed) and **Live fires**
 (`state.view`). The live tab shows near-real-time active-fire detections from the NASA FIRMS
@@ -233,7 +291,7 @@ a possible later "historical compare" feature).
   grid picker is disabled, Space/Escape/Cmd+Z are gated to the sim tab; sim state (area, result,
   playback position) survives the switch and the camera flies back to the grid.
 
-## D21. Live fires: fire regions and a satellite basemap
+## D23. Live fires: fire regions and a satellite basemap
 
 - **Fire regions are derived, not downloaded.** FIRMS publishes points, not perimeters. A region
   is the set of detections linked by single-linkage on a 0.02° (~2 km) grid with 8-neighbour
@@ -245,7 +303,7 @@ a possible later "historical compare" feature).
   per instance; a global raster would need its own tiling. Why 2 km: VIIRS pixels are 375 m and
   neighbouring pixels of one fire are never further apart than a few pixels; 2 km also bridges
   the gap between a NOAA-20 and a SNPP overpass of the same fire.
-- **"Largest fires" lists regions**, replacing the earlier 0.25° bins (D20): a bin cut fires in
+- **"Largest fires" lists regions**, replacing the earlier 0.25° bins (D22): a bin cut fires in
   half and merged unrelated ones. Ids are `R:` + the strongest member's id, so a selection
   survives a filter change as long as that member stays.
 - **Layers are toggles, not modes.** Detections and regions are independent switches in the

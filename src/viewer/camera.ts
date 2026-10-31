@@ -2,7 +2,8 @@
 
 import { BoundingSphere, Cartesian3, HeadingPitchRange, Math as CesiumMath, Rectangle } from 'cesium';
 import type { Viewer } from 'cesium';
-import type { GridSpec } from '../contract';
+import type { CellRef, GridSpec } from '../contract';
+import { cellCenterLonLat } from '../data/geo';
 
 function gridRectangle(grid: GridSpec): Rectangle {
   const b = grid.bounds;
@@ -47,3 +48,13 @@ export function flyToPoint(viewer: Viewer, lon: number, lat: number, rangeM: num
 
 // TODO(3d-polish): followFireFront(viewer, grid, arrivalTime, t) that keeps the active front in
 // frame while the simulation plays (stretch).
+
+/** Oblique close-up on one cell (e.g. the ignition) from `rangeM` away, looking from the south-west. */
+export function flyToCell(viewer: Viewer, grid: GridSpec, cell: CellRef, heightM: number, rangeM = 600, durationS = 1.5): void {
+  const { lon, lat } = cellCenterLonLat(grid, cell.row, cell.col);
+  const sphere = new BoundingSphere(Cartesian3.fromDegrees(lon, lat, heightM), 10);
+  viewer.camera.flyToBoundingSphere(sphere, {
+    duration: durationS,
+    offset: new HeadingPitchRange(CesiumMath.toRadians(35), CesiumMath.toRadians(-28), rangeM),
+  });
+}

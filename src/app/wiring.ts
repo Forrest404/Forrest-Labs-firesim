@@ -11,7 +11,7 @@ import { defaultIgnition } from '../data/ignition';
 import { computeSlopeAspect } from '../data/terrain';
 import { paintFuel, paintSlope } from '../viewer/burnCanvas';
 import { GridLayer } from '../viewer/burnLayer';
-import { flyToGlobe, flyToGrid, flyToPoint, flyTopDown } from '../viewer/camera';
+import { flyToCell, flyToGlobe, flyToGrid, flyToPoint, flyTopDown } from '../viewer/camera';
 import type { Backdrop, Basemap } from '../viewer/createViewer';
 import { gridCenter } from '../data/geo';
 import { createHotspotLayer } from '../viewer/hotspotLayer';
@@ -25,13 +25,15 @@ import { createPicker } from '../viewer/picking';
 import type { PickedCell, Picker } from '../viewer/picking';
 import type { Notices } from '../ui/notices';
 import { STR } from '../ui/strings';
-import { OverlayPainter } from './overlayPainter';
+import { OVERLAY_SCALE, OverlayPainter } from './overlayPainter';
+import { SmokeTimeline } from './smoke';
 import type { Preview } from './overlayPainter';
 import { SimCancelledError, SimClient } from './simClient';
 import type { AppState, Store } from './state';
 
 interface AreaContext {
   burn: GridLayer;
+  smoke: GridLayer;
   fuel: GridLayer;
   slope: GridLayer;
   outline: GridOutline;
@@ -45,6 +47,10 @@ export interface Wiring {
   topDown(): void;
   resetView(): void;
   picker: Picker;
+  /** Close-up on the ignition cell (dev hook / headless checks; a UI button can reuse it). */
+  focusIgnition(rangeM?: number): void;
+  /** The smoke timeline of the current result (dev hook / headless checks). */
+  smokeTimeline(): SmokeTimeline | null;
   /** Hook for the tools controller: receives picks when a drawing tool is active. */
   setDrawHandlers(h: { start(c: PickedCell): void; move(c: PickedCell): void; end(): void } | null): void;
   /** Live stroke preview painted into the overlay. */
@@ -66,7 +72,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
   const sim = new SimClient();
   const marker = createIgnitionMarker(viewer, STR.ignitionLabel);
   const effects = createFireEffects(viewer);
-  effects.setEnabled(store.get().effects.particles);
+  effects.setFlags(store.get().effects);
   effects.setQuality(store.get().effects.quality);
   // Live-fires detections. Picks arrive from a Cesium event, so the store write is deferred anyway.
   const hotspots = createHotspotLayer(viewer, (id) => {
@@ -87,6 +93,10 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
     regions.setVisible(live && s.live.layers.regions);
   };
   const simShown = (): boolean => store.get().view === 'sim';
+  /** Particle switches as set, except in the live view where every particle system is off. */
+  const applyEffects = (s: AppState): void => {
+    effects.setFlags(s.view === 'sim' ? s.effects : { ...s.effects, flames: false, embers: false, smokeParticles: false });
+  };
   let ctx: AreaContext | null = null;
   let draw: { start(c: PickedCell): void; move(c: PickedCell): void; end(): void } | null = null;
   let preview: Preview | null = null;
@@ -113,6 +123,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
     if (!ctx) return;
     ctx.painter.destroy();
     ctx.burn.destroy();
+    ctx.smoke.destroy();
     ctx.fuel.destroy();
     ctx.slope.destroy();
     ctx.outline.destroy();
@@ -129,9 +140,14 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
     const slope = new GridLayer(viewer, grid, { zIndex: 2 });
     const { slopeDeg } = computeSlopeAspect(s.area.elevation, grid.width, grid.height, grid.cellSizeM);
     slope.paint((d) => paintSlope(d, slopeDeg));
-    const burn = new GridLayer(viewer, grid, { zIndex: 3 });
+    const burn = new GridLayer(viewer, grid, { zIndex: 3, scale: OVERLAY_SCALE });
+    const smoke = new GridLayer(viewer, grid, { zIndex: 4, scale: OVERLAY_SCALE });
+    smoke.setVisible(s.effects.smoke && simShown());
     const outline = createGridOutline(viewer, grid);
-    ctx = { burn, fuel, slope, outline, painter: new OverlayPainter(burn, grid) };
+    const painter = new OverlayPainter(burn, grid);
+    painter.setSmoke(smoke, null);
+    painter.setEffects({ glow: s.effects.glow, smooth: s.effects.smooth });
+    ctx = { burn, smoke, fuel, slope, outline, painter };
     applyDebug();
     repaint();
     marker.set(grid, s.ignition);
@@ -155,10 +171,11 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
     picker.setEnabled(!live);
     if (!live) picker.setDragMode(s.tool !== 'ignite');
     marker.setVisible(!live);
-    effects.setEnabled(!live && s.effects.particles);
+    applyEffects(s);
     applyLiveLayers(s);
     if (ctx) {
       ctx.burn.setVisible(!live);
+      ctx.smoke.setVisible(!live && s.effects.smoke);
       applyDebug();
     }
     if (live) {
@@ -176,6 +193,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
     ctx.painter.schedule(s.result, s.interventions, s.playback.t, s.settings, preview);
     if (s.area) {
       const toward = (windTowardDeg(s.weather.windFromDeg) * Math.PI) / 180;
+      const sample = ctx.painter.lastSmokeSample;
       effects.update({
         grid: s.area.grid,
         arrival: s.result?.arrivalTime ?? null,
@@ -185,6 +203,13 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
         windY: Math.cos(toward),
         windSpeedMps: s.weather.windSpeedMps,
         useElevation: s.viewerMode === 'google',
+        playbackSpeed: s.playback.speed,
+        fuel: s.area.fuel,
+        intensity: s.result?.intensity ?? null,
+        maxRateMps: s.result?.stats.maxSpreadRateMps ?? 0,
+        smoke: s.result && sample
+          ? { emission: sample.emission, refEmission: sample.refEmission, burnoutAt: sample.burnoutAt, plumeTopM: sample.plumeTopM, smolderFrac: sample.smolderFrac }
+          : null,
       });
     }
   }
@@ -201,11 +226,17 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
     if (!ctx) return;
     if (s.debug !== prev.debug) applyDebug();
     if (s.ignition !== prev.ignition && s.area) marker.set(s.area.grid, s.ignition);
+    if (s.result !== prev.result && !s.result) {
+      ctx.painter.setSmoke(ctx.smoke, null);
+      ctx.painter.setBurnout(null);
+    }
     if (s.result !== prev.result || s.playback.t !== prev.playback.t || s.interventions !== prev.interventions || s.settings !== prev.settings) repaint();
     if (s.tool !== prev.tool) picker.setDragMode(s.tool !== 'ignite');
     if (s.effects !== prev.effects) {
-      effects.setEnabled(s.effects.particles && simShown());
+      applyEffects(s);
       effects.setQuality(s.effects.quality);
+      ctx.smoke.setVisible(s.effects.smoke && simShown());
+      ctx.painter.setEffects({ glow: s.effects.glow, smooth: s.effects.smooth });
       repaint();
     }
   });
@@ -263,6 +294,21 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
     store.set({ simRunning: true, simError: null });
     try {
       const result = await sim.run(scenario);
+      if (ctx) {
+        // Smoke follows the scenario that produced this result, not the live (possibly edited) weather.
+        const timeline = new SmokeTimeline({
+          grid: scenario.grid,
+          fuel: scenario.fuel,
+          elevation: scenario.elevation,
+          arrival: result.arrivalTime,
+          intensity: result.intensity,
+          weather: scenario.weather,
+          seed: scenario.seed,
+          durationS: scenario.durationSeconds,
+        });
+        ctx.painter.setSmoke(ctx.smoke, timeline);
+        ctx.painter.setBurnout(timeline.burnoutAt);
+      }
       const s = store.get();
       const firstRun = !s.result;
       const t = Math.min(s.playback.t, s.durationSeconds);
@@ -294,6 +340,13 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
       if (g) flyToGrid(viewer, g);
     },
     picker,
+    focusIgnition: (rangeM = 600) => {
+      const s = store.get();
+      if (!s.area || !s.ignition) return;
+      const h = s.viewerMode === 'google' ? s.area.elevation[s.ignition.row * s.area.grid.width + s.ignition.col] : 0;
+      flyToCell(viewer, s.area.grid, s.ignition, h, rangeM);
+    },
+    smokeTimeline: () => ctx?.painter.smokeTimeline ?? null,
     setDrawHandlers: (h) => {
       draw = h;
     },

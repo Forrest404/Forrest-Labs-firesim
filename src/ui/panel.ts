@@ -68,13 +68,24 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
       iconButton('compass', STR.cameraReset, () => actions.resetView()),
     ),
   });
-  const particles = toggle(STR.effectsParticles, (on) => store.update((s) => ({ effects: { ...s.effects, particles: on } })));
+  const fx = (key: 'flames' | 'embers' | 'smokeParticles' | 'smoke' | 'glow' | 'smooth', label: string, title?: string) =>
+    toggle(label, (on) => store.update((s) => ({ effects: { ...s.effects, [key]: on } })), { title });
+  const flames = fx('flames', STR.effectsFlames);
+  const embers = fx('embers', STR.effectsEmbers);
+  const puffs = fx('smokeParticles', STR.effectsSmokeParticles);
+  const glow = fx('glow', STR.effectsGlow);
+  const smooth = fx('smooth', STR.effectsSmooth);
   const quality = segmented(
     [{ value: 'low', label: STR.qualityLow }, { value: 'medium', label: STR.qualityMedium }, { value: 'high', label: STR.qualityHigh }],
     (q) => store.update((s) => ({ effects: { ...s.effects, quality: q as 'low' | 'medium' | 'high' } })),
     { ariaLabel: STR.effectsQuality, class: 'small' },
   );
-  view.body.append(particles.root, el('div', { class: 'ctl-row' }, el('span', { class: 'ctl-label' }, STR.effectsQuality), quality.root));
+  const smoke = fx('smoke', STR.effectsSmoke, STR.smokeHint);
+  view.body.append(
+    el('div', { class: 'sub-title' }, STR.effectsGroup),
+    flames.root, embers.root, puffs.root, smoke.root, glow.root, smooth.root,
+    el('div', { class: 'ctl-row' }, el('span', { class: 'ctl-label' }, STR.effectsQuality), quality.root),
+  );
   const debugBody = el('div', { class: 'sub' });
   view.body.append(debugBody, el('div', { class: 'muted hint' }, STR.cameraHelp));
 
@@ -108,9 +119,14 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
     advanced.header.setAttribute('aria-expanded', s.advancedOpen ? 'true' : 'false');
     modePill.classList.toggle('live', s.viewerMode === 'google');
     (modePill.querySelector('.pill-text') as HTMLElement).textContent = STR.viewerMode[s.viewerMode];
-    particles.input.checked = s.effects.particles;
+    flames.input.checked = s.effects.flames;
+    embers.input.checked = s.effects.embers;
+    puffs.input.checked = s.effects.smokeParticles;
+    smoke.input.checked = s.effects.smoke;
+    glow.input.checked = s.effects.glow;
+    smooth.input.checked = s.effects.smooth;
     quality.set(s.effects.quality);
-    quality.setDisabled(!s.effects.particles);
+    quality.setDisabled(!(s.effects.flames || s.effects.embers || s.effects.smokeParticles));
   });
   return { tools: tools.body, advanced: advanced.body };
 }

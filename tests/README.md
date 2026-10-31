@@ -26,3 +26,4 @@ Vitest, Node environment, pure modules only (no Cesium, no DOM). `npm test` runs
 - `redact.test.ts` — URL / key= / 32-hex redaction.
 
 The viewer and UI are verified by hand or headlessly (see `PROGRESS.md`), not by unit tests.
+- `smoke.test.ts`: the cosmetic smoke field (`src/app/smoke`) and painters: conservation, advection, diffusion, emission, determinism, scrub-back, perf.

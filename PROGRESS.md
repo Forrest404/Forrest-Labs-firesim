@@ -168,11 +168,37 @@ Companion files: [DECISIONS.md](DECISIONS.md) (judgement calls), [FEATURES.md](F
   dragged east), switches, simulate, speed, play, collapse, advanced toggle and a firebreak
   stroke all update the store; no exceptions or console errors.
 
+### Smoke plume (`feature/smoke`)
+
+- Deterministic smoke field in `src/app/smoke/` (emission, Briggs plume rise, seeded wind
+  meander, semi-Lagrangian advection, box-blur diffusion, loss, checkpointed timeline), draped
+  as a new GridLayer (zIndex 4) via `src/viewer/smokeCanvas.ts`; particles driven by the field;
+  "Smoke plume" switch in View. See D20.
+- `tests/smoke.test.ts` (18 tests): mass conservation, advection distance and sign, diffusion
+  symmetry/variance, emission closed form and cut-off, per-fuel burnout, plume/wind laws,
+  determinism, scrub-back == recompute, sampleAt interpolation, painters, perf (1.3 ms per
+  200x200 step on the build machine).
+- Headless (D16 method, served from a snapshot copy so teammate edits cannot reload the page):
+  with wind from 270 the 1 h / 6 h smoke centroids lie ~60 cells east of the ignition, with
+  wind from 0 ~60 cells south; scrubbing 24 h -> 1 h reproduces the 1 h field exactly; smoke
+  layer hides with the switch; no exceptions or console errors.
+
+### Fire visuals (`feature/smoke`, D21)
+
+- Switches for Flames, Embers, Smoke puffs, Smoke plume, Ground glow, Smooth edges; Quality
+  chips. Byram-sized flame particles, ember system, flickering ground glow, 2x anti-aliased
+  burn/smoke overlays, smoke dimmed over flaming cells. `wiring.focusIgnition()` close-up camera.
+- `tests/burnCanvasScaled.test.ts` (6 tests): scale-1 parity with `paintBurn`, nearest
+  upsample parity, anti-aliased edge alpha, glow only on empty pixels and only while flaming,
+  deterministic flicker, bilinear/nearest upsampling.
+- Headless: all six switches toggle in the store with no errors; top-down captures show the
+  smooth front + glow vs the blocky overlay; close-up capture of flames/embers/puffs.
+
 ## Live fires tab (`feature/live-fires`, 2026-10-31)
 
 - New: `src/data/firms.ts` + `firmsClient.ts` (tested: 32 cases, mutation-checked), `src/viewer/hotspotLayer.ts`,
   `src/app/liveController.ts`, `src/ui/live.ts`, `controls.tabBar`, `state.view` / `state.live`,
-  `ViewerHandle.setBackdrop`, `redact()` masks 32-hex keys. Decision D20.
+  `ViewerHandle.setBackdrop`, `redact()` masks 32-hex keys. Decision D22.
 - **Verified headlessly with a real key** (installed Chrome, SwiftShader, Google mode, 1400x900):
   clicking the tab fetches NOAA-20 + SNPP world/1 day (59,116 rows, 52,302 after the default
   low-confidence filter), the globe view shows the dots, "Largest fires" fly-to selects the sample
@@ -181,8 +207,8 @@ Companion files: [DECISIONS.md](DECISIONS.md) (judgement calls), [FEATURES.md](F
   and the key appears nowhere in console, exceptions or DOM. Screenshots in the session scratchpad.
 - Verified without a key (fallback globe): key-missing card with link, refresh disabled, nothing
   fetched. With a bogus key: FIRMS answers 400 without CORS headers, so the browser reports
-  "NASA FIRMS did not answer…" (see D20); nothing crashes.
-- Fire regions + satellite basemap (D21): `regionsFromHotspots` (tested: linkage, adjacency,
+  "NASA FIRMS did not answer…" (see D22); nothing crashes.
+- Fire regions + satellite basemap (D23): `regionsFromHotspots` (tested: linkage, adjacency,
   hull, footprint area; mutation-checked on the neighbour linkage), `src/viewer/regionLayer.ts`
   (one batched `GroundPrimitive`, highlight primitive for the selection), `live.layers` and
   `live.basemap`, `ViewerHandle.setBasemap`. Headless with a real key: 52,302 filtered detections
@@ -200,6 +226,9 @@ Companion files: [DECISIONS.md](DECISIONS.md) (judgement calls), [FEATURES.md](F
   onto the tiles (`ClassificationType.BOTH`), and a synthetic click on the tiles placed the
   ignition marker within 1 px of the click (pickPosition path). Particle heights on tiles still
   unchecked by a human. Earlier fallback suggestion (`ClassificationType.TERRAIN`) is not needed.
+- **Smoke**: particle physics runs on wall-clock time and Cesium's emitters are random, so only
+  the draped field is reproducible. No Worker yet: a 24 h forward scrub catches up over a few
+  seconds (12 ms per frame budget). FPS impact not measurable headlessly (SwiftShader).
 - **Real mouse drags** on the Cesium canvas were not exercised (no interactive browser); the
   pick/drag path runs only through `wiring.debugStroke()`. Click-to-ignite and drag-to-draw should
   be the first things a human checks.
