@@ -1,5 +1,5 @@
 /**
- * Screen -> lon/lat -> grid cell. Works on Google 3D Tiles (pickPosition) and on the fallback
+ * Screen -> lon/lat -> grid cell. Works on the ion 3D Tiles (pickPosition) and on the fallback
  * globe. Supports click and drag; while a drag tool is active the camera does not rotate.
  * Tools only ever see cell coordinates (and fractional cell positions for smooth lines).
  */

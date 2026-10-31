@@ -1,7 +1,7 @@
 /**
- * Creates the Cesium viewer. Never touches Cesium ion: the base layer and terrain are explicit.
- * Primary mode adds Google Photorealistic 3D Tiles when a key is present (googleTiles.ts);
- * otherwise, or on failure, the OpenStreetMap raster globe is the fallback.
+ * Creates the Cesium viewer. The base layer and terrain are explicit (no ion defaults).
+ * Primary mode adds Photorealistic 3D Tiles from Cesium ion when a token is present
+ * (ionTiles.ts); otherwise, or on failure, the OpenStreetMap raster globe is the fallback.
  */
 
 import {
@@ -10,21 +10,22 @@ import {
   OpenStreetMapImageryProvider,
   Viewer,
 } from 'cesium';
-import { tryAddGoogleTiles } from './googleTiles';
+import { tryAddIonTiles } from './ionTiles';
 
-export type ViewerMode = 'google' | 'fallback';
+export type ViewerMode = 'tiles' | 'fallback';
 
 export interface ViewerHandle {
   viewer: Viewer;
   mode: ViewerMode;
-  /** Why we are in fallback mode (empty in google mode). */
+  /** Why we are in fallback mode (empty in tiles mode). */
   fallbackReason: string;
 }
 
 export interface CreateViewerOptions {
   container: HTMLElement;
-  googleApiKey?: string;
-  /** Called if the mode changes after creation (e.g. Google tiles start failing later). */
+  /** Cesium ion access token (VITE_CESIUM_ION_TOKEN). Empty means fallback mode. */
+  ionAccessToken?: string;
+  /** Called if the mode changes after creation (e.g. 3D tiles start failing later). */
   onModeChange?: (mode: ViewerMode, reason: string) => void;
 }
 
@@ -50,11 +51,11 @@ export async function createViewer(o: CreateViewerOptions): Promise<ViewerHandle
   // Double-click on an entity would otherwise fly the camera to it; we handle clicks ourselves.
   viewer.screenSpaceEventHandler.removeInputAction(2 /* LEFT_DOUBLE_CLICK */);
 
-  const key = (o.googleApiKey ?? '').trim();
-  if (!key) {
-    return { viewer, mode: 'fallback', fallbackReason: 'No VITE_GOOGLE_MAPS_API_KEY set.' };
+  const token = (o.ionAccessToken ?? '').trim();
+  if (!token) {
+    return { viewer, mode: 'fallback', fallbackReason: 'No VITE_CESIUM_ION_TOKEN set.' };
   }
-  const result = await tryAddGoogleTiles(viewer, key, (reason) => o.onModeChange?.('fallback', reason));
-  if (result.ok) return { viewer, mode: 'google', fallbackReason: '' };
+  const result = await tryAddIonTiles(viewer, token, (reason) => o.onModeChange?.('fallback', reason));
+  if (result.ok) return { viewer, mode: 'tiles', fallbackReason: '' };
   return { viewer, mode: 'fallback', fallbackReason: result.reason };
 }

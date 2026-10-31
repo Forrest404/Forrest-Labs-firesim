@@ -1,20 +1,24 @@
 /**
- * Google Photorealistic 3D Tiles (Map Tiles API) in Cesium.
+ * Photorealistic 3D Tiles streamed from Cesium ion (ion asset 2275207, which is Google's
+ * Photorealistic 3D Tiles distributed and billed through ion).
  *
  * DISPLAY ONLY. Nothing in this module or anywhere else in the app samples, caches, downloads or
- * extracts data from Google tiles or imagery (see DECISIONS.md D9, D17). Simulation inputs come
- * from open data. Google's attribution and logo are rendered by Cesium's on-screen credit display.
+ * extracts data from these tiles (see DECISIONS.md D9, D18). Simulation inputs come from open
+ * data. Google's and Cesium's attribution are rendered by Cesium's on-screen credit display.
  *
- * Secret handling: the key is passed to Cesium per request and never logged. Tile URLs carry the
- * key, so every error message that could contain a URL goes through redact() before it leaves
- * this module.
+ * Secret handling: the ion token is handed to IonResource per asset and never assigned to the
+ * global Ion.defaultAccessToken, never logged. Tile URLs and ion responses carry access tokens,
+ * so every error message that could contain one goes through redact() before leaving here.
  */
 
-import { createGooglePhotorealistic3DTileset } from 'cesium';
-import type { Cesium3DTileset, Viewer } from 'cesium';
+import { Cesium3DTileset, IonResource } from 'cesium';
+import type { Viewer } from 'cesium';
 import { redact } from './redact';
 
-export type GoogleTilesResult = { ok: true; tileset: Cesium3DTileset } | { ok: false; reason: string };
+/** Cesium ion Asset Depot id for "Google Photorealistic 3D Tiles". */
+export const PHOTOREALISTIC_TILES_ASSET_ID = 2275207;
+
+export type TilesResult = { ok: true; tileset: Cesium3DTileset } | { ok: false; reason: string };
 
 /** Sliding window used to decide that the tileset has stopped working. */
 const FAILURE_WINDOW_MS = 30_000;
@@ -42,32 +46,30 @@ const TILESET_OPTIONS = {
   dynamicScreenSpaceErrorDensity: 2.0e-4,
   dynamicScreenSpaceErrorFactor: 24.0,
   dynamicScreenSpaceErrorHeightFalloff: 0.25,
-  // Keep the cache modest; the default is 1.5 GB.
+  // Same defaults createGooglePhotorealistic3DTileset applies for this asset, cache kept modest.
+  enableCollision: true,
   cacheBytes: 512 * 1024 * 1024,
   maximumCacheOverflowBytes: 256 * 1024 * 1024,
 } as const;
 
 /**
- * Adds the tileset. Resolves ok:false (without throwing) when the key is missing/invalid or the
- * root tileset cannot be fetched. If tiles start failing afterwards (quota, key restriction,
- * network), the tileset is removed, the globe is shown again and onLateFailure is called once.
- * The app never ends up with a blank scene: the fallback globe is always underneath.
+ * Adds the tileset. Resolves ok:false (without throwing) when the token is missing/invalid, the
+ * asset is not in the account, or the root tileset cannot be fetched. If tiles start failing
+ * afterwards (quota, token revoked, network), the tileset is removed, the globe is shown again
+ * and onLateFailure is called once. The fallback globe is always underneath, so the scene is
+ * never blank.
  */
-export async function tryAddGoogleTiles(
+export async function tryAddIonTiles(
   viewer: Viewer,
-  key: string,
+  accessToken: string,
   onLateFailure: (reason: string) => void,
-): Promise<GoogleTilesResult> {
+): Promise<TilesResult> {
   let tileset: Cesium3DTileset;
   try {
-    // No geocoder is configured at all (Viewer option geocoder:false), so the "only Google
-    // geocoder" warning does not apply.
-    tileset = await createGooglePhotorealistic3DTileset(
-      { key, onlyUsingWithGoogleGeocoder: true },
-      { ...TILESET_OPTIONS },
-    );
+    const resource = await IonResource.fromAssetId(PHOTOREALISTIC_TILES_ASSET_ID, { accessToken });
+    tileset = await Cesium3DTileset.fromUrl(resource, { ...TILESET_OPTIONS });
   } catch (err) {
-    return { ok: false, reason: `Google 3D Tiles could not be loaded: ${describe(err)}` };
+    return { ok: false, reason: `3D tiles could not be loaded from Cesium ion: ${describe(err)}` };
   }
   viewer.scene.primitives.add(tileset);
   viewer.scene.globe.show = false;
@@ -98,11 +100,11 @@ export async function tryAddGoogleTiles(
     if (authFailures.length >= AUTH_FAILURE_LIMIT) {
       revert(
         status === 429
-          ? 'Google 3D Tiles quota exceeded (HTTP 429).'
-          : `Google 3D Tiles rejected the key (HTTP ${status}): check API and referrer restrictions.`,
+          ? '3D tiles quota exceeded on Cesium ion (HTTP 429).'
+          : `Cesium ion rejected the token (HTTP ${status}): check the token scopes and allowed URLs.`,
       );
     } else if (failures.length >= FAILURE_LIMIT) {
-      revert('Google 3D Tiles stopped loading (network or server errors).');
+      revert('3D tiles stopped loading (network or server errors).');
     }
   });
 
@@ -120,10 +122,13 @@ function statusOf(message: string | undefined): number | undefined {
   return m ? Number(m[1]) : undefined;
 }
 
-/** Human-readable, URL-free description of a load error. */
+/** Human-readable, URL-free description of a load error, with ion's usual causes spelled out. */
 function describe(err: unknown): string {
   if (err && typeof err === 'object' && 'statusCode' in err) {
     const code = (err as { statusCode?: number }).statusCode;
+    if (code === 401) return 'HTTP 401 (token invalid or missing the assets:read scope)';
+    if (code === 403) return 'HTTP 403 (token not allowed for this URL or asset)';
+    if (code === 404) return `HTTP 404 (asset ${PHOTOREALISTIC_TILES_ASSET_ID} is not added to this ion account)`;
     if (typeof code === 'number') return `HTTP ${code}`;
   }
   const raw = err instanceof Error ? err.message : String(err);

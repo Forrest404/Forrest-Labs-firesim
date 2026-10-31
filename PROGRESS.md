@@ -145,23 +145,25 @@ Companion files: [DECISIONS.md](DECISIONS.md) (judgement calls), [FEATURES.md](F
 - [x] Works with no network apart from map tiles (bundles are static); synthetic areas labelled
 - [x] PROGRESS / DECISIONS / FEATURES / README complete; branch tagged `v0`
 
-### Google tiles key plumbing (`feature/google-tiles`)
+### 3D tiles credential plumbing (`feature/google-tiles`)
 
-- `.env.example` now documents how to obtain and restrict a key; `.env.local` is created empty
-  and confirmed gitignored (`git check-ignore`). History check: only `.env.example` was ever
-  tracked, no key value in any commit.
-- `src/viewer/googleTiles.ts`: sliding-window failure detection (auth/quota fast path), cost
-  controls, URL/key redaction (`src/viewer/redact.ts`, tested in `tests/redact.test.ts`).
-- README "Google 3D tiles setup" section; DECISIONS D17.
-- Still not exercised with a real key (none on the build machine). First run with a key: check
-  overlay alignment against the grid outline and click-to-ignite accuracy.
+- Backdrop is now Photorealistic 3D Tiles via Cesium ion (asset 2275207) using
+  `VITE_CESIUM_ION_TOKEN`; the Google Maps key path was removed (D18). `.env.example` documents
+  how to add the asset and create a restricted token; `.env.local` is created empty and confirmed
+  gitignored. History check: only `.env.example` was ever tracked, no credential in any commit.
+- `src/viewer/ionTiles.ts`: sliding-window failure detection (auth/quota fast path, 404 = asset
+  not in account), cost controls, token passed per asset. `src/viewer/redact.ts` strips URLs,
+  key/token fragments, Bearer headers and JWTs (`tests/redact.test.ts`).
+- README "3D tiles setup (Cesium ion)" section; DECISIONS D17, D18.
+- Still not exercised with a real token (none on the build machine). First run with a token:
+  check overlay alignment against the grid outline and click-to-ignite accuracy.
 
 ## Known issues / not verified
 
-- **Google Photorealistic 3D Tiles path not exercised** (no key on the build machine): draping of
+- **Photorealistic 3D Tiles path not exercised** (no ion token on the build machine): draping of
   the overlay on 3D tiles, picking on tiles, and particle heights on tiles are untested. First
   teammate with a key: put it in `.env.local`, load the app, check the overlay aligns with the
-  corner markers (Debug layers -> Grid outline). If classification on tiles fails, set
+  corner markers (Debug layers -> Grid outline). Put the token in `.env.local` as `VITE_CESIUM_ION_TOKEN`. If classification on tiles fails, set
   `classificationType: ClassificationType.TERRAIN` in `src/viewer/burnLayer.ts` and keep the globe.
 - **Real mouse drags** on the Cesium canvas were not exercised (no interactive browser); the
   pick/drag path runs only through `wiring.debugStroke()`. Click-to-ignite and drag-to-draw should

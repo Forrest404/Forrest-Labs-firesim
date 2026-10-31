@@ -7,7 +7,7 @@ export const STR = {
   honestyDetail:
     'Fire spread here is a simplified cellular model with Rothermel-inspired trends (wind, slope, fuel, moisture). It is not validated against real fires.',
   footer: 'Simplified model, not for real-world decisions. Land cover © OpenStreetMap contributors (ODbL); elevation AWS Terrain Tiles; synthetic areas are generated.',
-  fallbackBanner: 'Fallback view: Google 3D tiles unavailable.',
+  fallbackBanner: 'Fallback view: 3D tiles unavailable.',
   loadingArea: 'Loading demo area…',
   loadError: 'Could not load the demo area.',
   indexError: 'Could not load the list of demo areas. Reload the page or check the dev server.',
@@ -107,5 +107,5 @@ export const STR = {
   comingSoon: 'coming soon',
   advancedNote: 'Changing a value here switches dryness to "Custom". All factors are placeholders, not calibrated.',
 
-  viewerMode: { google: '3D tiles: Google Photorealistic (display only)', fallback: 'View: OpenStreetMap globe (fallback)' },
+  viewerMode: { tiles: '3D tiles: Photorealistic via Cesium ion (display only)', fallback: 'View: OpenStreetMap globe (fallback)' },
 } as const;

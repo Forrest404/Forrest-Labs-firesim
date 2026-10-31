@@ -19,54 +19,58 @@ simulation re-runs with your actions applied at the time you took them.
 ```bash
 git fetch && git checkout scaffold/v0
 npm install            # also copies Cesium's static assets into public/cesium/
-cp .env.example .env.local   # optional: add a Google Map Tiles API key for 3D tiles
+cp .env.example .env.local   # optional: add a Cesium ion token for photoreal 3D tiles
 npm run dev            # http://localhost:5173
 ```
 
 Other scripts: `npm run build` (static site in `dist/`), `npm run preview`, `npm test`,
 `npm run typecheck`, `npm run make:synthetic`, `npm run build:demo-area -- …` (see below).
 
-Requires Node 20+ (built with Node 25, npm 11). No backend, no accounts, no ion token.
+Requires Node 20+ (built with Node 25, npm 11). No backend. A Cesium ion token is optional (3D tiles only).
 
 ## Environment
 
 | Variable | Required | Purpose |
 |---|---|---|
-| `VITE_GOOGLE_MAPS_API_KEY` | no | Google Photorealistic 3D Tiles for the backdrop. Without it (or if tiles fail) the app falls back to an OpenStreetMap globe and shows a banner. |
+| `VITE_CESIUM_ION_TOKEN` | no | Cesium ion access token for the Photorealistic 3D Tiles backdrop (ion asset 2275207). Without it (or if tiles fail) the app falls back to an OpenStreetMap globe and shows a banner. |
 
-Keys go in `.env.local` (gitignored). Never commit keys.
+Tokens go in `.env.local` (gitignored). Never commit tokens.
 
-**Google tiles are display only.** Nothing in the app reads data from Google tiles or imagery. All
+**3D tiles are display only.** Nothing in the app reads data from the ion/Google tiles or imagery. All
 simulation inputs come from open data (OpenStreetMap, AWS Terrain Tiles) or are synthetic.
 
-## Google 3D tiles setup
+## 3D tiles setup (Cesium ion)
 
-The 3D backdrop is Google Photorealistic 3D Tiles, loaded through Cesium. It is optional: with no
-key the app runs on the OpenStreetMap fallback globe and shows the banner
-"Fallback view: Google 3D tiles unavailable".
+The 3D backdrop is Photorealistic 3D Tiles streamed from Cesium ion (asset 2275207, Google's
+photoreal tiles distributed and billed through ion). It is optional: with no token the app runs
+on the OpenStreetMap fallback globe and shows the banner "Fallback view: 3D tiles unavailable".
 
-1. **Get a key.** In Google Cloud Console pick a project with billing, enable the **Map Tiles
-   API** (APIs & Services -> Library), then create an API key (APIs & Services -> Credentials).
-2. **Restrict it** (Edit key):
-   - Application restrictions: *Websites*, add `localhost:*` and the deploy domain.
-   - API restrictions: *Restrict key*, select **Map Tiles API** only.
-   - Billing -> Budgets & alerts: set a small monthly budget with an email alert.
+1. **Get a token.** Sign in at [ion.cesium.com](https://ion.cesium.com). In the **Asset Depot**
+   open "Google Photorealistic 3D Tiles" and click **Add to my assets**. Then under **Access
+   Tokens** create a token.
+2. **Restrict it** when creating or editing the token:
+   - Scopes: `assets:read` only.
+   - Allowed URLs: `http://localhost:*` and the deploy domain.
+   - Account -> Usage: keep an eye on the 3D Tiles streaming quota (the free tier has a monthly
+     cap; ion emails you as you approach it).
 3. **Put it in `.env.local`** in the repo root (copy `.env.example` if the file does not exist):
    ```
-   VITE_GOOGLE_MAPS_API_KEY=<your key, no quotes, no spaces>
+   VITE_CESIUM_ION_TOKEN=<your token, no quotes, no spaces>
    ```
-   `.env.local` is gitignored. **Never commit a key**, never paste one in chat or an issue, and
+   `.env.local` is gitignored. **Never commit a token**, never paste one in chat or an issue, and
    each teammate needs their own `.env.local`. Vite reads env files at startup, so **restart
    `npm run dev`** after editing it.
-4. **Check it worked.** The panel's mode line reads "3D tiles: Google Photorealistic (display
-   only)", photoreal buildings and terrain appear with the Google logo in the bottom-right credit
-   area, and there is no fallback banner. If the banner appears, its text says why: no key, the
-   key was rejected (HTTP 403: API not enabled or referrer restriction), quota exceeded (HTTP 429),
-   or tiles stopped loading (network).
+4. **Check it worked.** The panel's mode line reads "3D tiles: Photorealistic via Cesium ion
+   (display only)", photoreal buildings and terrain appear with the Google and Cesium credits in
+   the bottom-right, and there is no fallback banner. If the banner appears, its text says why:
+   no token, HTTP 401 (token invalid or missing `assets:read`), HTTP 403 (allowed-URL restriction
+   or asset not permitted), HTTP 404 (asset not added to your ion account), HTTP 429 (quota), or
+   tiles stopped loading (network).
 
-The app never crashes on a bad key: the fallback globe is always underneath and is shown again
-when tiles stop loading. Cost controls live in `src/viewer/googleTiles.ts` (screen-space error,
-no preloading of flight destinations, culling while moving, a modest cache).
+The app never crashes on a bad token: the fallback globe is always underneath and is shown again
+when tiles stop loading. The token is passed per asset, never set globally on `Ion`, and never
+logged. Cost controls live in `src/viewer/ionTiles.ts` (screen-space error, no preloading of
+flight destinations, culling while moving, a modest cache).
 
 ## Using the app
 
@@ -111,7 +115,7 @@ src/contract/   FROZEN shared types, conventions, fuel table, presets, validator
 src/sim/        pure simulation core + Web Worker wrapper   (no DOM, no Cesium)
 src/data/       lat/lon <-> grid, rasterising, terrain, OSM rules, bundles, synthetic areas
 src/tools/      firebreak / water as pure logic, undo/redo, tool registry
-src/viewer/     the ONLY Cesium importer: viewer, Google tiles + fallback, overlay, picking, particles
+src/viewer/     the ONLY Cesium importer: viewer, ion 3D tiles + fallback, overlay, picking, particles
 src/ui/         side panel, settings, playback, tools UI, notices, strings.ts (all copy)
 src/app/        store, worker client, clock, wiring, entry point
 public/demo-areas/  committed demo-area bundles + index.json
@@ -138,7 +142,7 @@ and licence in [data/README.md](data/README.md). Synthetic areas: `npm run make:
 
 Land cover © OpenStreetMap contributors (ODbL). Elevation: AWS Terrain Tiles (Mapzen Terrarium;
 underlying sources per <https://registry.opendata.aws/terrain-tiles/>). Basemap tiles ©
-OpenStreetMap. 3D tiles (optional): Google. Rendering: CesiumJS.
+OpenStreetMap. 3D tiles (optional): Google Photorealistic via Cesium ion. Rendering: CesiumJS.
 
 ## Working in parallel
 
