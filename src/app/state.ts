@@ -9,6 +9,7 @@ import type { DemoArea, DemoAreaIndexEntry } from '../data/bundle';
 import type { Basemap, ViewerMode } from '../viewer/createViewer';
 import { DEFAULT_FILTERS } from '../data/firms';
 import type { FireRegion, Hotspot, HotspotFilters, LiveSource } from '../data/firms';
+import type { ContainOverrides, ContainPlan, ResponseLevel } from '../contain';
 
 export type ToolId = 'ignite' | 'firebreak' | 'water';
 
@@ -85,6 +86,26 @@ export interface EffectsFlags {
   quality: 'low' | 'medium' | 'high';
 }
 
+/** Emergency response simulation (src/contain). The plan is recomputed by Simulate when enabled. */
+export interface ContainState {
+  enabled: boolean;
+  level: ResponseLevel;
+  /** Advanced-panel tweaks on top of the preset; null = preset as is. */
+  overrides: ContainOverrides | null;
+  planning: boolean;
+  /** 0-1 while planning. */
+  progress: number;
+  plan: ContainPlan | null;
+  /** Which run `result` currently holds when a plan exists. */
+  show: 'contained' | 'baseline';
+  /** Draw the other run's burned-area outline over the shown run. */
+  outline: boolean;
+  /** Moving unit markers in 3D. */
+  units3d: boolean;
+  /** Dispatch cards over the map. */
+  hud: boolean;
+}
+
 export interface AppState {
   areas: DemoAreaIndexEntry[];
   area: DemoArea | null;
@@ -112,6 +133,7 @@ export interface AppState {
   advancedOpen: boolean;
   view: ViewId;
   live: LiveState;
+  contain: ContainState;
 }
 
 export type Listener = (state: AppState, prev: AppState) => void;
@@ -166,6 +188,7 @@ export function initialState(): AppState {
     advancedOpen: false,
     view: 'sim',
     live: initialLive(),
+    contain: { enabled: false, level: 'standard', overrides: null, planning: false, progress: 0, plan: null, show: 'contained', outline: true, units3d: true, hud: true },
   };
 }
 

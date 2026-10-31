@@ -3,6 +3,7 @@ import 'cesium/Build/Cesium/Widgets/widgets.css';
 import '../ui/styles.css';
 import { loadDemoAreaIndex } from '../data/demoAreas';
 import { createFirmsClient } from '../data/firmsClient';
+import { mountDispatchHud } from '../ui/dispatchHud';
 import { createNotices } from '../ui/notices';
 import { mountPanel } from '../ui/panel';
 import { STR } from '../ui/strings';
@@ -48,6 +49,7 @@ async function main(): Promise<void> {
     resetView: () => wiringRef?.resetView(),
   });
   mountSettingsAdvanced(slots.advanced, store);
+  mountDispatchHud(document.getElementById('app') as HTMLElement, store);
 
   notices.persistent('loading', STR.loadingArea, 'info');
   const handle = await createViewer({

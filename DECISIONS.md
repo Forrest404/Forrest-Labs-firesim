@@ -319,3 +319,40 @@ a possible later "historical compare" feature).
   60 km range needs sub-100 m imagery to read the terrain; GIBS stays a candidate for a
   "satellite image of the day" overlay. The toggle lives in the Live fires pane only; in the
   simulation it would be invisible under Google tiles.
+
+## D24. Emergency response simulation on the frozen contract
+
+PR #4 ("containment simulation") introduced dispatched units, a rollout optimizer and moving 3D
+markers, but its lines were 90-150 m wide, crossed roads and buildings, landed all at once at
+the unit's ETA, and the optimizer ran ~40 synchronous sims on the UI thread with hard-coded
+resources. The port in `src/contain/` keeps its structure (sector candidates perpendicular to the
+spread, re-simulate each option, greedy lock-in, baseline vs contained metrics, time-driven unit
+kinematics) and changes the model:
+
+- **No contract change.** Hand and dozer lines are `firebreak` interventions one cell wide; engine
+  wet lines, bucket drops and retardant are `water` with per-unit `moistureBoost`/`halfLifeS`
+  (retardant: 6 h half-life). The sim, validator and tools are untouched.
+- **Lines only touch burnable cells.** Roads, water and buildings (all `FuelClass.NONE`) are free
+  tie-ins, never "cleared" and never painted. With a homes layer (`DemoArea.homes`, the format
+  from feature/yariel) a line stops at a home, dozers keep three cells clear of one, and ground
+  units near homes switch to a wet line. Vegetation cleared is weighted by fuel (forest 1,
+  shrub 0.4, grass 0.15) and penalised in the score, so cutting is a last resort.
+- **Crews can be outrun.** A ground unit works its line cell by cell at a production rate
+  (hand crew 15 m/min, engine 12, dozer 40, scaled by fuel) from the moment it reaches the line
+  (base → entry at road speed, entry → line on foot or track). Every three cells become one
+  intervention stamped with its completion time, so the fire can reach the unfinished end first,
+  at which point the crew pulls back. Aircraft lay `dropCells` per drop, one per reload cycle
+  (helicopter 7 min, airtanker 45 min), never on cells already burning.
+- **Response level is a dial.** `LEVELS` fixes detection delay, roster, assignments per unit,
+  line budget, drops per sortie and the cut penalty for Minimal / Standard / Aggressive /
+  Maximum; the advanced panel overrides any of them (`ContainOverrides`). Units of one type
+  leave a minute apart; bases are placed 6 / 20 / 60 km outside the grid on the side where the
+  most roads leave it (no Overpass or OSRM: deterministic, offline, instant).
+- **With vs without in one job.** The planner runs inside the sim worker behind a `plan`
+  request and returns both runs. The UI flips `result` between them, draws the other run's
+  burned-area outline in magenta, and shows Without / With / Saved plus homes reached when the
+  area has a homes layer. The Gemini briefing, its dev-server endpoint and the voice callouts
+  were dropped: a static Pages site has no server, and the briefing's "guardrail" was dead code.
+- **Cost.** A full plan is 20-130 sims and finishes in well under a second on a 200×200 grid,
+  so candidates are evaluated per unit, not per unit type, and every level tries all eight
+  sectors each cycle.

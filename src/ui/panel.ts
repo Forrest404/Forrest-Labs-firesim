@@ -5,6 +5,7 @@
 
 import type { Store } from '../app/state';
 import { mountAreaPicker } from './areaPicker';
+import { mountContain } from './contain';
 import type { AreaPickerActions } from './areaPicker';
 import type { LiveActions } from '../app/liveController';
 import { iconButton, section, segmented, tabBar, toggle } from './controls';
@@ -48,6 +49,7 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
   const area = section('map', STR.areaLabel);
   const settings = section('wind', STR.settingsTitle);
   const sim = section('flame', STR.simulateTitle, { class: 'sim' });
+  const respond = section('target', STR.containTitle, { class: 'respond' });
   const tools = section('axe', STR.toolsTitle);
   const advChevron = el('span', { class: 'chev' }, icon('chevron', 16));
   const advanced = section('sliders', STR.advancedTitle, { class: 'adv', trailing: advChevron });
@@ -96,7 +98,7 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
     (v) => actions.setView(v),
     { ariaLabel: STR.tabsLabel },
   );
-  const simPane = el('div', { class: 'pane', role: 'tabpanel' }, area.root, settings.root, sim.root, tools.root, advanced.root, view.root);
+  const simPane = el('div', { class: 'pane', role: 'tabpanel' }, area.root, settings.root, sim.root, respond.root, tools.root, advanced.root, view.root);
   const livePane = el('div', { class: 'pane', role: 'tabpanel' });
   livePane.hidden = true;
   tabs.set('sim');
@@ -105,6 +107,7 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
   mountAreaPicker(area.body, store, actions);
   mountSettingsSimple(settings.body, store);
   mountPlayback(sim.body, store, actions);
+  mountContain(respond.body, store);
   mountDebug(debugBody, store);
   mountLive(livePane, store, actions);
 

@@ -8,6 +8,8 @@ import type { RateModelId, SimSettings, Weather } from '../contract';
 import { staleIfResult } from '../app/state';
 import type { Store } from '../app/state';
 import { el } from './el';
+import { UNIT_TYPES, resolveLevel } from '../contain';
+import type { ContainOverrides, UnitType } from '../contain';
 import { STR } from './strings';
 
 interface NumField {
@@ -71,6 +73,27 @@ export function mountSettingsAdvanced(container: HTMLElement, store: Store): voi
   for (const label of [STR.advGridSize, STR.advSpotting, STR.advCrownFire, STR.advTimeVaryingWeather]) {
     details.append(el('label', { class: 'disabled', title: STR.comingSoon }, el('span', {}, `${label} — ${STR.comingSoon}`), el('input', { type: 'checkbox', disabled: true })));
   }
+  // Emergency response overrides on top of the chosen preset (src/contain).
+  const setOverride = (patch: ContainOverrides): void =>
+    store.update((s) => ({ contain: { ...s.contain, overrides: { ...s.contain.overrides, ...patch, roster: { ...s.contain.overrides?.roster, ...patch.roster } } }, ...staleIfResult(s) }));
+  const respNum = (label: string, min: number, max: number, step: number, unit: string | undefined, get: (r: ReturnType<typeof resolveLevel>) => number, set: (v: number) => ContainOverrides): HTMLInputElement => {
+    const input = el('input', { type: 'number', min, max, step }) as HTMLInputElement;
+    input.onchange = () => {
+      const v = Math.min(max, Math.max(min, Number(input.value)));
+      if (Number.isFinite(v)) setOverride(set(v));
+    };
+    respInputs.push({ input, get });
+    details.append(el('label', {}, el('span', {}, label), el('span', { class: 'num' }, input, unit ? el('span', { class: 'unit' }, unit) : null)));
+    return input;
+  };
+  const respInputs: { input: HTMLInputElement; get: (r: ReturnType<typeof resolveLevel>) => number }[] = [];
+  details.append(el('div', { class: 'sub-title' }, STR.advResponse));
+  respNum(STR.advRespDelay, 0, 120, 1, 'min', (r) => Math.round(r.delayS / 60), (v) => ({ delayS: v * 60 }));
+  respNum(STR.advRespCycles, 1, 8, 1, undefined, (r) => r.cycles, (v) => ({ cycles: Math.round(v) }));
+  respNum(STR.advRespBudget, 60, 3000, 30, 'm', (r) => r.lineBudgetM, (v) => ({ lineBudgetM: v }));
+  for (const t of UNIT_TYPES) respNum(STR.advRespUnits[t], 0, 8, 1, undefined, (r) => r.roster[t], (v) => ({ roster: { [t]: Math.round(v) } as Partial<Record<UnitType, number>> }));
+  const respReset = el('button', { type: 'button', class: 'ghost', onclick: () => store.update((s) => ({ contain: { ...s.contain, overrides: null }, ...staleIfResult(s) })) }, STR.advRespReset) as HTMLButtonElement;
+  details.append(respReset);
   details.append(el('div', { class: 'muted' }, STR.advancedNote));
   container.append(details);
 
@@ -82,6 +105,9 @@ export function mountSettingsAdvanced(container: HTMLElement, store: Store): voi
     });
     burnout.checked = s.settings.burnoutEnabled;
     model.value = s.settings.rateModel;
+    const resolved = resolveLevel(s.contain.level, s.contain.overrides);
+    for (const r of respInputs) if (document.activeElement !== r.input) r.input.value = String(r.get(resolved));
+    respReset.disabled = !s.contain.overrides;
     if (details.open !== s.advancedOpen) details.open = s.advancedOpen;
   });
 }

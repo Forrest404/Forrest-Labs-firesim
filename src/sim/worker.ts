@@ -3,6 +3,7 @@
  * Instantiated by src/app/simClient.ts via `new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })`.
  */
 
+import { planContainment } from '../contain/planner';
 import { simulate } from './index';
 import type { SimRequest, SimResponse } from './protocol';
 
@@ -18,6 +19,22 @@ ctx.onmessage = (event) => {
   const msg = event.data;
   if (msg.type === 'cancel') {
     cancelled.add(msg.id);
+    return;
+  }
+  if (msg.type === 'plan') {
+    try {
+      const plan = planContainment(msg.input, (fraction) => ctx.postMessage({ type: 'progress', id: msg.id, fraction }));
+      if (cancelled.has(msg.id)) {
+        cancelled.delete(msg.id);
+        return;
+      }
+      const transfer: Transferable[] = [plan.baseline.arrivalTime.buffer, plan.contained.arrivalTime.buffer];
+      if (plan.baseline.intensity) transfer.push(plan.baseline.intensity.buffer);
+      if (plan.contained.intensity && plan.contained.intensity !== plan.baseline.intensity) transfer.push(plan.contained.intensity.buffer);
+      ctx.postMessage({ type: 'planResult', id: msg.id, plan }, transfer);
+    } catch (err) {
+      ctx.postMessage({ type: 'error', id: msg.id, message: err instanceof Error ? err.message : String(err) });
+    }
     return;
   }
   if (msg.type !== 'run') return;

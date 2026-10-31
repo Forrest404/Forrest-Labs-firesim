@@ -51,7 +51,7 @@ export function mountPlayback(container: HTMLElement, store: Store, actions: Pla
     const hasArea = !!s.area;
     const stale = !!s.result && s.resultStale;
     simulateBtn.disabled = !hasArea || !s.ignition || s.simRunning;
-    simLabel.textContent = s.simRunning ? STR.simulating : stale ? STR.reSimulate : STR.simulate;
+    simLabel.textContent = s.simRunning ? (s.contain.planning ? STR.containPlanning : STR.simulating) : stale ? STR.reSimulate : s.contain.enabled ? STR.simulateContain : STR.simulate;
     const simIconName = s.simRunning ? 'loader' : stale ? 'restart' : 'flame';
     if (simIconName !== lastSimIcon) { lastSimIcon = simIconName; simIcon.replaceChildren(icon(simIconName)); }
     simulateBtn.classList.toggle('stale', stale);

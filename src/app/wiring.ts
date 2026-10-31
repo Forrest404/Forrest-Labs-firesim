@@ -4,7 +4,9 @@
  */
 
 import { FuelClass, validateScenario, windTowardDeg } from '../contract';
-import type { Scenario } from '../contract';
+import type { Scenario, SimResult } from '../contract';
+import type { ContainPlan } from '../contain';
+import { createDispatchOverlay } from '../viewer/dispatchOverlay';
 import { scenarioFromArea } from '../data/bundle';
 import { loadDemoArea } from '../data/demoAreas';
 import { defaultIgnition } from '../data/ignition';
@@ -72,6 +74,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
   const sim = new SimClient();
   const marker = createIgnitionMarker(viewer, STR.ignitionLabel);
   const effects = createFireEffects(viewer);
+  const dispatch = createDispatchOverlay(viewer);
   effects.setFlags(store.get().effects);
   effects.setQuality(store.get().effects.quality);
   // Live-fires detections. Picks arrive from a Cesium event, so the store write is deferred anyway.
@@ -98,6 +101,8 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
     effects.setFlags(s.view === 'sim' ? s.effects : { ...s.effects, flames: false, embers: false, smokeParticles: false });
   };
   let ctx: AreaContext | null = null;
+  /** Scenario of the current result, kept so the smoke field can follow a flip between the two runs. */
+  let lastScenario: Scenario | null = null;
   let draw: { start(c: PickedCell): void; move(c: PickedCell): void; end(): void } | null = null;
   let preview: Preview | null = null;
 
@@ -190,7 +195,13 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
   function repaint(): void {
     if (!ctx) return;
     const s = store.get();
-    ctx.painter.schedule(s.result, s.interventions, s.playback.t, s.settings, preview);
+    const plan = s.contain.plan;
+    const showPlan = !!plan && s.contain.show === 'contained';
+    const interventions = showPlan ? [...s.interventions, ...plan.interventions] : s.interventions;
+    // Outline of the other run: baseline over the contained run, or the reverse.
+    ctx.painter.setRing(plan && s.contain.outline && s.result ? (s.contain.show === 'contained' ? plan.baseline.arrivalTime : plan.contained.arrivalTime) : null);
+    ctx.painter.schedule(s.result, interventions, s.playback.t, s.settings, preview);
+    dispatch.updateTime(s.playback.t);
     if (s.area) {
       const toward = (windTowardDeg(s.weather.windFromDeg) * Math.PI) / 180;
       const sample = ctx.painter.lastSmokeSample;
@@ -230,7 +241,10 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
       ctx.painter.setSmoke(ctx.smoke, null);
       ctx.painter.setBurnout(null);
     }
-    if (s.result !== prev.result || s.playback.t !== prev.playback.t || s.interventions !== prev.interventions || s.settings !== prev.settings) repaint();
+    if (s.contain.plan !== prev.contain.plan || s.area !== prev.area) dispatch.setOrders(s.area?.grid ?? null, s.contain.plan?.orders ?? []);
+    if (s.contain !== prev.contain || s.view !== prev.view) dispatch.setVisible(s.view === 'sim' && !!s.contain.plan && s.contain.show === 'contained' && s.contain.units3d);
+    if (s.result !== prev.result && s.result && lastScenario && s.contain.plan && (s.result === s.contain.plan.contained || s.result === s.contain.plan.baseline)) attachSmoke(lastScenario, s.result);
+    if (s.result !== prev.result || s.playback.t !== prev.playback.t || s.interventions !== prev.interventions || s.settings !== prev.settings || s.contain.show !== prev.contain.show || s.contain.outline !== prev.contain.outline) repaint();
     if (s.tool !== prev.tool) picker.setDragMode(s.tool !== 'ignite');
     if (s.effects !== prev.effects) {
       applyEffects(s);
@@ -260,6 +274,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
         resultStale: false,
         simRunning: false,
         playback: { ...store.get().playback, t: 0, playing: false },
+        contain: { ...store.get().contain, plan: null, planning: false, show: 'contained' },
         weather: { ...store.get().weather, windFromDeg: area.meta.defaultWindFromDeg ?? store.get().weather.windFromDeg },
       });
     } catch (err) {
@@ -285,30 +300,51 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
     return errors.length ? errors[0] : scenario;
   }
 
+  /** Smoke follows the scenario that produced the result, not the live (possibly edited) weather. */
+  function attachSmoke(scenario: Scenario, result: SimResult): void {
+    if (!ctx) return;
+    const timeline = new SmokeTimeline({
+      grid: scenario.grid,
+      fuel: scenario.fuel,
+      elevation: scenario.elevation,
+      arrival: result.arrivalTime,
+      intensity: result.intensity,
+      weather: scenario.weather,
+      seed: scenario.seed,
+      durationS: scenario.durationSeconds,
+    });
+    ctx.painter.setSmoke(ctx.smoke, timeline);
+    ctx.painter.setBurnout(timeline.burnoutAt);
+  }
+
   async function simulate(): Promise<void> {
     const scenario = buildScenario();
     if (typeof scenario === 'string') {
       store.set({ simError: scenario });
       return;
     }
-    store.set({ simRunning: true, simError: null });
+    const s0 = store.get();
+    const respond = s0.contain.enabled;
+    store.set({ simRunning: true, simError: null, contain: { ...s0.contain, planning: respond, progress: 0 } });
     try {
-      const result = await sim.run(scenario);
-      if (ctx) {
-        // Smoke follows the scenario that produced this result, not the live (possibly edited) weather.
-        const timeline = new SmokeTimeline({
-          grid: scenario.grid,
-          fuel: scenario.fuel,
-          elevation: scenario.elevation,
-          arrival: result.arrivalTime,
-          intensity: result.intensity,
-          weather: scenario.weather,
-          seed: scenario.seed,
-          durationS: scenario.durationSeconds,
-        });
-        ctx.painter.setSmoke(ctx.smoke, timeline);
-        ctx.painter.setBurnout(timeline.burnoutAt);
+      let plan: ContainPlan | null = null;
+      let result: SimResult;
+      if (respond) {
+        let lastShown = 0;
+        plan = await sim.plan(
+          { scenario, level: s0.contain.level, overrides: s0.contain.overrides, homes: s0.area?.homes ?? null },
+          (f) => {
+            if (f - lastShown < 0.05 && f < 1) return;
+            lastShown = f;
+            store.update((st) => ({ contain: { ...st.contain, progress: f } }));
+          },
+        );
+        result = plan.contained;
+      } else {
+        result = await sim.run(scenario);
       }
+      lastScenario = scenario;
+      attachSmoke(scenario, result);
       const s = store.get();
       const firstRun = !s.result;
       const t = Math.min(s.playback.t, s.durationSeconds);
@@ -317,8 +353,10 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
         resultStale: false,
         simRunning: false,
         playback: { ...s.playback, t: firstRun ? 0 : t, playing: firstRun ? true : s.playback.playing },
+        contain: { ...s.contain, plan, planning: false, progress: 1, show: 'contained' },
       });
     } catch (err) {
+      store.update((st) => ({ contain: { ...st.contain, planning: false } }));
       if (err instanceof SimCancelledError) return;
       store.set({ simRunning: false, simError: `${STR.simFailed} ${err instanceof Error ? err.message : String(err)}` });
     }

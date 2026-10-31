@@ -5,7 +5,7 @@
 
 import { NEVER_ARRIVES, cellAreaHa } from '../contract';
 import type { GridSpec, Intervention, SimResult, SimSettings } from '../contract';
-import { paintBurnScaled } from '../viewer/burnCanvas';
+import { paintBurnScaled, paintRing } from '../viewer/burnCanvas';
 import type { GridLayer } from '../viewer/burnLayer';
 import { paintSmoke, upsampleBilinear, upsampleNearest } from '../viewer/smokeCanvas';
 
@@ -54,6 +54,7 @@ export class OverlayPainter {
   private fx: OverlayEffects = { glow: true, smooth: true };
   private smokeHi: Float32Array | null = null;
   private readonly flaming: Uint8Array;
+  private ring: Float32Array | null = null;
 
   constructor(
     private readonly layer: GridLayer,
@@ -82,6 +83,11 @@ export class OverlayPainter {
 
   setEffects(fx: OverlayEffects): void {
     this.fx = fx;
+  }
+
+  /** Arrival field of another run whose burned-area outline is drawn over this one (null: none). */
+  setRing(arrival: Float32Array | null): void {
+    this.ring = arrival;
   }
 
   get lastSmokeSample(): SmokeSample | null {
@@ -121,7 +127,7 @@ export class OverlayPainter {
     }
     const arrival = a.result?.arrivalTime ?? EMPTY;
     const flameWindowS = Math.max(300, Math.min(1800, a.settings.waterHalfLifeS * 1.5));
-    this.layer.paint((data) =>
+    this.layer.paint((data) => {
       paintBurnScaled(data, arrival.length ? arrival : this.emptyArrival(), this.grid.width, this.grid.height, this.layer.scale, a.t, {
         flameWindowS,
         burnoutAt: a.result && this.burnoutAt ? this.burnoutAt : undefined,
@@ -129,8 +135,9 @@ export class OverlayPainter {
         wetness: this.wetness,
         smooth: this.fx.smooth,
         glow: this.fx.glow && !!a.result,
-      }),
-    );
+      });
+      if (this.ring && a.result) paintRing(data, this.ring, this.grid.width, this.grid.height, this.layer.scale, a.t, RING_RGBA);
+    });
     this.paintSmoke(a.t);
   }
 
@@ -214,6 +221,8 @@ export class OverlayPainter {
 }
 
 const EMPTY = new Float32Array(0);
+/** Magenta: distinct from fire (orange), firebreak (grey) and water (blue). */
+const RING_RGBA: [number, number, number, number] = [255, 70, 220, 235];
 
 export function liveStats(result: SimResult | null, grid: GridSpec, t: number): LiveStats {
   if (!result) return { burnedCells: 0, burnedAreaHa: 0 };

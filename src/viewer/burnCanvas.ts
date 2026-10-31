@@ -262,3 +262,32 @@ export function paintCheckerboard(data: Uint8ClampedArray, width: number, height
     }
   }
 }
+
+/**
+ * Outline of the burned area of another run at time t: cells that have burned whose 4-neighbour
+ * has not (or lies outside the grid), filled over the scaled canvas. Used to show the "without
+ * response" perimeter over the contained run (and the reverse).
+ */
+export function paintRing(data: Uint8ClampedArray, arrival: Float32Array, width: number, height: number, scale: number, t: number, rgba: RGBA): void {
+  const W = width * scale;
+  const [cr, cg, cb, ca] = rgba;
+  for (let r = 0; r < height; r++) {
+    for (let c = 0; c < width; c++) {
+      const i = r * width + c;
+      if (!(arrival[i] <= t)) continue;
+      const edge =
+        r === 0 || c === 0 || r === height - 1 || c === width - 1 ||
+        !(arrival[i - width] <= t) || !(arrival[i + width] <= t) || !(arrival[i - 1] <= t) || !(arrival[i + 1] <= t);
+      if (!edge) continue;
+      for (let dy = 0; dy < scale; dy++) {
+        let p = ((r * scale + dy) * W + c * scale) * 4;
+        for (let dx = 0; dx < scale; dx++, p += 4) {
+          data[p] = cr;
+          data[p + 1] = cg;
+          data[p + 2] = cb;
+          data[p + 3] = ca;
+        }
+      }
+    }
+  }
+}
