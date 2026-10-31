@@ -94,4 +94,13 @@ describe('planner', () => {
     expect(prompts[1]).toContain('Previous attempts, verified by the simulator');
     expect(out.state.attempts[0].proposal.tMinutes).toBe(60);
   });
+
+  it('falls back to the built-in planner when Gemini fails', async () => {
+    const fetchImpl = (async () => new Response('quota', { status: 429 })) as typeof fetch;
+    const out = await suggestPlan(scenario, { apiKey: 'test', homes: bc.homes, fetchImpl });
+    expect(out.state.status).toBe('done');
+    expect(out.state.attempts.length).toBeGreaterThan(0);
+    expect(out.state.attempts[0].source).toBe('builtin');
+    expect(out.state.attempts[0].note).toMatch(/Gemini unavailable \(.*429.*\); built-in plan used/);
+  });
 });
