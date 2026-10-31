@@ -16,8 +16,9 @@ export function createReferenceOutline(viewer: Viewer, rings: [number, number][]
         polyline: {
           positions: Cartesian3.fromDegreesArray(ring.flat()),
           clampToGround: true,
-          width: 3,
-          material: Color.WHITE.withAlpha(0.9),
+          width: 4,
+          // Cyan reads on both the light OSM globe and dark burn/satellite imagery.
+          material: Color.fromCssColorString('#22d3ee'),
         },
       }),
     );

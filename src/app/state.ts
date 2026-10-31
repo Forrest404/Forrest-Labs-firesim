@@ -8,6 +8,7 @@ import type { CellRef, Intervention, SimResult, SimSettings, Weather } from '../
 import type { DemoArea, DemoAreaIndexEntry } from '../data/bundle';
 import type { ViewerMode } from '../viewer/createViewer';
 import type { PlanState } from './planner';
+import type { ControlRun } from './realFire';
 
 export type ToolId = 'ignite' | 'firebreak' | 'water';
 
@@ -55,6 +56,10 @@ export interface AppState {
   baseline: SimResult | null;
   /** Gemini (or built-in) plan suggestions and their verification. */
   plan: PlanState | null;
+  /** Accuracy colours against the area's real fire instead of the fire colours. */
+  compare: boolean;
+  /** No-wind and reversed-wind re-runs from "Compare with real fire", for the current result. */
+  controls: ControlRun[] | null;
   /** True when inputs changed since `result` was computed. */
   resultStale: boolean;
   simRunning: boolean;
@@ -92,6 +97,8 @@ export function initialState(): AppState {
     result: null,
     baseline: null,
     plan: null,
+    compare: false,
+    controls: null,
     resultStale: false,
     simRunning: false,
     simError: null,

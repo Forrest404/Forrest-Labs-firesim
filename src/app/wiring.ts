@@ -24,7 +24,9 @@ import { createPicker } from '../viewer/picking';
 import type { PickedCell, Picker } from '../viewer/picking';
 import type { Notices } from '../ui/notices';
 import { STR } from '../ui/strings';
+import { overlapAtRealSize } from './impact';
 import { OverlayPainter } from './overlayPainter';
+import { controlRuns } from './realFire';
 import type { Preview } from './overlayPainter';
 import { SimCancelledError, SimClient } from './simClient';
 import type { Store } from './state';
@@ -41,6 +43,8 @@ interface AreaContext {
 export interface Wiring {
   selectArea(name: string): Promise<void>;
   simulate(): Promise<void>;
+  /** Re-runs the area's real fire (recorded weather and ignition), jumps to real size, shows accuracy colours. */
+  compareWithRealFire(): Promise<void>;
   /** The scenario the current inputs describe, or a user-facing reason why there isn't one. */
   buildScenario(): Scenario | string;
   cancel(): void;
@@ -125,7 +129,8 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
   function repaint(): void {
     if (!ctx) return;
     const s = store.get();
-    ctx.painter.schedule(s.result, s.interventions, s.playback.t, s.settings, preview);
+    const compareMask = s.compare ? s.area?.reference?.mask ?? null : null;
+    ctx.painter.schedule(s.result, s.interventions, s.playback.t, s.settings, preview, compareMask);
     if (s.area) {
       const toward = (windTowardDeg(s.weather.windFromDeg) * Math.PI) / 180;
       effects.update({
@@ -146,7 +151,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     if (!ctx) return;
     if (s.debug !== prev.debug) applyDebug();
     if (s.ignition !== prev.ignition && s.area) marker.set(s.area.grid, s.ignition);
-    if (s.result !== prev.result || s.playback.t !== prev.playback.t || s.interventions !== prev.interventions || s.settings !== prev.settings) repaint();
+    if (s.result !== prev.result || s.playback.t !== prev.playback.t || s.interventions !== prev.interventions || s.settings !== prev.settings || s.compare !== prev.compare) repaint();
     if (s.tool !== prev.tool) picker.setDragMode(s.tool !== 'ignite');
     if (s.effects !== prev.effects) {
       effects.setEnabled(s.effects.particles);
@@ -173,6 +178,8 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
         result: null,
         baseline: null,
         plan: null,
+        compare: false,
+        controls: null,
         resultStale: false,
         simRunning: false,
         playback: { ...store.get().playback, t: 0, playing: false },
@@ -212,7 +219,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
       store.set({ simError: scenario });
       return;
     }
-    store.set({ simRunning: true, simError: null });
+    store.set({ simRunning: true, simError: null, controls: null });
     try {
       const result = await sim.run(scenario);
       // A run without the firefighting actions, so the panel can say what the plan changed.
@@ -234,9 +241,35 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     }
   }
 
+  async function compareWithRealFire(): Promise<void> {
+    const s = store.get();
+    const ref = s.area?.reference;
+    if (!s.area || !ref) return;
+    // The real day: recorded weather and ignition, no firefighting actions.
+    store.set({
+      weather: { ...s.weather, windFromDeg: s.area.meta.defaultWindFromDeg ?? s.weather.windFromDeg, ...s.area.meta.defaultWeather },
+      ignition: defaultIgnition(s.area),
+      interventions: [],
+      plan: null,
+    });
+    await simulate();
+    const after = store.get();
+    const scenario = buildScenario();
+    if (!after.result || !after.area || typeof scenario === 'string') return;
+    // Jump to the moment the run is as big as the real fire: the fair point to compare shapes.
+    const fair = overlapAtRealSize(after.result, ref);
+    store.set({
+      compare: true,
+      controls: controlRuns(scenario, ref),
+      playback: { ...after.playback, playing: false, t: fair ? fair.t : after.durationSeconds },
+    });
+    flyTopDown(viewer, after.area.grid);
+  }
+
   return {
     selectArea,
     simulate,
+    compareWithRealFire,
     buildScenario,
     cancel: () => {
       sim.cancelAll();

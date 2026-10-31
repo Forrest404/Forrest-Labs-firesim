@@ -37,6 +37,7 @@ async function main(): Promise<void> {
   const slots = mountPanel(panelEl, store, {
     selectArea: (name) => void wiringRef?.selectArea(name),
     simulate: () => void wiringRef?.simulate(),
+    compareWithRealFire: () => void wiringRef?.compareWithRealFire(),
     cancel: () => wiringRef?.cancel(),
     topDown: () => wiringRef?.topDown(),
     resetView: () => wiringRef?.resetView(),

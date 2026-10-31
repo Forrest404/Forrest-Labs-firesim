@@ -5,6 +5,7 @@ import { homesReached, overlapAt, overlapAtRealSize, totalHomes } from '../app/i
 import type { Overlap } from '../app/impact';
 import { liveStats } from '../app/overlayPainter';
 import type { SimResult } from '../contract';
+import { COMPARE_RGBA } from '../viewer/burnCanvas';
 import { el, formatClock } from './el';
 import { STR } from './strings';
 
@@ -12,6 +13,7 @@ const SPEEDS = [1, 4, 16, 64, 256, 1024];
 
 export interface PlaybackActions {
   simulate(): void;
+  compareWithRealFire(): void;
   cancel(): void;
 }
 
@@ -33,6 +35,12 @@ export function mountPlayback(container: HTMLElement, store: Store, actions: Pla
   const impact = el('div', { class: 'impact' });
   const realFire = el('div', { class: 'real-fire' });
   const realSize = new WeakMap<SimResult, Overlap | null>();
+  const compareBtn = el('button', { class: 'primary', onclick: () => actions.compareWithRealFire() }, STR.compareButton) as HTMLButtonElement;
+  const colorsBtn = el('button', { onclick: () => store.update((s) => ({ compare: !s.compare })) }) as HTMLButtonElement;
+  const swatch = (kind: keyof typeof COMPARE_RGBA, label: string): HTMLElement =>
+    el('span', { class: 'swatch-item' }, el('span', { class: 'swatch', style: `background: rgba(${COMPARE_RGBA[kind].slice(0, 3).join(',')}, 1)` }), label);
+  const legend = el('div', { class: 'legend' }, swatch('both', STR.legendBoth), swatch('missed', STR.legendMissed), swatch('extra', STR.legendExtra));
+  const pct = (o: Overlap | null): string => (o ? `${Math.round(o.iou * 100)} %` : STR.neverReal);
 
   container.append(
     el('h2', {}, STR.simulateTitle),
@@ -79,17 +87,36 @@ export function mountPlayback(container: HTMLElement, store: Store, actions: Pla
     } else impact.replaceChildren();
 
     const ref = s.area?.reference;
-    if (has && ref) {
-      if (!realSize.has(s.result!)) realSize.set(s.result!, overlapAtRealSize(s.result!, ref));
-      const fair = realSize.get(s.result!);
-      const live = overlapAt(s.result!, ref, s.playback.t);
-      realFire.replaceChildren(
-        el('div', {}, el('strong', {}, `${STR.realFire} ${ref.name}: `), `${ref.areaHa.toFixed(0)} ha ${STR.whiteOutline}`),
-        fair
-          ? el('div', {}, el('strong', {}, `${STR.matchAtRealSize} ${Math.round(fair.iou * 100)} %`), el('span', { class: 'muted' }, ` (IoU, ${STR.reached} ${(fair.t / 3600).toFixed(1)} h; ${STR.covers} ${Math.round(fair.covered * 100)} % ${STR.ofRealBurn})`))
-          : el('div', { class: 'muted' }, STR.neverRealSize),
-        el('div', { class: 'muted' }, `${STR.overlapNow} ${Math.round(live.iou * 100)} %`),
-      );
+    if (ref) {
+      compareBtn.disabled = s.simRunning;
+      colorsBtn.textContent = s.compare ? STR.showFireColors : STR.showAccuracyColors;
+      const parts: (HTMLElement | false)[] = [
+        el('div', {}, el('strong', {}, `${STR.realFire} ${ref.name}: `), `${ref.areaHa.toFixed(0)} ha ${STR.realOutline}`),
+        el('div', { class: 'row' }, compareBtn, has && colorsBtn),
+      ];
+      if (has) {
+        if (!realSize.has(s.result!)) realSize.set(s.result!, overlapAtRealSize(s.result!, ref));
+        const fair = realSize.get(s.result!);
+        const live = overlapAt(s.result!, ref, s.playback.t);
+        parts.push(
+          fair
+            ? el('div', { class: 'match' }, el('strong', {}, `${STR.matchAtRealSize} ${Math.round(fair.iou * 100)} %`), el('span', { class: 'muted' }, ` (IoU, ${STR.reached} ${(fair.t / 3600).toFixed(1)} h; ${STR.covers} ${Math.round(fair.covered * 100)} % ${STR.ofRealBurn})`))
+            : el('div', { class: 'muted' }, STR.neverRealSize),
+          el('div', { class: 'muted' }, `${STR.overlapNow} ${Math.round(live.iou * 100)} %`),
+          s.compare && legend,
+        );
+        if (s.controls) {
+          const label: Record<string, string> = { real: STR.controlReal, noWind: STR.controlNoWind, reversed: STR.controlReversed };
+          parts.push(
+            el('div', { class: 'controls' },
+              el('div', {}, el('strong', {}, STR.controlsTitle)),
+              ...s.controls.map((c) => el('div', { class: c.kind === 'real' ? 'control real' : 'control' }, `${label[c.kind]}: ${pct(c.overlap)}`)),
+              el('div', { class: 'muted' }, STR.controlsNote),
+            ),
+          );
+        }
+      }
+      realFire.replaceChildren(...parts.filter((p): p is HTMLElement => !!p));
     } else realFire.replaceChildren();
   });
 }
