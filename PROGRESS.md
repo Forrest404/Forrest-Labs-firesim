@@ -7,7 +7,7 @@ Companion files: [DECISIONS.md](DECISIONS.md) (judgement calls), [FEATURES.md](F
 
 - [x] Stage 0: Recon (branch `scaffold/v0` created from `main` @ `42fe7b2`)
 - [x] Stage 1: Scaffold and contract
-- [ ] Stage 2: Sim core on the fixture
+- [x] Stage 2: Sim core on the fixture
 - [ ] Stage 3: Data (geo, raster, terrain, bundles, synthetic areas, build script)
 - [ ] Stage 4: Cesium viewer spike
 - [ ] Stage 5: Overlay, playback, ignition (CRITICAL MILESTONE)
@@ -38,13 +38,21 @@ Companion files: [DECISIONS.md](DECISIONS.md) (judgement calls), [FEATURES.md](F
   pushed `PROGRESS.md` + `plan.md` to `origin/scaffold/v0`. Harmless; the build keeps committing locally.
 - Verified: `npm run typecheck`, `npm test` (7 pass), `npm run build` all green.
 
+### Stage 2 — Sim core
+- `src/sim/`: minimum-travel-time solver (Dijkstra, flat typed arrays, binary heap), factors in
+  `rates.ts`, timestamped firebreak/water events in `events.ts`, mulberry32 PRNG, worker + protocol.
+- `tests/fixtures.ts` (50 x 50 forest, river, road, optional hill) and 16 sim tests + 2 perf tests.
+- Measured: 200 x 200 in ~10 ms, 300 x 300 in ~23 ms (Node, after warm-up).
+- Tuning note: upwind (backing) spread was ~50x slower than the head at 8 m/s; softened to ~20x so
+  the fire visibly creeps upwind in a demo. Still a placeholder (see `rates.ts`).
+
 ## Current stage
 
-Stage 2: Sim core on the fixture.
+Stage 3: Data.
 
 ## Next
 
-Stage 3: Data.
+Stage 4: Cesium viewer spike.
 
 ## Known issues / not verified
 
