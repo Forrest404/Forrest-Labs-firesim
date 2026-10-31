@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "areas": [
+    {
+      "name": "alpirsbach",
+      "label": "Alpirsbach, Black Forest",
+      "synthetic": false,
+      "file": "alpirsbach.json",
+      "center": {
+        "lon": 8.4,
+        "lat": 48.345
+      },
+      "description": "Real land cover (OpenStreetMap) and elevation (AWS Terrain Tiles) around 48.345, 8.400."
+    },
+    {
+      "name": "boulder-creek",
+      "label": "Boulder Creek, CA",
+      "synthetic": false,
+      "file": "boulder-creek.json",
+      "center": {
+        "lon": -122.122,
+        "lat": 37.126
+      },
+      "description": "Real land cover (OpenStreetMap) and elevation (AWS Terrain Tiles) around 37.126, -122.122."
+    },
+    {
+      "name": "synthetic-ridge",
+      "label": "Forest Ridge (synthetic)",
+      "synthetic": true,
+      "file": "synthetic-ridge.json",
+      "center": {
+        "lon": 8.4,
+        "lat": 48.345
+      },
+      "description": "Generated terrain and land cover (ridge). Not a real place. Coordinates are only a frame of reference."
+    },
+    {
+      "name": "synthetic-valley",
+      "label": "River Valley (synthetic)",
+      "synthetic": true,
+      "file": "synthetic-valley.json",
+      "center": {
+        "lon": -122.122,
+        "lat": 37.126
+      },
+      "description": "Generated terrain and land cover (valley). Not a real place. Coordinates are only a frame of reference."
+    }
+  ]
+}

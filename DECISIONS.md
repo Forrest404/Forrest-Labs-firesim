@@ -75,17 +75,31 @@ Cartographic -> degrees -> `geo.lonLatToCell`. Tools only ever see cell coordina
 Plain TS with a tiny `el()` helper and one CSS file. Preact was allowed but not needed for a
 side panel; one fewer dependency and no build plugin.
 
-## D8. Demo areas are synthetic in this build
+## D8. Demo areas: two real, two synthetic
 
-Overpass was unreachable from the build machine (four public endpoints timed out). The two
-committed bundles are generated (`scripts/make-synthetic.ts`), flagged `synthetic: true`, and
-labelled "(synthetic)" in the picker. The real builder (`scripts/build-demo-area.ts`) is written
-and should be run by a teammate on a networked machine. Suggested real areas (varied terrain,
-river or road, lots of forest, good OSM coverage):
-- Boulder Creek, Santa Cruz Mountains, CA, centre about 37.126, -122.122: redwood forest, Hwy 9,
-  San Lorenzo River, strong relief.
-- Alpirsbach, Black Forest, DE, centre about 48.345, 8.40: dense `landuse=forest`, Kinzig river,
-  B294, good OSM polygons.
+Overpass was unreachable during recon (four public endpoints timed out), so two synthetic areas
+were generated first (`scripts/make-synthetic.ts`, flagged `synthetic: true`, labelled
+"(synthetic)" in the picker). Overpass came back during Stage 3 and the real builder
+(`scripts/build-demo-area.ts`) produced two real bundles, which are listed first:
+- `boulder-creek`: Boulder Creek, Santa Cruz Mountains, CA (37.126, -122.122): redwood forest,
+  Hwy 9, San Lorenzo River, 100-800 m relief. Patchy OSM forest polygons; much land is "default".
+- `alpirsbach`: Alpirsbach, Black Forest, DE (48.345, 8.40): dense `landuse=forest` (75 % of
+  cells), Kinzig river, B294, railway.
+The synthetic areas stay as the no-network fallback and as a predictable test bed.
+Bundles are about 260 KB each (base64 fuel + Float32 elevation); 4 of them is fine to commit.
+
+## D13. Which OSM features are barriers
+
+A 30 m cell is either burnable or not, and the model has no spotting, so every barrier is
+absolute. To avoid turning real areas into mazes:
+- Roads are barriers only for `motorway/trunk/primary/secondary/tertiary` (+ links). Residential and
+  unclassified streets are ignored (a few metres wide; Boulder Creek had 5,500 cells of them).
+- Waterways are barriers only for `river` and `canal`; `stream` is ignored (5,100 cells of
+  creeks in Boulder Creek).
+- `building=*`, industrial/retail/quarry land use, parking and runways are non-burnable.
+  `landuse=residential` is NOT: in wildland-urban areas those polygons are wooded lots and would
+  have removed a quarter of the Boulder Creek grid. They fall through to the default fuel (D10).
+Teammates on `sim-realism` / `live-data` can revisit once spotting exists.
 
 ## D9. Legal boundary for Google tiles
 
