@@ -300,7 +300,7 @@ Values live in `src/data/demo-scenarios.ts`; `npm run tune:demo` prints the repo
 duration and the saved plan were tuned; `src/contract` and the sim physics are untouched, default
 settings (factors rate model).
 
-**Surrey Hills** (real data): ignition cell (row 142, col 102) = about 51.165 N, -0.384 E, dense
+**Surrey Hills** (real data): ignition cell (row 142, col 102) = 51.1635 N, -0.3749 E (110 m), dense
 woodland on the low south-west side; wind from 225 deg (SW) at 25 km/h, dryness high, 4 h, seed 1.
 Threatened: a disc of 8 cells (240 m) around Coldharbour at (97, 109). Uncontained: 191 ha, reaches the
 zone at 2.65 h (66 % of the run), head at the break line at 1.80 h (45 %). Contained plan (cell-space
@@ -328,6 +328,14 @@ is out of scope. (4) Wind speed and dryness barely change the shape; they change
 "extreme" made fires faster, not thinner). (5) A SSW wind (195 deg) gives a more direct hit and aspect up to
 2.9 but departs further from the brief's south-westerly.
 
-**Other choices.** Unmapped land is GRASS (D10). Playback speed 256x for both scenarios (4 h = 56 s,
+**What the contained run looks like.** The break is anchored on the road at its west end only; the east
+side is open farmland, so some fire still spills round the east end of the line toward the north-east. It
+is held away from Coldharbour (never reaches the zone, not even at 6 h) and burns 62 % of the area, but the
+picture is "held back", not "stopped dead". A longer line (to col 160, 2 km) lowers the area to about 51 %
+but is a long drag for a presenter.
+
+**Other choices.** `surrey-hills` is listed first in `index.json`, so it is now the area the app opens on
+(the loader takes the first entry). Camera: flies to the middle of the action (Surrey (120, 105),
+backup (118, 145)) 2.6-2.8 km out, looking along the fire, rather than framing the whole 6 km grid. Unmapped land is GRASS (D10). Playback speed 256x for both scenarios (4 h = 56 s,
 6 h = 84 s of real time). Camera heading 40 deg (Surrey) / 70 deg (backup), pitch -30, looking along the
 fire. A run takes about 5 ms, so re-simulation after every change is instant.
