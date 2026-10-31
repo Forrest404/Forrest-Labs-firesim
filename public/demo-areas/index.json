@@ -2,6 +2,17 @@
   "version": 1,
   "areas": [
     {
+      "name": "surrey-hills",
+      "label": "Surrey Hills (Leith Hill)",
+      "synthetic": false,
+      "file": "surrey-hills.json",
+      "center": {
+        "lon": -0.376,
+        "lat": 51.175
+      },
+      "description": "Real land cover (OpenStreetMap) and elevation (AWS Terrain Tiles) around 51.175, -0.376. Land without an OSM land-cover polygon is assumed to be grass."
+    },
+    {
       "name": "alpirsbach",
       "label": "Alpirsbach, Black Forest",
       "synthetic": false,

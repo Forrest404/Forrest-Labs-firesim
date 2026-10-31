@@ -253,3 +253,42 @@ and smoothing, layer visibility for the plume) so turning one off removes only t
 None of this changes the simulation; the particle visuals remain non-reproducible (Cesium
 emitter randomness), the overlay pixels are deterministic and unit-tested
 (`tests/burnCanvasScaled.test.ts`).
+
+## D22. Demo scenario work: base, disclaimer, fallbacks
+
+- Branch `feature/demo-scenario` is cut from `main` in its own worktree (`../Forrest-Labs-firesim-demo`)
+  because the shared directory had another session's uncommitted edits. It therefore does NOT have
+  what lives only on `scaffold/v0` (live weather, compass, ensembles, WorldCover builder, 16-direction
+  stencil). The demo is built and tuned on this branch's 8-neighbour sim.
+- The on-screen "Simplified model" pill and the footer sentence are removed here too, on request
+  (same as `scaffold/v0` commit dda42f5). The demo copy and `DEMO.md` do not mention it.
+- Data fallback chain if Overpass is down: retry (3 mirrors, several passes), then the existing
+  synthetic areas, labelled synthetic. Overpass was reachable when the Surrey bundle was built
+  (it returns HTTP 502 or times out intermittently; a second pass worked).
+
+## D23. Surrey Hills data: multipolygon woodland was being dropped (fixed), class shares, road check
+
+**Bug found by looking at the first Surrey build.** The builder only used a multipolygon relation's
+member ways that were already closed on their own. Large woodlands are usually split over several ways,
+so they were skipped (17 "unclosed" shapes) and the whole ridge-top wood of Leith Hill came out as
+default fill (21 % of the grid). `assembleRings` (`src/data/osm.ts`) now joins member ways end to end
+into rings (any order or direction, shared node coordinates matched exactly); chains that do not close
+are still counted in `skippedUnclosed`, never turned into polygons. After the fix: 0 skipped, default fill
+5.5 % (scattered gardens and verges). Tests: `tests/osmRings.test.ts` (fuzzed order and direction,
+holes, unjoinable chains, through `buildFuelGrid`); mutation-checked.
+
+**Surrey Hills bundle** (`public/demo-areas/surrey-hills.json`, real OpenStreetMap land cover and AWS
+Terrain Tiles, 200 x 200 cells of 30 m around 51.175 N, -0.376 E; unmapped land = GRASS, D10):
+conifer forest 48.5 %, farmland 34.1 %, grass 10.7 %, non-burnable 4.0 %, shrub 2.5 %, deciduous 0.1 %.
+Elevation 61-300 m. Trees default to conifer unless OSM says `leaf_type=broadleaved`, so the mixed
+Surrey woods read as mostly conifer (the model treats them as one dense woodland class anyway).
+Non-burnable is far from "mostly": the grid is not walled in.
+
+**Road leak check (fuzzed).** A 1-cell road cannot be crossed by a fire that moves to its 8
+neighbours: `lineCells` adds an orthogonal bridge cell whenever a step changes both row and column,
+which makes every rasterised line 4-connected. `tests/roadLeak.test.ts` fuzzes this three ways
+(connectivity of 400 random polylines; 300 roads built through `buildFuelGrid` for every road class
+separate the two sides under 8-neighbour flood fill; 40 solver runs pushed hard at a road never burn
+the far side). Removing the bridge makes three tests fail, so they would catch a regression. No change
+to the rasteriser was needed. Consequence for the demo: with no spotting on this branch a road is an
+absolute barrier, so the fire can only reach what is in its own compartment of woodland.
