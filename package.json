@@ -27,6 +27,7 @@
     "vitest": "^4.1.12"
   },
   "dependencies": {
+    "@google/genai": "^2.32.0",
     "cesium": "^1.146.0"
   }
 }

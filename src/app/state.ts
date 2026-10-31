@@ -3,6 +3,7 @@
  * UI components read from it and write to it; they never own state themselves.
  */
 
+import type { DipSite, FireStationAsset, TacticalPlanResult } from '../agent/types';
 import { DEFAULT_DURATION_SECONDS, DEFAULT_SETTINGS, DEFAULT_WEATHER } from '../contract';
 import type { CellRef, Intervention, SimResult, SimSettings, Weather } from '../contract';
 import type { DemoArea, DemoAreaIndexEntry } from '../data/bundle';
@@ -15,6 +16,11 @@ export interface PlaybackState {
   t: number;
   playing: boolean;
   /** Simulated seconds per real second. */
+}
+
+export interface PlaybackStateFull {
+  t: number;
+  playing: boolean;
   speed: number;
 }
 
@@ -55,7 +61,15 @@ export interface AppState {
   simRunning: boolean;
   simError: string | null;
 
-  playback: PlaybackState;
+  /** Tactical Dispatch Agent state */
+  stations: FireStationAsset[];
+  dipSite: DipSite | null;
+  agentPlan: TacticalPlanResult | null;
+  agentRunning: boolean;
+  highlightedOrderId: string | null;
+  trackedOrderId: string | null;
+
+  playback: PlaybackStateFull;
   tool: ToolId;
   toolParams: ToolParams;
   debug: DebugFlags;
@@ -88,6 +102,12 @@ export function initialState(): AppState {
     resultStale: false,
     simRunning: false,
     simError: null,
+    stations: [],
+    dipSite: null,
+    agentPlan: null,
+    agentRunning: false,
+    highlightedOrderId: null,
+    trackedOrderId: null,
     playback: { t: 0, playing: false, speed: 64 },
     tool: 'ignite',
     toolParams: { firebreakWidthCells: 3, waterRadiusCells: 3, preClear: false },

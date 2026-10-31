@@ -2,6 +2,8 @@
 import 'cesium/Build/Cesium/Widgets/widgets.css';
 import '../ui/styles.css';
 import { loadDemoAreaIndex } from '../data/demoAreas';
+import { mountAgentPanel } from '../ui/agentPanel';
+import { mountDispatchPopupHud } from '../ui/dispatchPopupHud';
 import { createNotices } from '../ui/notices';
 import { mountPanel } from '../ui/panel';
 import { STR } from '../ui/strings';
@@ -13,6 +15,7 @@ import { createStore } from './state';
 import { createToolsController } from './toolsController';
 import { wire } from './wiring';
 
+const appEl = document.getElementById('app') as HTMLElement;
 const panelEl = document.getElementById('panel') as HTMLElement;
 const noticesEl = document.getElementById('notices') as HTMLElement;
 const viewerEl = document.getElementById('viewer') as HTMLElement;
@@ -36,6 +39,8 @@ async function main(): Promise<void> {
   const slots = mountPanel(panelEl, store, {
     selectArea: (name) => void wiringRef?.selectArea(name),
     simulate: () => void wiringRef?.simulate(),
+    startWithoutIntervention: () => void wiringRef?.startWithoutIntervention(),
+    startWithContainmentAi: () => void wiringRef?.startWithContainmentAi(),
     cancel: () => wiringRef?.cancel(),
     topDown: () => wiringRef?.topDown(),
     resetView: () => wiringRef?.resetView(),
@@ -56,7 +61,38 @@ async function main(): Promise<void> {
 
   const wiring = wire(handle.viewer, store, notices);
   wiringRef = wiring;
-  mountTools(slots.tools, store, createToolsController(store, wiring));
+  const toolsCtl = createToolsController(store, wiring);
+  mountTools(slots.tools, store, toolsCtl);
+
+  mountAgentPanel(slots.agent, store, {
+    recommendPlan: () => void wiring.recommendPlan(),
+    deployPlan: () => {
+      const plan = store.get().agentPlan;
+      if (!plan) return;
+      const enabledInterventions = plan.orders
+        .filter((o) => o.enabled)
+        .map((o) => o.intervention);
+      if (enabledInterventions.length === 0) return;
+      const nonAgent = store.get().interventions.filter((iv) => !iv.id.startsWith('agent-'));
+      store.set({ interventions: nonAgent });
+      toolsCtl.commitBatch(enabledInterventions);
+      store.update((s) => ({
+        playback: { ...s.playback, t: 0, playing: true },
+      }));
+      void wiring.simulate();
+      notices.show(STR.agentDeployedNotice, 'info', 4500);
+    },
+    toggleOrder: (orderId, enabled) => wiring.toggleOrder(orderId, enabled),
+    highlightOrder: (orderId) => wiring.highlightOrder(orderId),
+    flyToOrder: (orderId) => wiring.flyToOrder(orderId),
+  });
+
+  mountDispatchPopupHud(appEl, store, {
+    flyToActiveUnit: (orderId) => wiring.flyToOrder(orderId),
+    stopTracking: () => wiring.stopTrackingOrder(),
+    highlightOrder: (orderId) => wiring.highlightOrder(orderId),
+  });
+
   startClock(store);
 
   try {
@@ -73,10 +109,13 @@ async function main(): Promise<void> {
     notices.persistent('loading', null);
   }
 
-  // Keyboard: Escape returns to the ignition tool, Space toggles playback.
+  // Keyboard: Escape returns to the ignition tool and releases 3D unit lock, Space toggles playback.
   window.addEventListener('keydown', (e) => {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
-    if (e.key === 'Escape') store.set({ tool: 'ignite' });
+    if (e.key === 'Escape') {
+      wiring.stopTrackingOrder();
+      store.set({ tool: 'ignite' });
+    }
     if (e.key === ' ' && store.get().result) {
       e.preventDefault();
       store.update((s) => ({ playback: { ...s.playback, playing: !s.playback.playing } }));

@@ -3,6 +3,7 @@
   --panel-fg: #e8e8e8;
   --muted: #a7adb5;
   --accent: #ff7a1a;
+  --cyan: #38bdf8;
   --danger: #ff4d4d;
   --ok: #4ad17a;
   --border: rgba(255, 255, 255, 0.12);
@@ -18,9 +19,9 @@ html, body { margin: 0; height: 100%; background: #0b0d10; overflow: hidden; }
 #viewer .cesium-viewer-bottom { right: 12px; left: auto; }
 
 #panel {
-  position: absolute; top: 12px; left: 12px; width: 330px; max-height: calc(100% - 24px);
+  position: absolute; top: 12px; left: 12px; width: 360px; max-height: calc(100% - 24px);
   overflow-y: auto; background: var(--panel-bg); border: 1px solid var(--border); border-radius: 10px;
-  padding: 12px 14px; box-sizing: border-box; backdrop-filter: blur(6px);
+  padding: 14px 16px; box-sizing: border-box; backdrop-filter: blur(6px);
 }
 #panel h1 { font-size: 16px; margin: 0 0 4px; }
 #panel h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 14px 0 6px; }
@@ -39,6 +40,7 @@ html, body { margin: 0; height: 100%; background: #0b0d10; overflow: hidden; }
 #panel button:disabled { opacity: 0.5; cursor: not-allowed; }
 #panel .row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 #panel .muted { color: var(--muted); font-size: 12px; }
+#panel .tabular { font-variant-numeric: tabular-nums; }
 #panel .notice { background: rgba(255, 122, 26, 0.15); border: 1px solid rgba(255, 122, 26, 0.5); border-radius: 8px; padding: 8px 10px; margin: 6px 0 10px; font-weight: 600; }
 #panel .notice small { display: block; font-weight: 400; color: var(--muted); margin-top: 4px; }
 
@@ -55,18 +57,313 @@ html, body { margin: 0; height: 100%; background: #0b0d10; overflow: hidden; }
 #panel .footer { margin-top: 12px; font-size: 11px; }
 #panel ul.interventions { list-style: none; padding: 0; margin: 6px 0 0; font-size: 12px; }
 #panel ul.interventions li { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 3px 0; border-top: 1px dashed var(--border); }
-#panel button.small { padding: 1px 6px; font-size: 11px; margin: 0; }
+#panel button.small { padding: 2px 7px; font-size: 11px; margin: 0; }
 #panel label.disabled { opacity: 0.5; }
 #panel .num { display: inline-flex; align-items: center; gap: 4px; }
 #panel .num input { width: 72px; }
 #panel .unit { color: var(--muted); font-size: 12px; min-width: 24px; }
 
+/* Tactical Dispatch Agent Styles */
+#panel ul.agent-stations { list-style: none; padding: 0; margin: 6px 0; font-size: 12px; }
+#panel li.agent-station-row { display: flex; flex-direction: column; gap: 1px; padding: 4px 0; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+#panel .agent-stn-name { font-weight: 500; color: var(--panel-fg); }
+#panel .agent-dipsite { background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.28); border-radius: 6px; padding: 6px 8px; margin: 4px 0 8px; color: #bae6fd; font-variant-numeric: tabular-nums; }
+#panel .agent-btn, #panel .agent-deploy-btn { width: 100%; margin: 6px 0; padding: 8px 12px; }
+#panel .agent-compare-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 8px 0; background: #15181d; border: 1px solid var(--border); border-radius: 6px; padding: 8px; }
+#panel .agent-metric { display: flex; flex-direction: column; gap: 2px; }
+#panel .agent-metric strong { font-size: 13px; color: var(--panel-fg); }
+#panel .agent-metric strong.agent-saved { color: var(--ok); }
+#panel .agent-briefing { background: #15181d; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin: 8px 0; font-size: 12px; line-height: 1.45; }
+#panel .agent-briefing-meta { font-size: 11px; margin-bottom: 4px; }
+#panel .agent-subtitle { margin: 8px 0 4px; font-weight: 600; }
+#panel ul.agent-orders { list-style: none; padding: 0; margin: 4px 0 8px; display: flex; flex-direction: column; gap: 6px; }
+#panel li.agent-order-item { background: #15181d; border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px; transition: border-color 0.15s; }
+#panel li.agent-order-item.highlighted, #panel li.agent-order-item:hover { border-color: var(--cyan); }
+#panel .agent-order-header { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+#panel label.agent-order-check { display: inline-flex; align-items: center; gap: 6px; margin: 0; justify-content: flex-start; cursor: pointer; font-size: 12px; }
+#panel .agent-order-meta { margin-top: 3px; color: #7dd3fc; font-size: 11px; }
+#panel .agent-order-radio { margin-top: 5px; font-size: 11.5px; color: #f8fafc; font-style: italic; background: rgba(255, 255, 255, 0.04); border-left: 2px solid var(--accent); padding: 4px 7px; border-radius: 0 4px 4px 0; line-height: 1.35; }
+#panel .agent-order-rationale { margin-top: 4px; font-size: 11px; color: var(--muted); line-height: 1.35; }
+#panel ul.agent-reasoning-log { list-style: none; padding: 0; margin: 4px 0 0; max-height: 150px; overflow-y: auto; font-size: 11px; line-height: 1.4; }
+#panel ul.agent-reasoning-log li { padding: 3px 0; border-top: 1px dashed rgba(255, 255, 255, 0.08); }
+#panel .agent-log-selected { color: var(--ok); font-weight: 600; }
+
+/* Tactic Badges (Water Spray vs Fire Break) */
+.hud-tactic-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.tactic-badge-water {
+  background: rgba(56, 189, 248, 0.18);
+  color: #7dd3fc;
+  border: 1px solid rgba(56, 189, 248, 0.45);
+}
+.tactic-badge-firebreak {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fcd34d;
+  border: 1px solid rgba(245, 158, 11, 0.5);
+}
+
+/* Time-Synchronized Floating HUD Dispatch Toast Stack & Live Radio Net */
+.dispatch-hud-container {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 364px;
+  max-height: calc(100% - 48px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 25;
+  pointer-events: none;
+}
+.dispatch-hud-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(14, 17, 22, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 7px 11px;
+  backdrop-filter: blur(8px);
+  pointer-events: auto;
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+}
+.hud-title-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.hud-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #4ad17a;
+  box-shadow: 0 0 8px #4ad17a;
+  animation: hudPulse 1.6s infinite ease-in-out;
+}
+@keyframes hudPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.85); }
+}
+.hud-header-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.hud-clock-pill {
+  background: #181c23;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+  color: #bae6fd;
+}
+.hud-voice-btn, .hud-speak-btn {
+  background: #22262d;
+  color: var(--panel-fg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 2px 7px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.hud-voice-btn.active {
+  border-color: rgba(74, 209, 122, 0.5);
+  color: #86efac;
+}
+.dispatch-toast-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  padding-right: 2px;
+  pointer-events: auto;
+}
+.dispatch-toast-card {
+  background: rgba(15, 19, 25, 0.93);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  padding: 9px 11px;
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  transition: transform 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease;
+}
+.dispatch-toast-card.phase-executing_tactic {
+  border-left-color: #4ad17a;
+}
+.dispatch-toast-card.phase-dip_refill {
+  border-left-color: #38bdf8;
+}
+.dispatch-toast-card:hover,
+.dispatch-toast-card.highlighted {
+  border-color: var(--cyan);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  transform: translateY(-1px);
+}
+.hud-toast-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+.hud-crew-id {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hud-unit-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.hud-unit-icon.unit-engine { color: #ff7a1a; }
+.hud-unit-icon.unit-helicopter { color: #38bdf8; }
+.hud-unit-icon.unit-airtanker { color: #f43f5e; }
+.hud-crew-titles {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  line-height: 1.25;
+}
+.hud-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.hud-equalizer {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 12px;
+}
+.hud-equalizer i {
+  display: inline-block;
+  width: 2px;
+  height: 4px;
+  background: var(--muted);
+  border-radius: 1px;
+}
+.hud-equalizer.speaking i {
+  background: #4ad17a;
+  animation: eqBounce 0.55s infinite ease-in-out alternate;
+}
+.hud-equalizer.speaking i:nth-child(2) { animation-delay: 0.15s; }
+.hud-equalizer.speaking i:nth-child(3) { animation-delay: 0.3s; }
+.hud-equalizer.speaking i:nth-child(4) { animation-delay: 0.1s; }
+@keyframes eqBounce {
+  0% { height: 3px; }
+  100% { height: 12px; }
+}
+.hud-transcript {
+  margin: 6px 0 5px;
+  font-size: 12px;
+  line-height: 1.38;
+  color: #f8fafc;
+  font-weight: 500;
+}
+.hud-tactic-meta {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-bottom: 6px;
+}
+.hud-progress-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.hud-progress-bar {
+  flex: 1;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.09);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.hud-progress-fill {
+  height: 100%;
+  transition: width 0.15s linear;
+}
+.hud-progress-fill.fill-water { background: #38bdf8; }
+.hud-progress-fill.fill-firebreak { background: #f59e0b; }
+.hud-status-text {
+  font-size: 10.5px;
+  color: #bae6fd;
+  white-space: nowrap;
+}
+.start-buttons-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.start-ai-btn,
+.start-baseline-btn {
+  width: 100%;
+  padding: 8px 12px;
+  font-weight: 600;
+  text-align: center;
+}
+#panel button.start-baseline-btn {
+  background: #1c222b;
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #e2e8f0;
+}
+#panel button.start-baseline-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+#panel button.active-mode {
+  box-shadow: 0 0 0 1.5px var(--cyan);
+}
+.hud-track-btn,
+.hud-stop-track-btn {
+  background: rgba(56, 189, 248, 0.12);
+  color: #7dd3fc;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 5px;
+  padding: 2px 7px;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.hud-track-btn:hover,
+.hud-stop-track-btn:hover {
+  background: rgba(56, 189, 248, 0.24);
+  border-color: #38bdf8;
+}
+.hud-track-btn.active,
+.hud-stop-track-btn {
+  background: rgba(74, 209, 122, 0.2);
+  color: #86efac;
+  border-color: rgba(74, 209, 122, 0.55);
+}
+.dispatch-toast-card.tracked,
+#panel li.agent-order-item.tracked {
+  border-color: #4ad17a;
+  box-shadow: 0 0 0 1px rgba(74, 209, 122, 0.45), 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+
 #notices { position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
-#notices .banner { background: rgba(18, 20, 24, 0.92); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 8px; padding: 8px 12px; pointer-events: auto; }
-#notices .banner.error { border-left-color: var(--danger); }
-#notices .banner.info { border-left-color: #4aa3ff; }
+#notices .banner { background: rgba(18, 20, 24, 0.92); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; pointer-events: auto; }
+#notices .banner.error { border-color: var(--danger); }
+#notices .banner.info { border-color: #4aa3ff; }
 
 @media (max-width: 720px) {
   #panel { width: calc(100% - 24px); max-height: 55%; top: auto; bottom: 12px; }
+  .dispatch-hud-container { width: calc(100% - 24px); top: 12px; right: 12px; max-height: 36%; }
   #notices { bottom: auto; top: 10px; width: calc(100% - 24px); }
 }

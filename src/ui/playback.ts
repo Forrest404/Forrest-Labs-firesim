@@ -9,11 +9,30 @@ const SPEEDS = [1, 4, 16, 64, 256];
 
 export interface PlaybackActions {
   simulate(): void;
+  startWithoutIntervention(): void;
+  startWithContainmentAi(): void;
   cancel(): void;
 }
 
 export function mountPlayback(container: HTMLElement, store: Store, actions: PlaybackActions): void {
-  const simulateBtn = el('button', { class: 'primary', onclick: () => actions.simulate() }, STR.simulate) as HTMLButtonElement;
+  const startAiBtn = el(
+    'button',
+    {
+      class: 'primary start-ai-btn',
+      onclick: () => actions.startWithContainmentAi(),
+    },
+    STR.startWithAi,
+  ) as HTMLButtonElement;
+
+  const startBaselineBtn = el(
+    'button',
+    {
+      class: 'start-baseline-btn',
+      onclick: () => actions.startWithoutIntervention(),
+    },
+    STR.startWithoutIntervention,
+  ) as HTMLButtonElement;
+
   const cancelBtn = el('button', { onclick: () => actions.cancel() }, STR.cancel) as HTMLButtonElement;
   const hint = el('div', { class: 'muted' });
   const error = el('div', { class: 'error-text', role: 'alert' });
@@ -30,7 +49,7 @@ export function mountPlayback(container: HTMLElement, store: Store, actions: Pla
 
   container.append(
     el('h2', {}, STR.simulateTitle),
-    el('div', { class: 'row' }, simulateBtn, cancelBtn),
+    el('div', { class: 'start-buttons-col' }, startAiBtn, startBaselineBtn, cancelBtn),
     hint,
     error,
     el('div', { class: 'row' }, playBtn, restartBtn, ...speedBtns),
@@ -40,10 +59,34 @@ export function mountPlayback(container: HTMLElement, store: Store, actions: Pla
 
   store.subscribe((s) => {
     const hasArea = !!s.area;
-    simulateBtn.disabled = !hasArea || !s.ignition || s.simRunning;
-    simulateBtn.textContent = s.simRunning ? STR.simulating : s.result && s.resultStale ? STR.reSimulate : STR.simulate;
-    simulateBtn.classList.toggle('stale', !!s.result && s.resultStale);
-    cancelBtn.style.display = s.simRunning ? '' : 'none';
+    const busy = s.simRunning || s.agentRunning;
+    startAiBtn.disabled = !hasArea || !s.ignition || busy;
+    startBaselineBtn.disabled = !hasArea || !s.ignition || busy;
+
+    if (s.agentRunning) {
+      startAiBtn.textContent = STR.simulatingWithAi;
+    } else if (s.simRunning && s.agentPlan) {
+      startAiBtn.textContent = STR.simulatingWithAi;
+    } else if (s.result && s.resultStale) {
+      startAiBtn.textContent = STR.reSimulateWithAi;
+    } else {
+      startAiBtn.textContent = STR.startWithAi;
+    }
+
+    if (s.simRunning && !s.agentRunning && !s.agentPlan) {
+      startBaselineBtn.textContent = STR.simulating;
+    } else if (s.result && s.resultStale) {
+      startBaselineBtn.textContent = STR.reSimulateWithoutIntervention;
+    } else {
+      startBaselineBtn.textContent = STR.startWithoutIntervention;
+    }
+
+    startAiBtn.classList.toggle('stale', !!s.result && s.resultStale);
+    startBaselineBtn.classList.toggle('stale', !!s.result && s.resultStale);
+    startAiBtn.classList.toggle('active-mode', !!s.result && !!s.agentPlan);
+    startBaselineBtn.classList.toggle('active-mode', !!s.result && !s.agentPlan);
+
+    cancelBtn.style.display = busy ? '' : 'none';
     hint.textContent = !s.ignition ? STR.placeIgnitionHint : s.result && s.resultStale ? STR.staleHint : '';
     error.textContent = s.simError ?? '';
 
@@ -57,7 +100,8 @@ export function mountPlayback(container: HTMLElement, store: Store, actions: Pla
     clock.textContent = formatClock(s.playback.t);
     if (has && s.area) {
       const st = liveStats(s.result, s.area.grid, s.playback.t);
-      stats.textContent = `${st.burnedAreaHa.toFixed(0)} ha · ${st.burnedCells} cells burned · ${STR.simTime} ${s.result!.stats.runtimeMs.toFixed(0)} ms`;
+      const modeBadge = s.agentPlan ? ' · AI Containment Active' : ' · Uncontained Baseline';
+      stats.textContent = `${st.burnedAreaHa.toFixed(0)} ha · ${st.burnedCells} cells burned${modeBadge} · ${STR.simTime} ${s.result!.stats.runtimeMs.toFixed(0)} ms`;
     } else stats.textContent = '';
   });
 }

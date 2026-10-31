@@ -1,0 +1,8 @@
+{
+  "name": "Wildfire Sim - 3D Wildfire Spread Simulator",
+  "description": "Simplified 3D wildfire spread simulator built with CesiumJS. Not for real-world decisions.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -3,6 +3,11 @@
  * viewer objects are created in response to state changes.
  */
 
+import {
+  discoverFireStations,
+  findBestDipSite,
+  generateTacticalContainmentPlan,
+} from '../agent';
 import { FuelClass, validateScenario, windTowardDeg } from '../contract';
 import type { Scenario } from '../contract';
 import { scenarioFromArea } from '../data/bundle';
@@ -13,6 +18,7 @@ import { paintFuel, paintSlope } from '../viewer/burnCanvas';
 import { GridLayer } from '../viewer/burnLayer';
 import { flyToGrid, flyTopDown } from '../viewer/camera';
 import type { Viewer } from 'cesium';
+import { createDispatchOverlay } from '../viewer/dispatchOverlay';
 import { createGridOutline } from '../viewer/gridOutline';
 import type { GridOutline } from '../viewer/gridOutline';
 import { createIgnitionMarker } from '../viewer/ignitionMarker';
@@ -37,6 +43,13 @@ interface AreaContext {
 export interface Wiring {
   selectArea(name: string): Promise<void>;
   simulate(): Promise<void>;
+  startWithoutIntervention(): Promise<void>;
+  startWithContainmentAi(): Promise<void>;
+  recommendPlan(): Promise<void>;
+  toggleOrder(orderId: string, enabled: boolean): void;
+  highlightOrder(orderId: string | null): void;
+  flyToOrder(orderId: string): void;
+  stopTrackingOrder(): void;
   cancel(): void;
   topDown(): void;
   resetView(): void;
@@ -52,6 +65,7 @@ export interface Wiring {
 export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
   const sim = new SimClient();
   const marker = createIgnitionMarker(viewer, STR.ignitionLabel);
+  const dispatchOverlay = createDispatchOverlay(viewer);
   const effects = createFireEffects(viewer);
   effects.setEnabled(store.get().effects.particles);
   effects.setQuality(store.get().effects.quality);
@@ -69,7 +83,18 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
         notices.show(STR.ignitionNonBurnable, 'warn', 4000);
         return;
       }
-      store.update((st) => ({ ignition: { row: cell.row, col: cell.col }, resultStale: !!st.result }));
+      const nextIgn = { row: cell.row, col: cell.col };
+      const dipSite = findBestDipSite(s.area, nextIgn);
+      dispatchOverlay.stopTracking();
+      store.update((st) => ({
+        ignition: nextIgn,
+        dipSite,
+        agentPlan: null,
+        trackedOrderId: null,
+        highlightedOrderId: null,
+        interventions: st.interventions.filter((iv) => !iv.id.startsWith('agent-')),
+        resultStale: !!st.result,
+      }));
     },
     onDragStart: (c) => draw?.start(c),
     onDragMove: (c) => draw?.move(c),
@@ -103,6 +128,14 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     applyDebug();
     repaint();
     marker.set(grid, s.ignition);
+    dispatchOverlay.setStationsAndDipSite(s.stations, s.dipSite);
+    dispatchOverlay.setOrders(
+      grid,
+      s.agentPlan?.orders ?? [],
+      s.highlightedOrderId,
+      s.area.elevation,
+      s.viewerMode === 'google',
+    );
     flyToGrid(viewer, grid);
   }
 
@@ -118,6 +151,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     if (!ctx) return;
     const s = store.get();
     ctx.painter.schedule(s.result, s.interventions, s.playback.t, s.settings, preview);
+    dispatchOverlay.updateTime(s.playback.t);
     if (s.area) {
       const toward = (windTowardDeg(s.weather.windFromDeg) * Math.PI) / 180;
       effects.update({
@@ -138,6 +172,24 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     if (!ctx) return;
     if (s.debug !== prev.debug) applyDebug();
     if (s.ignition !== prev.ignition && s.area) marker.set(s.area.grid, s.ignition);
+    if (s.stations !== prev.stations || s.dipSite !== prev.dipSite) {
+      dispatchOverlay.setStationsAndDipSite(s.stations, s.dipSite);
+    }
+    if (s.agentPlan !== prev.agentPlan || s.viewerMode !== prev.viewerMode) {
+      dispatchOverlay.setOrders(
+        s.area?.grid ?? null,
+        s.agentPlan?.orders ?? [],
+        s.highlightedOrderId,
+        s.area?.elevation ?? null,
+        s.viewerMode === 'google',
+      );
+      dispatchOverlay.updateTime(s.playback.t);
+    } else if (s.highlightedOrderId !== prev.highlightedOrderId) {
+      dispatchOverlay.setHighlightedOrder(s.highlightedOrderId);
+    }
+    if (s.trackedOrderId !== prev.trackedOrderId && !s.trackedOrderId) {
+      dispatchOverlay.stopTracking();
+    }
     if (s.result !== prev.result || s.playback.t !== prev.playback.t || s.interventions !== prev.interventions || s.settings !== prev.settings) repaint();
     if (s.tool !== prev.tool) picker.setDragMode(s.tool !== 'ignite');
     if (s.effects !== prev.effects) {
@@ -155,12 +207,21 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     }
     store.set({ areaLoading: true, simError: null });
     sim.cancelAll();
+    dispatchOverlay.stopTracking();
     try {
       const area = await loadDemoArea(entry);
+      const ignition = defaultIgnition(area);
+      const dipSite = findBestDipSite(area, ignition);
       store.set({
         area,
         areaLoading: false,
-        ignition: defaultIgnition(area),
+        ignition,
+        dipSite,
+        stations: [],
+        agentPlan: null,
+        agentRunning: false,
+        highlightedOrderId: null,
+        trackedOrderId: null,
         interventions: [],
         result: null,
         resultStale: false,
@@ -168,13 +229,19 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
         playback: { ...store.get().playback, t: 0, playing: false },
         weather: { ...store.get().weather, windFromDeg: area.meta.defaultWindFromDeg ?? store.get().weather.windFromDeg },
       });
+
+      // Discover real Overpass fire stations & OSRM road travel times (with regional fallback)
+      const stations = await discoverFireStations(area);
+      if (store.get().area === area) {
+        store.set({ stations });
+      }
     } catch (err) {
       store.set({ areaLoading: false });
       notices.show(`${STR.loadError} ${err instanceof Error ? err.message : String(err)}`, 'error', 8000);
     }
   }
 
-  function buildScenario(): Scenario | string {
+  function buildScenario(interventionsOverride?: Scenario['interventions']): Scenario | string {
     const s = store.get();
     if (!s.area) return STR.loadError;
     if (!s.ignition) return STR.placeIgnitionHint;
@@ -186,7 +253,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
       durationSeconds: s.durationSeconds,
       seed: s.seed,
     });
-    scenario.interventions = s.interventions;
+    scenario.interventions = interventionsOverride ?? s.interventions;
     const errors = validateScenario(scenario);
     return errors.length ? errors[0] : scenario;
   }
@@ -215,18 +282,170 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     }
   }
 
+  async function startWithoutIntervention(): Promise<void> {
+    dispatchOverlay.stopTracking();
+    const manualOnly = store.get().interventions.filter((iv) => !iv.id.startsWith('agent-'));
+    const scenario = buildScenario(manualOnly);
+    if (typeof scenario === 'string') {
+      store.set({ simError: scenario });
+      return;
+    }
+    store.set({
+      simRunning: true,
+      agentRunning: false,
+      simError: null,
+      agentPlan: null,
+      trackedOrderId: null,
+      highlightedOrderId: null,
+      interventions: manualOnly,
+    });
+    try {
+      const result = await sim.run(scenario);
+      const s = store.get();
+      store.set({
+        result,
+        resultStale: false,
+        simRunning: false,
+        playback: { ...s.playback, t: 0, playing: true },
+      });
+    } catch (err) {
+      if (err instanceof SimCancelledError) return;
+      store.set({ simRunning: false, simError: `${STR.simFailed} ${err instanceof Error ? err.message : String(err)}` });
+    }
+  }
+
+  async function startWithContainmentAi(): Promise<void> {
+    const s0 = store.get();
+    if (!s0.area || s0.simRunning || s0.agentRunning) return;
+    dispatchOverlay.stopTracking();
+    const manualOnly = s0.interventions.filter((iv) => !iv.id.startsWith('agent-'));
+    const baselineScenario = buildScenario(manualOnly);
+    if (typeof baselineScenario === 'string') {
+      store.set({ simError: baselineScenario });
+      return;
+    }
+
+    store.set({
+      simRunning: true,
+      agentRunning: true,
+      simError: null,
+      trackedOrderId: null,
+      highlightedOrderId: null,
+      interventions: manualOnly,
+    });
+
+    try {
+      // Step 1: Compute baseline wildfire spread
+      const baselineResult = await sim.run(baselineScenario);
+      const s1 = store.get();
+      if (!s1.area) return;
+
+      // Step 2: Ensure fire stations are discovered
+      let stations = s1.stations;
+      if (stations.length === 0) {
+        stations = await discoverFireStations(s1.area);
+        store.set({ stations });
+      }
+
+      // Step 3: Compute multi-wave hybrid tactic containment plan (Water Spray vs Fire Break)
+      const plan = await generateTacticalContainmentPlan(
+        s1.area,
+        baselineScenario,
+        baselineResult,
+        stations,
+        s1.dipSite,
+        0,
+      );
+
+      // Step 4: Automatically deploy enabled AI interventions and run contained simulation
+      const enabledInterventions = plan.orders
+        .filter((o) => o.enabled)
+        .map((o) => o.intervention);
+      const mergedInterventions = [...manualOnly, ...enabledInterventions];
+      const containedScenario = buildScenario(mergedInterventions);
+      const finalResult =
+        typeof containedScenario === 'string'
+          ? baselineResult
+          : await sim.run(containedScenario);
+
+      const s2 = store.get();
+      store.set({
+        agentPlan: plan,
+        interventions: mergedInterventions,
+        result: finalResult,
+        resultStale: false,
+        simRunning: false,
+        agentRunning: false,
+        playback: { ...s2.playback, t: 0, playing: true },
+      });
+
+      notices.show(
+        `AI Containment deployed (${enabledInterventions.length} orders · -${plan.savedHa.toFixed(1)} ha saved). Click any radio card to track in 3D.`,
+        'info',
+        5000,
+      );
+    } catch (err) {
+      if (err instanceof SimCancelledError) {
+        store.set({ simRunning: false, agentRunning: false });
+        return;
+      }
+      store.set({
+        simRunning: false,
+        agentRunning: false,
+        simError: `${STR.simFailed} ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+  }
+
+  async function recommendPlan(): Promise<void> {
+    await startWithContainmentAi();
+  }
+
+  function toggleOrder(orderId: string, enabled: boolean): void {
+    const plan = store.get().agentPlan;
+    if (!plan) return;
+    const orders = plan.orders.map((o) => (o.id === orderId ? { ...o, enabled } : o));
+    store.set({ agentPlan: { ...plan, orders } });
+  }
+
+  function highlightOrder(orderId: string | null): void {
+    if (store.get().highlightedOrderId === orderId) return;
+    store.set({ highlightedOrderId: orderId });
+  }
+
+  function flyToOrder(orderId: string): void {
+    store.set({ trackedOrderId: orderId, highlightedOrderId: orderId });
+    dispatchOverlay.flyToActiveUnit(orderId, store.get().playback.t);
+  }
+
+  function stopTrackingOrder(): void {
+    dispatchOverlay.stopTracking();
+    if (store.get().trackedOrderId !== null) {
+      store.set({ trackedOrderId: null });
+    }
+  }
+
   return {
     selectArea,
     simulate,
+    startWithoutIntervention,
+    startWithContainmentAi,
+    recommendPlan,
+    toggleOrder,
+    highlightOrder,
+    flyToOrder,
+    stopTrackingOrder,
     cancel: () => {
       sim.cancelAll();
-      store.set({ simRunning: false });
+      store.set({ simRunning: false, agentRunning: false });
     },
     topDown: () => {
+      stopTrackingOrder();
       const g = store.get().area?.grid;
       if (g) flyTopDown(viewer, g);
     },
     resetView: () => {
+      stopTrackingOrder();
       const g = store.get().area?.grid;
       if (g) flyToGrid(viewer, g);
     },

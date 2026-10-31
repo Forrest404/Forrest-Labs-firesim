@@ -16,6 +16,8 @@ export interface ToolsController {
   redo(): void;
   remove(id: string): void;
   clearAll(): void;
+  /** Atomically appends a batch of interventions (e.g. from the Tactical Dispatch Agent) onto the undo/redo stack. */
+  commitBatch(batch: Intervention[]): void;
   readonly canUndo: boolean;
   readonly canRedo: boolean;
 }
@@ -87,6 +89,11 @@ export function createToolsController(store: Store, wiring: Wiring): ToolsContro
     redo: () => applyHistory(history.redo()),
     remove: (id) => commit(store.get().interventions.filter((iv) => iv.id !== id)),
     clearAll: () => commit([]),
+    commitBatch: (batch) => {
+      if (batch.length === 0) return;
+      const existing = store.get().interventions.filter((iv) => !batch.some((b) => b.id === iv.id));
+      commit([...existing, ...batch]);
+    },
     get canUndo() {
       return history.canUndo;
     },
