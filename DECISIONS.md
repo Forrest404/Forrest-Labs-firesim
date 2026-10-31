@@ -339,3 +339,47 @@ but is a long drag for a presenter.
 backup (118, 145)) 2.6-2.8 km out, looking along the fire, rather than framing the whole 6 km grid. Unmapped land is GRASS (D10). Playback speed 256x for both scenarios (4 h = 56 s,
 6 h = 84 s of real time). Camera heading 40 deg (Surrey) / 70 deg (backup), pitch -30, looking along the
 fire. A run takes about 5 ms, so re-simulation after every change is instant.
+
+## D25. Visual design pass: a field instrument, not a dashboard
+
+Branch `feature/ui-craft` (off `feature/demo-scenario`). Markup and behaviour are unchanged except where
+listed; the look is almost entirely `src/ui/styles.css`. Nothing in `src/sim`, `src/data` or the contract changed.
+
+**What was removed, and why.** The first design had the usual generic tells: an orange-to-yellow
+gradient button with a coloured glow, a frosted-glass floating panel with backdrop blur, a gradient logo
+tile, a decorative icon on every card heading, boxed cards nested inside a rounded card, pill chips for
+every number, press-scaling and a pulsing "stale" button. All gone.
+
+**What replaced it.**
+- *Layout:* a docked full-height sidebar (336 px) with hairline rules between sections instead of boxes;
+  a bottom sheet on phones. Radius 3 px everywhere, 4 px spacing grid (`--s1..--s4`).
+- *Colour:* warm paper and ink by default, graphite when the OS asks for dark (`prefers-color-scheme`). One
+  ember accent, used only for the Simulate button, the wind needle and notice rules. "Load demo scenario" is an
+  ink fill, so there is one headline action on screen.
+- *Type:* IBM Plex Sans for words, IBM Plex Mono for everything measured (wind, moisture, clock, areas, cell
+  counts, coordinates, shortcut keys), tabular figures, thousands separators. Self-hosted through
+  `@fontsource` (latin 400/500/600 and mono 400/500, about 100 KB) so the offline backup demo looks the same;
+  no CDN.
+- *Controls:* joined segmented buttons that invert when selected; a 2 px hairline slider with a plain thumb;
+  a wind dial with eight tick marks and mono compass letters; flat switches; real keycap `kbd` elements in the tips.
+- *Motion:* only functional state changes at 120-180 ms; a stale result is marked with an outline instead of
+  a pulse; the draw options appear with a short reveal; everything is disabled under `prefers-reduced-motion`.
+- *Icons:* decorative ones removed (section headings, the Simulate and Load buttons); the rest are
+  functional and 1.75 px stroke.
+
+**Checked, not eyeballed.** Every text and control pair was computed against WCAG: body, secondary and
+tertiary text at least 4.8:1, primary button 5.8:1 (light) / 6.4:1 (dark), control borders at least 3:1 (the first
+light-theme border value measured 2.37 and was darkened), accent on panel 5.5:1 / 5.9:1. Verified in headless
+Chrome in light, dark, reduced-motion and 390 px phone width: no horizontal overflow, 44 px targets on coarse
+pointers, keyboard focus ring visible (also inside the inverted segments), every control has an accessible name,
+fonts actually load (`document.fonts.check`).
+
+**Bug fixed on the way.** The draw-tool options (brush size, "apply at t = 0") sat in a one-row grid
+with two children, so even when closed the second child reserved a 36 px blank gap under the tool hint. They are
+now not rendered when closed. The wind needle also leaked above the sticky header (missing stacking context).
+
+**Not done / limits.** The Cesium credit strip and the OSM basemap are not ours to style. The page title lost
+"(simplified demo)". Only the demo branch was restyled: `main` and `scaffold/v0` still have the older look and the
+other session's panel edits will conflict with `styles.css` on merge (nearly every rule changed; take this file
+wholesale and re-apply their additions). Not tested on a real phone or a projector; the dark theme is the OS
+setting only (no toggle).

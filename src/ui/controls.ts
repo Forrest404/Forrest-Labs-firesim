@@ -7,11 +7,11 @@ import { el } from './el';
 import { icon } from './icons';
 import type { IconName } from './icons';
 
-/** A card section with an icon + title header and an optional trailing slot. */
-export function section(name: IconName, title: string, opts: { trailing?: Node; class?: string } = {}): { root: HTMLElement; body: HTMLElement; header: HTMLElement } {
+/** A ruled section with a title header and an optional trailing slot. No decorative icon: the title is enough. */
+export function section(title: string, opts: { trailing?: Node; class?: string } = {}): { root: HTMLElement; body: HTMLElement; header: HTMLElement } {
   const body = el('div', { class: 'section-body' });
   const header = el('div', { class: 'section-head' },
-    el('h2', {}, icon(name, 16), el('span', {}, title)),
+    el('h2', {}, title),
     opts.trailing ?? null,
   );
   const root = el('section', { class: `card ${opts.class ?? ''}`.trim() }, header, body);

@@ -1,5 +1,5 @@
 /**
- * Inline SVG icons (Lucide-style, 24-unit grid, 2px stroke). One icon family for the whole UI;
+ * Inline SVG icons (Lucide-style, 24-unit grid, 1.75 stroke). One icon family for the whole UI;
  * no emoji. Each call returns a fresh <svg> element.
  */
 
@@ -45,7 +45,7 @@ export function icon(name: IconName, size = 18): SVGSVGElement {
   svg.setAttribute('height', String(size));
   svg.setAttribute('fill', 'none');
   svg.setAttribute('stroke', 'currentColor');
-  svg.setAttribute('stroke-width', '2');
+  svg.setAttribute('stroke-width', '1.75');
   svg.setAttribute('stroke-linecap', 'round');
   svg.setAttribute('stroke-linejoin', 'round');
   svg.setAttribute('aria-hidden', 'true');

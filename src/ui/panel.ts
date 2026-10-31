@@ -40,18 +40,18 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
   }, { class: 'collapse' });
   collapseBtn.setAttribute('aria-expanded', 'true');
   const header = el('header', { class: 'brand' },
-    el('div', { class: 'brand-left' }, el('span', { class: 'logo' }, icon('flame', 18)), el('h1', {}, STR.appTitle)),
+    el('div', { class: 'brand-left' }, el('span', { class: 'logo' }, icon('flame', 16)), el('h1', {}, STR.appTitle)),
     el('div', { class: 'brand-right' }, modePill, collapseBtn),
   );
 
   // Sections
-  const demo = section('sparkles', STR.demoTitle, { class: 'demo' });
-  const area = section('map', STR.areaLabel);
-  const settings = section('wind', STR.settingsTitle);
-  const sim = section('flame', STR.simulateTitle, { class: 'sim' });
-  const tools = section('axe', STR.toolsTitle);
+  const demo = section(STR.demoTitle, { class: 'demo' });
+  const area = section(STR.areaLabel);
+  const settings = section(STR.settingsTitle);
+  const sim = section(STR.simulateTitle, { class: 'sim' });
+  const tools = section(STR.toolsTitle);
   const advChevron = el('span', { class: 'chev' }, icon('chevron', 16));
-  const advanced = section('sliders', STR.advancedTitle, { class: 'adv', trailing: advChevron });
+  const advanced = section(STR.advancedTitle, { class: 'adv', trailing: advChevron });
   // settingsAdvanced.ts renders a <details>; its summary is hidden and the card header drives it.
   advanced.header.setAttribute('role', 'button');
   advanced.header.setAttribute('tabindex', '0');
@@ -63,7 +63,7 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
   advanced.header.addEventListener('click', toggleAdvanced);
   advanced.header.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleAdvanced(); } });
 
-  const view = section('eye', STR.viewTitle, {
+  const view = section(STR.viewTitle, {
     trailing: el('div', { class: 'row tight' },
       iconButton('topdown', STR.cameraTopDown, () => actions.topDown()),
       iconButton('compass', STR.cameraReset, () => actions.resetView()),

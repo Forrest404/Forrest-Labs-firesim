@@ -1,5 +1,11 @@
 // Entry point: boots the store, panel, viewer and wiring. Any failure shows a banner.
 import 'cesium/Build/Cesium/Widgets/widgets.css';
+// Self-hosted fonts (no CDN: the offline backup demo must look the same).
+import '@fontsource/ibm-plex-sans/latin-400.css';
+import '@fontsource/ibm-plex-sans/latin-500.css';
+import '@fontsource/ibm-plex-sans/latin-600.css';
+import '@fontsource/ibm-plex-mono/latin-400.css';
+import '@fontsource/ibm-plex-mono/latin-500.css';
 import '../ui/styles.css';
 import { loadDemoAreaIndex } from '../data/demoAreas';
 import { createNotices } from '../ui/notices';

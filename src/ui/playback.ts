@@ -8,6 +8,7 @@ import { icon } from './icons';
 import { STR } from './strings';
 
 const SPEEDS = [1, 4, 16, 64, 256];
+const NUM = new Intl.NumberFormat('en');
 
 export interface PlaybackActions {
   simulate(): void;
@@ -16,7 +17,7 @@ export interface PlaybackActions {
 
 export function mountPlayback(container: HTMLElement, store: Store, actions: PlaybackActions): void {
   const simLabel = el('span', {});
-  const simIcon = el('span', { class: 'btn-icon' }, icon('flame'));
+  const simIcon = el('span', { class: 'btn-icon' });
   const simulateBtn = el('button', { type: 'button', class: 'primary big', onclick: () => actions.simulate() }, simIcon, simLabel) as HTMLButtonElement;
   const cancelBtn = iconButton('x', STR.cancel, () => actions.cancel(), { class: 'cancel' });
   const hint = el('div', { class: 'hint muted' });
@@ -52,8 +53,8 @@ export function mountPlayback(container: HTMLElement, store: Store, actions: Pla
     const stale = !!s.result && s.resultStale;
     simulateBtn.disabled = !hasArea || !s.ignition || s.simRunning;
     simLabel.textContent = s.simRunning ? STR.simulating : stale ? STR.reSimulate : STR.simulate;
-    const simIconName = s.simRunning ? 'loader' : stale ? 'restart' : 'flame';
-    if (simIconName !== lastSimIcon) { lastSimIcon = simIconName; simIcon.replaceChildren(icon(simIconName)); }
+    const simIconName = s.simRunning ? 'loader' : stale ? 'restart' : '';
+    if (simIconName !== lastSimIcon) { lastSimIcon = simIconName; simIcon.replaceChildren(...(simIconName ? [icon(simIconName)] : [])); }
     simulateBtn.classList.toggle('stale', stale);
     simulateBtn.classList.toggle('running', s.simRunning);
     cancelBtn.hidden = !s.simRunning;
@@ -77,8 +78,8 @@ export function mountPlayback(container: HTMLElement, store: Store, actions: Pla
     stats.hidden = !has;
     if (has && s.area) {
       const st = liveStats(s.result, s.area.grid, s.playback.t);
-      area.textContent = `${st.burnedAreaHa.toFixed(0)} ha`;
-      cells.textContent = `${st.burnedCells} ${STR.cellsBurned}`;
+      area.textContent = `${NUM.format(Math.round(st.burnedAreaHa))} ha`;
+      cells.textContent = `${NUM.format(st.burnedCells)} ${STR.cellsBurned}`;
     }
   });
 }

@@ -20,10 +20,10 @@ export function mountDemoCard(container: HTMLElement, store: Store, actions: Dem
   for (const id of DEMO_IDS) select.append(el('option', { value: id }, STR.demoNames[id]));
   select.onchange = () => { chosen = select.value as DemoId; renderTips(); };
 
-  const loadBtn = el('button', { type: 'button', class: 'primary big', onclick: () => actions.load(chosen) }, el('span', { class: 'btn-icon' }, icon('flame')), el('span', {}, STR.demoLoad)) as HTMLButtonElement;
+  const loadBtn = el('button', { type: 'button', class: 'strong big', onclick: () => actions.load(chosen) }, STR.demoLoad) as HTMLButtonElement;
   const resetBtn = el('button', { type: 'button', class: 'reset', onclick: () => actions.reset() }, icon('restart', 16), el('span', {}, STR.demoReset)) as HTMLButtonElement;
   const containedLabel = el('span', {}, STR.demoContained);
-  const containedBtn = el('button', { type: 'button', title: STR.demoContainedHint, onclick: () => actions.showContained() }, icon('axe', 16), containedLabel) as HTMLButtonElement;
+  const containedBtn = el('button', { type: 'button', title: STR.demoContainedHint, onclick: () => actions.showContained() }, containedLabel) as HTMLButtonElement;
   const tips = el('div', { class: 'demo-tips', hidden: true });
   const tipsBtn = iconButton('info', STR.demoTips, () => {
     tips.hidden = !tips.hidden;
