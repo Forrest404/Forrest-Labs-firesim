@@ -89,3 +89,18 @@ firebreaks with burnout on; validity and causality are asserted always.
   limit, a wrong damping constant and an exponent typo are all caught.
 - `tests/rothermel.test.ts`: equations, pinned independent reference values, model-in-solver.
 - `tests/spray.test.ts`: spray bookkeeping, FIFO of the crossing over a fine sweep, wait-for-dry.
+
+## SIM-8. 16-direction stencil: rounder fires (`settings.neighbourhood`, default 16)
+
+8-neighbour shortest paths overestimate straight-line distance by up to 8.2 % (at 22.5 degrees),
+so a fire on uniform ground came out as a polygon. The solver now also uses the 8 knight moves
+(1 x 2 cells), cutting the worst error to 2.7 %. Cost: about 1.5x solve time (15 to 22 ms on
+200 x 200, 26 to 39 ms on 300 x 300). `neighbourhood: 8` is kept, and is byte-identical to the
+previous solver (checked on 80 random scenarios with water, firebreaks and wind variability).
+
+A knight move hops over two cells, so it is only allowed when both are (a) the same fuel as the
+target, (b) unsprayed, and (c) not firebroken by the arrival time. Without (a) a one-cell stripe of
+slow fuel or a thin wall could be skipped; without (b) a one-cell wet band could be hopped; without
+(c) a firebreak could be hopped. Each guard is covered by tests that fail when it is removed. With
+the guards, 16 directions is never slower than 8 at any cell (fuzzed, burnout off: 0 of 77,561
+cells later, 16,084 earlier). With burnout on and water that guarantee does not hold, see SIM-6.

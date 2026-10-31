@@ -67,6 +67,9 @@ export function mountSettingsAdvanced(container: HTMLElement, store: Store): voi
   }
   const burnout = el('input', { type: 'checkbox' }) as HTMLInputElement;
   burnout.onchange = () => store.update((s) => ({ settings: { ...s.settings, burnoutEnabled: burnout.checked }, ...staleIfResult(s) }));
+  const round = el('input', { type: 'checkbox' }) as HTMLInputElement;
+  round.onchange = () => store.update((s) => ({ settings: { ...s.settings, neighbourhood: round.checked ? 16 : 8 }, ...staleIfResult(s) }));
+  details.append(el('label', {}, el('span', {}, STR.advRoundShape), round));
   details.append(el('label', {}, el('span', {}, STR.advBurnout), burnout));
   for (const label of [STR.advGridSize, STR.advSpotting, STR.advCrownFire, STR.advTimeVaryingWeather]) {
     details.append(el('label', { class: 'disabled', title: STR.comingSoon }, el('span', {}, `${label} — ${STR.comingSoon}`), el('input', { type: 'checkbox', disabled: true })));
@@ -82,6 +85,7 @@ export function mountSettingsAdvanced(container: HTMLElement, store: Store): voi
     });
     burnout.checked = s.settings.burnoutEnabled;
     model.value = s.settings.rateModel;
+    round.checked = s.settings.neighbourhood === 16;
     if (details.open !== s.advancedOpen) details.open = s.advancedOpen;
   });
 }

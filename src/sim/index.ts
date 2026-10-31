@@ -19,7 +19,7 @@ import { MinHeap } from './heap';
 import { createRateFn } from './models';
 import type { EdgeInput } from './models';
 import { mulberry32 } from './prng';
-import { NEIGHBOR_OFFSETS, cosAgainstWind } from './rates';
+import { NEIGHBOR_OFFSETS, KING_MOVES, cosAgainstWind } from './rates';
 
 const DEG = Math.PI / 180;
 
@@ -76,6 +76,7 @@ export function simulate(scenario: Scenario): SimResult {
   }
 
   const crossing: Crossing = { t: Infinity, rate: 0 };
+  const moves = settings.neighbourhood;
   let maxRate = 0;
 
   while (heap.size > 0) {
@@ -92,7 +93,7 @@ export function simulate(scenario: Scenario): SimResult {
     const wy = windY[i];
     const ei = elevation[i];
 
-    for (let k = 0; k < 8; k++) {
+    for (let k = 0; k < moves; k++) {
       const off = NEIGHBOR_OFFSETS[k];
       const r2 = row + off.dr;
       const c2 = col + off.dc;
@@ -103,6 +104,17 @@ export function simulate(scenario: Scenario): SimResult {
       if (fj === FuelClass.NONE) continue;
       const mx = extinction[fj];
       if (mx <= baseMoisture) continue;
+
+      // Knight move: only across two cells that are the same fuel as the target, unsprayed (see
+      // rates.ts). Their firebreak status is checked once the arrival time is known.
+      let m1 = -1;
+      let m2 = -1;
+      if (k >= KING_MOVES) {
+        m1 = (row + off.m1r) * width + (col + off.m1c);
+        m2 = (row + off.m2r) * width + (col + off.m2c);
+        if (fuel[m1] !== fj || fuel[m2] !== fj) continue;
+        if (events.hasWater && (events.sprayHead[m1] >= 0 || events.sprayHead[m2] >= 0)) continue;
+      }
 
       const dist = cellSizeM * off.distFactor;
 
@@ -125,6 +137,7 @@ export function simulate(scenario: Scenario): SimResult {
         tArr = t + dist / rate;
       }
       if (tArr >= events.breakT[j] || tArr > duration) continue;
+      if (m1 >= 0 && (tArr >= events.breakT[m1] || tArr >= events.breakT[m2])) continue;
       if (tArr < arrival[j]) {
         arrival[j] = tArr;
         rateAtIgnition[j] = rate;

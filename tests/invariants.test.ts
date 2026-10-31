@@ -319,7 +319,7 @@ for (const model of MODELS) {
     });
 
     it('measured grid anisotropy on a flat, windless, uniform grid stays within the documented bound', () => {
-      // 8-neighbour shortest paths overestimate straight-line distance by up to ~8.2 % at 22.5 degrees.
+      // 16-direction stencil: worst case ~2.7 % (8 directions: ~8.2 % at 22.5 degrees).
       const { arrivalTime: a } = run(open({ weather: { windSpeedMps: 0 }, fuelClass: FuelClass.GRASS, durationSeconds: 48 * 3600 }));
       const v = a[idx(25, 35)] / 10; // seconds per cell along the axis
       let worst = 0;
@@ -340,5 +340,5 @@ for (const model of MODELS) {
   });
 }
 
-/** Tightened when the grid-shape fix lands (feature 5). */
-const GRID_ERROR_BOUND = 0.09;
+/** Default stencil is 16 directions (2.7 % worst case); 8 directions would be 8.2 %. */
+const GRID_ERROR_BOUND = 0.03;

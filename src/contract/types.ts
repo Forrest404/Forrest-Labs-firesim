@@ -101,6 +101,8 @@ export interface SimSettings {
   rateModel: RateModelId;
   /** 'iso' model only: constant spread speed in m/s. */
   isoSpeedMps: number;
+  /** Spread directions per cell: 8 (king moves) or 16 (adds knight moves, rounder fires). */
+  neighbourhood: 8 | 16;
   /** Scales every spread rate. */
   globalMultiplier: number;
   /** Magnitude of the wind effect (0 disables wind). */

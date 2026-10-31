@@ -75,6 +75,7 @@ export function validateScenario(s: Scenario): string[] {
   if (!(w.relativeHumidity >= 0 && w.relativeHumidity <= 1)) errors.push('relativeHumidity must be 0-1');
   if (!(w.baseFuelMoisture >= 0 && w.baseFuelMoisture <= 1)) errors.push('baseFuelMoisture must be 0-1');
   if (!['factors', 'rothermel', 'iso'].includes(s.settings.rateModel)) errors.push(`unknown rateModel ${String(s.settings.rateModel)}`);
+  if (s.settings.neighbourhood !== 8 && s.settings.neighbourhood !== 16) errors.push('neighbourhood must be 8 or 16');
   if (!(s.settings.isoSpeedMps >= 0)) errors.push('isoSpeedMps must be >= 0');
   if (s.settings.spottingEnabled) errors.push('spottingEnabled is a stub and must be false in v0');
 

@@ -95,6 +95,7 @@ export const STR = {
   modelIso: 'Constant speed (for testing)',
   modelNote: 'Rothermel uses placeholder fuel beds and ignores the wind exponent and spread multiplier shape. No model here is validated against real fires.',
   advIsoSpeed: 'Constant speed (test model)',
+  advRoundShape: 'Round fire shape (16 directions)',
   advTemperature: 'Air temperature',
   advHumidity: 'Relative humidity',
   advFuelMoisture: 'Dead fuel moisture',
