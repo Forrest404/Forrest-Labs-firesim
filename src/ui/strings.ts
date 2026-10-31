@@ -3,10 +3,7 @@
  */
 export const STR = {
   appTitle: 'Wildfire Sim',
-  honestyNotice: 'Simplified model. Not for real-world decisions.',
-  honestyDetail:
-    'Fire spread here is a simplified cellular model with Rothermel-inspired trends (wind, slope, fuel, moisture). It is not validated against real fires.',
-  footer: 'Not for real-world decisions · Land cover © OpenStreetMap contributors (ODbL) · Elevation: AWS Terrain Tiles · Synthetic areas are generated',
+  footer: 'Land cover © OpenStreetMap contributors (ODbL) · Elevation: AWS Terrain Tiles · Synthetic areas are generated',
   collapsePanel: 'Hide panel',
   expandPanel: 'Show panel',
   fallbackBanner: 'Fallback view: Google 3D tiles unavailable.',

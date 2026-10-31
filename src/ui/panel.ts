@@ -1,5 +1,5 @@
 /**
- * Side panel: brand header (title, viewer-mode pill, collapse), compact honesty pill, then one
+ * Side panel: brand header (title, viewer-mode pill, collapse), then one
  * card per section. Sections mount themselves into the bodies handed to them.
  */
 
@@ -40,7 +40,6 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
     el('div', { class: 'brand-left' }, el('span', { class: 'logo' }, icon('flame', 18)), el('h1', {}, STR.appTitle)),
     el('div', { class: 'brand-right' }, modePill, collapseBtn),
   );
-  const honesty = el('div', { class: 'honesty', title: STR.honestyDetail, tabindex: '0' }, icon('info', 14), el('span', {}, STR.honestyNotice));
 
   // Sections
   const area = section('map', STR.areaLabel);
@@ -88,7 +87,7 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
   view.body.append(debugBody, el('div', { class: 'muted hint' }, STR.cameraHelp));
 
   const footer = el('footer', { class: 'muted footer' }, STR.footer);
-  root.append(header, honesty, area.root, settings.root, sim.root, tools.root, advanced.root, view.root, footer);
+  root.append(header, area.root, settings.root, sim.root, tools.root, advanced.root, view.root, footer);
 
   mountAreaPicker(area.body, store, actions);
   mountSettingsSimple(settings.body, store);

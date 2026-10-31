@@ -31,7 +31,7 @@ async function main(): Promise<void> {
   window.addEventListener('error', (e) => report(e.message));
   window.addEventListener('unhandledrejection', (e) => report(e.reason instanceof Error ? e.reason.message : String(e.reason)));
 
-  // Panel first so the honesty notice is visible even if the viewer fails.
+  // Panel first so it is visible even if the viewer fails.
   let wiringRef: ReturnType<typeof wire> | null = null;
   const slots = mountPanel(panelEl, store, {
     selectArea: (name) => void wiringRef?.selectArea(name),

@@ -85,12 +85,6 @@ button:disabled { cursor: not-allowed; }
 .pill.live .dot { background: var(--ok); box-shadow: 0 0 0 3px rgba(74, 209, 122, 0.2); }
 .pill.tag { height: 20px; padding: 0 7px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
 
-.honesty {
-  display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: var(--radius-sm);
-  background: var(--accent-soft); border: 1px solid rgba(255, 122, 26, 0.35); color: #ffd2ad; font-size: 12px; font-weight: 600;
-  cursor: help;
-}
-
 /* ---------- Cards ---------- */
 .card {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
