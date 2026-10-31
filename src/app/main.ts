@@ -44,6 +44,8 @@ async function main(): Promise<void> {
     topDown: () => wiringRef?.topDown(),
     resetView: () => wiringRef?.resetView(),
     groundView: () => wiringRef?.groundView(),
+    loadLiveFires: () => void wiringRef?.loadLiveFires(),
+    predictLiveFire: (fire) => void wiringRef?.predictLiveFire(fire),
   });
   mountSettingsAdvanced(slots.advanced, store);
   mountRealVsSim(document.getElementById('app') as HTMLElement, store, () => wiringRef?.groundView());

@@ -371,3 +371,12 @@ details > *:not(summary) { animation: fade-in var(--t-med) var(--ease) both; }
 .rvs-start-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #111; border: 2px solid #fff; vertical-align: -1px; margin-right: 6px; }
 button.icon-btn.active, .rvs-ground.active { color: #22d3ee; border-color: rgba(34, 211, 238, 0.6); background: rgba(34, 211, 238, 0.12); }
 .rvs-ground { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; min-height: 30px; padding: 0 10px; }
+
+/* Live fires · predict */
+#panel ul.live-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow: auto; }
+#panel ul.live-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); font-size: 12px; }
+#panel ul.live-list li button { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 0 10px; flex-shrink: 0; }
+#panel .live-forecast { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+#panel .live-forecast:empty { display: none; }
+#panel .live-forecast .ring-row { display: grid; grid-template-columns: 12px 1fr auto; align-items: center; gap: 8px; font-size: 13px; }
+#panel .live-forecast .ring-swatch { width: 12px; height: 4px; border-radius: 2px; }

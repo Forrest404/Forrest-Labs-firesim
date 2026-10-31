@@ -9,6 +9,7 @@ import type { DemoArea, DemoAreaIndexEntry } from '../data/bundle';
 import type { ViewerMode } from '../viewer/createViewer';
 import type { PlanState } from './planner';
 import type { ControlRun } from './realFire';
+import type { LiveFire } from '../data/liveFire';
 
 export type ToolId = 'ignite' | 'firebreak' | 'water';
 
@@ -64,6 +65,11 @@ export interface AppState {
   sideBySide: boolean;
   /** Ground view: the camera stays low in front of the fire front while it plays. */
   groundFollow: boolean;
+  /** Fires reported now (NIFC), once loaded; null before the first load. */
+  liveFires: LiveFire[] | null;
+  liveLoading: boolean;
+  /** Draw the 1 h / 3 h / 6 h forecast rings on the overlay (live fires). */
+  forecast: boolean;
   /** True when inputs changed since `result` was computed. */
   resultStale: boolean;
   simRunning: boolean;
@@ -105,6 +111,9 @@ export function initialState(): AppState {
     controls: null,
     sideBySide: false,
     groundFollow: false,
+    liveFires: null,
+    liveLoading: false,
+    forecast: false,
     resultStale: false,
     simRunning: false,
     simError: null,

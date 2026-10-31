@@ -5,7 +5,7 @@
 
 import { NEVER_ARRIVES, cellAreaHa } from '../contract';
 import type { GridSpec, Intervention, SimResult, SimSettings } from '../contract';
-import { paintBurn, paintCompare } from '../viewer/burnCanvas';
+import { FORECAST_RINGS, paintBurn, paintCompare, paintRingCells } from '../viewer/burnCanvas';
 import type { GridLayer } from '../viewer/burnLayer';
 
 export interface Preview {
@@ -24,7 +24,7 @@ export class OverlayPainter {
   private dirty = false;
   private lastPaint = 0;
   private raf = 0;
-  private args: { result: SimResult | null; interventions: Intervention[]; t: number; settings: SimSettings; preview: Preview | null; compareMask: Uint8Array | null } | null = null;
+  private args: { result: SimResult | null; interventions: Intervention[]; t: number; settings: SimSettings; preview: Preview | null; compareMask: Uint8Array | null; ringCells: Uint8Array | null } | null = null;
 
   constructor(
     private readonly layer: GridLayer,
@@ -38,10 +38,11 @@ export class OverlayPainter {
 
   /**
    * Request a repaint with the latest inputs (coalesced to one paint per frame). With a
-   * `compareMask` (a real fire's burned cells) the layer shows the accuracy view instead.
+   * `compareMask` (a real fire's burned cells) the layer shows the accuracy view instead; with
+   * `ringCells` (from forecastRingCells) the forecast outlines (where the fire is predicted at 1 h / 3 h / 6 h) are drawn on top.
    */
-  schedule(result: SimResult | null, interventions: Intervention[], t: number, settings: SimSettings, preview: Preview | null = null, compareMask: Uint8Array | null = null): void {
-    this.args = { result, interventions, t, settings, preview, compareMask };
+  schedule(result: SimResult | null, interventions: Intervention[], t: number, settings: SimSettings, preview: Preview | null = null, compareMask: Uint8Array | null = null, ringCells: Uint8Array | null = null): void {
+    this.args = { result, interventions, t, settings, preview, compareMask, ringCells };
     this.dirty = true;
     if (!this.raf) this.raf = requestAnimationFrame(this.tick);
   }
@@ -74,13 +75,14 @@ export class OverlayPainter {
     }
     const arrival = a.result?.arrivalTime ?? EMPTY;
     const flameWindowS = Math.max(300, Math.min(1800, a.settings.waterHalfLifeS * 1.5));
-    this.layer.paint((data) =>
+    this.layer.paint((data) => {
       paintBurn(data, arrival.length ? arrival : this.emptyArrival(), a.t, {
         flameWindowS,
         firebreak: this.firebreak,
         wetness: this.wetness,
-      }),
-    );
+      });
+      if (a.ringCells) paintRingCells(data, a.ringCells, FORECAST_RINGS);
+    });
   }
 
   private emptyCache: Float32Array | null = null;

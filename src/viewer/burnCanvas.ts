@@ -120,6 +120,51 @@ export function paintCompare(data: Uint8ClampedArray, arrival: Float32Array, t: 
   }
 }
 
+export interface ForecastRing {
+  /** Seconds after ignition. */
+  t: number;
+  rgba: RGBA;
+}
+
+/** Forecast rings: 1 h / 3 h / 6 h in white -> amber -> red. */
+export const FORECAST_RINGS: ForecastRing[] = [
+  { t: 3600, rgba: [255, 255, 255, 255] },
+  { t: 3 * 3600, rgba: [255, 200, 60, 255] },
+  { t: 6 * 3600, rgba: [255, 70, 70, 255] },
+];
+
+/**
+ * Where each ring is drawn: cells burned by its time with a neighbour that could still burn but
+ * has not yet (the advancing edge). Roads, water and rock inside the fire are not outlined, and
+ * neither is the grid border. Value = ring index + 1, later rings win; 0 = no ring.
+ */
+export function forecastRingCells(arrival: Float32Array, fuel: Uint8Array, width: number, rings: ForecastRing[]): Uint8Array {
+  const out = new Uint8Array(arrival.length);
+  const height = arrival.length / width;
+  rings.forEach((ring, k) => {
+    const open = (j: number): boolean => fuel[j] !== FuelClass.NONE && !(arrival[j] <= ring.t);
+    for (let i = 0; i < arrival.length; i++) {
+      if (!(arrival[i] <= ring.t)) continue;
+      const r = (i / width) | 0;
+      const c = i - r * width;
+      if ((c > 0 && open(i - 1)) || (c < width - 1 && open(i + 1)) || (r > 0 && open(i - width)) || (r < height - 1 && open(i + width))) out[i] = k + 1;
+    }
+  });
+  return out;
+}
+
+export function paintRingCells(data: Uint8ClampedArray, cells: Uint8Array, rings: ForecastRing[]): void {
+  for (let i = 0, p = 0; i < cells.length; i++, p += 4) {
+    const k = cells[i];
+    if (!k) continue;
+    const c = rings[k - 1].rgba;
+    data[p] = c[0];
+    data[p + 1] = c[1];
+    data[p + 2] = c[2];
+    data[p + 3] = c[3];
+  }
+}
+
 /** Alignment test pattern: 10-cell checkerboard with a red NW corner block and blue SE block. */
 export function paintCheckerboard(data: Uint8ClampedArray, width: number, height: number): void {
   for (let r = 0; r < height; r++) {

@@ -12,10 +12,12 @@ import { el } from './el';
 import { icon } from './icons';
 import { mountPlayback } from './playback';
 import type { PlaybackActions } from './playback';
+import { mountLiveFires } from './liveFires';
+import type { LiveFiresActions } from './liveFires';
 import { mountSettingsSimple } from './settingsSimple';
 import { STR } from './strings';
 
-export interface PanelActions extends AreaPickerActions, PlaybackActions {
+export interface PanelActions extends AreaPickerActions, PlaybackActions, LiveFiresActions {
   topDown(): void;
   resetView(): void;
   groundView(): void;
@@ -46,6 +48,7 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
   const honesty = el('div', { class: 'honesty', title: STR.honestyDetail, tabindex: '0' }, icon('info', 14), el('span', {}, STR.honestyNotice));
 
   // Sections
+  const live = section('globe', STR.liveTitle, { class: 'live' });
   const area = section('map', STR.areaLabel);
   const settings = section('wind', STR.settingsTitle);
   const sim = section('flame', STR.simulateTitle, { class: 'sim' });
@@ -72,8 +75,9 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
   view.body.append(debugBody, el('div', { class: 'muted hint' }, STR.cameraHelp));
 
   const footer = el('footer', { class: 'muted footer' }, STR.footer);
-  root.append(header, honesty, area.root, settings.root, sim.root, planner.root, tools.root, advanced.root, view.root, footer);
+  root.append(header, honesty, live.root, area.root, settings.root, sim.root, planner.root, tools.root, advanced.root, view.root, footer);
 
+  mountLiveFires(live.body, store, actions);
   mountAreaPicker(area.body, store, actions);
   mountSettingsSimple(settings.body, store);
   mountPlayback(sim.body, store, actions);

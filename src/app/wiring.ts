@@ -8,9 +8,12 @@ import type { GridSpec, Scenario, SimResult } from '../contract';
 import { scenarioFromArea } from '../data/bundle';
 import { simulate as runSimulation } from '../sim';
 import { loadDemoArea } from '../data/demoAreas';
+import type { DemoArea } from '../data/bundle';
+import { buildLiveArea, fetchLiveFires } from '../data/liveFire';
+import type { LiveFire } from '../data/liveFire';
 import { defaultIgnition } from '../data/ignition';
 import { computeSlopeAspect } from '../data/terrain';
-import { paintFuel, paintSlope } from '../viewer/burnCanvas';
+import { FORECAST_RINGS, forecastRingCells, paintFuel, paintSlope } from '../viewer/burnCanvas';
 import { GridLayer } from '../viewer/burnLayer';
 import { flyToGrid, flyToGround, flyTopDown, groundPose } from '../viewer/camera';
 import { cellCenterLonLat, lonLatToCell } from '../data/geo';
@@ -34,6 +37,8 @@ import type { Store } from './state';
 
 /** Playback speed for "Real vs simulation": Crozier reaches real size (~11 h) in about 20 s. */
 const REAL_VS_SIM_SPEED = 2048;
+/** Live forecast playback: 6 h in about 10 s. */
+const LIVE_FORECAST_SPEED = 2048;
 /** Ground view: cells that ignited this recently count as the front the camera watches. */
 const GROUND_FRONT_WINDOW_S = 1800;
 /** Ground view re-aims at most this often while playing, gliding between poses. */
@@ -62,6 +67,10 @@ export interface Wiring {
   resetView(): void;
   /** Toggles the ground view that follows the fire front. */
   groundView(): void;
+  /** Loads the fires reported now (NIFC). */
+  loadLiveFires(): Promise<void>;
+  /** Builds the area around a live fire and forecasts the next hours. */
+  predictLiveFire(fire: LiveFire): Promise<void>;
   picker: Picker;
   /** Hook for the tools controller: receives picks when a drawing tool is active. */
   setDrawHandlers(h: { start(c: PickedCell): void; move(c: PickedCell): void; end(): void } | null): void;
@@ -150,7 +159,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     if (!ctx) return;
     const s = store.get();
     const compareMask = s.compare ? s.area?.reference?.mask ?? null : null;
-    ctx.painter.schedule(s.result, s.interventions, s.playback.t, s.settings, preview, compareMask);
+    ctx.painter.schedule(s.result, s.interventions, s.playback.t, s.settings, preview, compareMask, s.forecast ? ringCellsFor(s.result, s.area?.fuel) : null);
     if (s.area) {
       const toward = (windTowardDeg(s.weather.windFromDeg) * Math.PI) / 180;
       effects.update({
@@ -171,7 +180,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     if (!ctx) return;
     if (s.debug !== prev.debug) applyDebug();
     if (s.ignition !== prev.ignition && s.area) marker.set(s.area.grid, s.ignition);
-    if (s.result !== prev.result || s.playback.t !== prev.playback.t || s.interventions !== prev.interventions || s.settings !== prev.settings || s.compare !== prev.compare) repaint();
+    if (s.result !== prev.result || s.playback.t !== prev.playback.t || s.interventions !== prev.interventions || s.settings !== prev.settings || s.compare !== prev.compare || s.forecast !== prev.forecast) repaint();
     if (s.tool !== prev.tool) picker.setDragMode(s.tool !== 'ignite');
     if (s.effects !== prev.effects) {
       effects.setEnabled(s.effects.particles);
@@ -208,6 +217,14 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     return { lon, lat, groundM };
   }
 
+  // Forecast ring cells depend only on the result, so they are computed once per run.
+  let ringCache: { result: SimResult; cells: Uint8Array } | null = null;
+  function ringCellsFor(result: SimResult | null, fuel: Uint8Array | undefined): Uint8Array | null {
+    if (!result || !fuel) return null;
+    if (ringCache?.result !== result) ringCache = { result, cells: forecastRingCells(result.arrivalTime, fuel, store.get().area!.grid.width, FORECAST_RINGS) };
+    return ringCache.cells;
+  }
+
   let lastFollow = 0;
   function followFront(immediate: boolean): void {
     const now = performance.now();
@@ -225,10 +242,15 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
       notices.show(STR.liveAreaUnavailable, 'info');
       return;
     }
+    await loadArea(() => loadDemoArea(entry));
+  }
+
+  /** Loads an area and resets everything that belonged to the previous one. */
+  async function loadArea(load: () => Promise<DemoArea>): Promise<boolean> {
     store.set({ areaLoading: true, simError: null });
     sim.cancelAll();
     try {
-      const area = await loadDemoArea(entry);
+      const area = await load();
       store.set({
         area,
         areaLoading: false,
@@ -241,6 +263,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
         controls: null,
         sideBySide: false,
         groundFollow: false,
+        forecast: false,
         resultStale: false,
         simRunning: false,
         playback: { ...store.get().playback, t: 0, playing: false },
@@ -253,10 +276,33 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
         // Area defaults (e.g. Rothermel on real LANDFIRE fuel), else back to the app's default model.
         settings: { ...store.get().settings, rateModel: DEFAULT_SETTINGS.rateModel, ...area.meta.defaultSettings },
       });
+      return true;
     } catch (err) {
       store.set({ areaLoading: false });
       notices.show(`${STR.loadError} ${err instanceof Error ? err.message : String(err)}`, 'error', 8000);
+      return false;
     }
+  }
+
+  async function loadLiveFires(): Promise<void> {
+    store.set({ liveLoading: true });
+    try {
+      store.set({ liveFires: await fetchLiveFires(), liveLoading: false });
+    } catch (err) {
+      store.set({ liveLoading: false });
+      notices.show(`${STR.liveFiresError} ${err instanceof Error ? err.message : String(err)}`, 'error', 8000);
+    }
+  }
+
+  /** Builds the forest around a fire burning now and forecasts the next hours from its reported point. */
+  async function predictLiveFire(fire: LiveFire): Promise<void> {
+    notices.persistent('live', `${STR.liveBuilding} ${fire.name}…`, 'info');
+    const ok = await loadArea(() => buildLiveArea(fire));
+    notices.persistent('live', null);
+    if (!ok) return;
+    await simulate();
+    if (!store.get().result) return;
+    store.set({ forecast: true, playback: { t: 0, playing: true, speed: LIVE_FORECAST_SPEED } });
   }
 
   function buildScenario(): Scenario | string {
@@ -344,6 +390,8 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
 
   return {
     selectArea,
+    loadLiveFires,
+    predictLiveFire,
     simulate,
     compareWithRealFire,
     realVsSim,
