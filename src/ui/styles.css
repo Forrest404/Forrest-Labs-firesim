@@ -68,7 +68,14 @@ html, body { margin: 0; height: 100%; background: #0b0d10; overflow: hidden; }
 
 #panel .impact { margin-top: 8px; font-size: 15px; }
 #panel .impact strong { color: var(--accent); }
-#panel .real-fire { margin-top: 8px; font-size: 12px; border-left: 3px solid #fff; padding-left: 8px; }
+#panel .real-fire { margin-top: 8px; font-size: 12px; border-left: 3px solid #22d3ee; padding-left: 8px; }
+#panel .real-fire .row { margin: 6px 0; }
+#panel .real-fire .match strong { font-size: 15px; color: #22d3ee; }
+#panel .real-fire .legend { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 6px; }
+#panel .real-fire .swatch-item { display: inline-flex; align-items: center; gap: 4px; }
+#panel .real-fire .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+#panel .real-fire .controls { margin-top: 8px; }
+#panel .real-fire .control.real { color: #22d3ee; font-weight: 600; }
 #panel .real-fire:empty, #panel .impact:empty { display: none; }
 #panel ul.plan-attempts { list-style: none; padding: 0; margin: 6px 0 0; font-size: 12px; }
 #panel ul.plan-attempts li { padding: 6px 0; border-top: 1px dashed var(--border); }

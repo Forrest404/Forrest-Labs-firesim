@@ -98,6 +98,28 @@ export function paintBurn(data: Uint8ClampedArray, arrival: Float32Array, t: num
   }
 }
 
+export const COMPARE_RGBA: Record<'both' | 'missed' | 'extra', RGBA> = {
+  both: [40, 200, 90, 210],
+  missed: [235, 60, 50, 200],
+  extra: [250, 190, 40, 170],
+};
+
+/**
+ * Accuracy view at time t against a real fire's burned mask: burned in both green, burned only in
+ * reality (missed) red, burned only in the simulation (extra) amber, everything else transparent.
+ */
+export function paintCompare(data: Uint8ClampedArray, arrival: Float32Array, t: number, realMask: Uint8Array): void {
+  for (let i = 0, p = 0; i < arrival.length; i++, p += 4) {
+    const sim = arrival[i] !== NEVER_ARRIVES && arrival[i] <= t;
+    const real = realMask[i] === 1;
+    const c = sim && real ? COMPARE_RGBA.both : real ? COMPARE_RGBA.missed : sim ? COMPARE_RGBA.extra : null;
+    data[p] = c ? c[0] : 0;
+    data[p + 1] = c ? c[1] : 0;
+    data[p + 2] = c ? c[2] : 0;
+    data[p + 3] = c ? c[3] : 0;
+  }
+}
+
 /** Alignment test pattern: 10-cell checkerboard with a red NW corner block and blue SE block. */
 export function paintCheckerboard(data: Uint8ClampedArray, width: number, height: number): void {
   for (let r = 0; r < height; r++) {

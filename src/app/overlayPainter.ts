@@ -5,7 +5,7 @@
 
 import { NEVER_ARRIVES, cellAreaHa } from '../contract';
 import type { GridSpec, Intervention, SimResult, SimSettings } from '../contract';
-import { paintBurn } from '../viewer/burnCanvas';
+import { paintBurn, paintCompare } from '../viewer/burnCanvas';
 import type { GridLayer } from '../viewer/burnLayer';
 
 export interface Preview {
@@ -24,7 +24,7 @@ export class OverlayPainter {
   private dirty = false;
   private lastPaint = 0;
   private raf = 0;
-  private args: { result: SimResult | null; interventions: Intervention[]; t: number; settings: SimSettings; preview: Preview | null } | null = null;
+  private args: { result: SimResult | null; interventions: Intervention[]; t: number; settings: SimSettings; preview: Preview | null; compareMask: Uint8Array | null } | null = null;
 
   constructor(
     private readonly layer: GridLayer,
@@ -36,9 +36,12 @@ export class OverlayPainter {
     this.wetness = new Float32Array(n);
   }
 
-  /** Request a repaint with the latest inputs (coalesced to one paint per frame). */
-  schedule(result: SimResult | null, interventions: Intervention[], t: number, settings: SimSettings, preview: Preview | null = null): void {
-    this.args = { result, interventions, t, settings, preview };
+  /**
+   * Request a repaint with the latest inputs (coalesced to one paint per frame). With a
+   * `compareMask` (a real fire's burned cells) the layer shows the accuracy view instead.
+   */
+  schedule(result: SimResult | null, interventions: Intervention[], t: number, settings: SimSettings, preview: Preview | null = null, compareMask: Uint8Array | null = null): void {
+    this.args = { result, interventions, t, settings, preview, compareMask };
     this.dirty = true;
     if (!this.raf) this.raf = requestAnimationFrame(this.tick);
   }
@@ -58,6 +61,12 @@ export class OverlayPainter {
   private paintNow(): void {
     const a = this.args;
     if (!a) return;
+    if (a.compareMask) {
+      const mask = a.compareMask;
+      const arrival = a.result?.arrivalTime ?? this.emptyArrival();
+      this.layer.paint((data) => paintCompare(data, arrival, a.t, mask));
+      return;
+    }
     this.buildMasks(a.interventions, a.t, a.settings);
     if (a.preview) {
       if (a.preview.type === 'firebreak') for (const c of a.preview.cells) this.firebreak[c] = 1;
