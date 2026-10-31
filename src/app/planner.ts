@@ -85,9 +85,22 @@ export async function suggestPlan(scenario: Scenario, opts: PlannerOptions = {})
 
   try {
     for (let n = 1; n <= MAX_ATTEMPTS; n++) {
-      const raw = source === 'gemini'
-        ? await askGemini(describe(scenario, baseline, opts.homes, state.attempts), opts)
-        : builtinProposal(scenario, baseline, n);
+      // If Gemini fails (network, quota, wrong model id), fall back to the built-in planner so the
+      // button never dead-ends on stage. The attempt is labelled with the source actually used.
+      let attemptSource: PlanState['source'] = source;
+      let fallbackNote = '';
+      let raw: Proposal;
+      if (source === 'gemini') {
+        try {
+          raw = await askGemini(describe(scenario, baseline, opts.homes, state.attempts), opts);
+        } catch (err) {
+          attemptSource = 'builtin';
+          fallbackNote = `Gemini unavailable (${err instanceof Error ? err.message : String(err)}); built-in plan used.`;
+          raw = builtinProposal(scenario, baseline, n);
+        }
+      } else {
+        raw = builtinProposal(scenario, baseline, n);
+      }
       const { proposal, note: trimNote } = enforceBudget(raw, scenario);
       const interventions = toInterventions(proposal, scenario, n);
       const after = score(simulate({ ...base, interventions }));
@@ -97,14 +110,14 @@ export async function suggestPlan(scenario: Scenario, opts: PlannerOptions = {})
       const accepted = reduction >= ACCEPT_REDUCTION;
       const attempt: PlanAttempt = {
         n,
-        source,
+        source: attemptSource,
         proposal,
         homesBefore: before.homes,
         homesAfter: after.homes,
         areaBeforeHa: before.areaHa,
         areaAfterHa: after.areaHa,
         accepted,
-        note: [trimNote, accepted ? '' : `Only ${Math.round(reduction * 100)} % better; needs ${Math.round(ACCEPT_REDUCTION * 100)} %.`].filter(Boolean).join(' '),
+        note: [fallbackNote, trimNote, accepted ? '' : `Only ${Math.round(reduction * 100)} % better; needs ${Math.round(ACCEPT_REDUCTION * 100)} %.`].filter(Boolean).join(' '),
       };
       state.attempts.push(attempt);
       emit();
