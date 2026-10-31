@@ -18,6 +18,9 @@ Desktop.ini
 # Dependencies
 node_modules/
 
+# Cesium static assets copied by scripts/copy-cesium.mjs (postinstall)
+public/cesium/
+
 # Build / output
 build/
 dist/
