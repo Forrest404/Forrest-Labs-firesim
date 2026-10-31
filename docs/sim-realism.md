@@ -197,3 +197,38 @@ Tests: `tests/weather-timeline.test.ts` (interpolation, direction wrap, moisture
 `tests/weather.test.ts` (constant schedule equals steady, wind shift, monotone wind ramp, damp air
 and lag, too-wet-then-dry, FIFO sweep, fuzzed firebreak monotonicity and validity under random
 schedules), `tests/crossing-accuracy.test.ts`. Mutation-checked: five injected bugs are caught.
+
+## SIM-12. Ensembles and burn-probability maps (`src/sim/ensemble.ts`)
+
+One simulation costs about 20 ms, so many perturbed runs are cheap. `runEnsemble` runs N (1-500)
+simulations, each with perturbed wind speed (mean-preserving lognormal, so the average wind is
+unchanged), wind direction (normal, degrees), fuel moisture (normal, fraction), optionally the
+ignition cell (random burnable cell within a radius) and the seed (embers, wind variability). A
+weather schedule is perturbed consistently (same speed factor and direction offset on every
+keyframe). Every perturbation is a pure hash of (baseSeed, run, parameter), so an ensemble is exactly
+reproducible, and independent of the order the runs are made in (tested by running them backwards).
+
+Output: per-cell burn probability, mean and earliest arrival, burned-area quantiles (p10/p50/p90),
+mean spot fires, and 24 time slices of ignition counts so `probabilityAt(result, t)` gives P(burned by
+t) and the probability map animates with the scrubber (exact at slice boundaries, linear within a
+slice). Per-run results are not stored, so memory does not grow with N. Interventions, spotting and
+schedules apply in every run, so the map shows how a firebreak changes the odds.
+
+The app runs it in the worker with progress and cancel (the worker yields between runs). UI: runs
+(25-200), an uncertainty level (low/medium/high as data in `UNCERTAINTY_PRESETS`), ignition
+position (exact, +-1, +-3 cells), a toggle for the probability layer (drawn above the single run,
+which fades back), a legend, and a one-line summary. An ensemble is flagged stale when conditions
+change. Cost on 200 x 200, 100 runs: 2.4 s plain, 3.9 s Rothermel, 8.3 s with spotting and a weather
+schedule (about 80 ms per run; the app shows progress).
+
+Honest limits: the perturbation sizes are guesses, not measured forecast errors, and the map shows
+the spread of THIS model under those guesses. It is not a calibrated probability of a real fire. At
+t = 0 the ignition cell shows 0 because the first slice interpolates from nothing.
+
+Tests (`tests/ensemble.test.ts`, 17): perturbation statistics (mean-preserving to 0.6 %), zero
+perturbation collapses to the deterministic run, reproducibility and order independence, valid
+probabilities, the full map checked against direct counts at all 25 slice boundaries, quantile
+order, sensitivity to wind and direction uncertainty, downwind monotonicity, interventions and
+spotting inside runs, cancel and progress. Mutation-checked: a non-mean-preserving factor, a
+same-for-every-run perturbation, a wrong divisor, dropped interventions, and slices shifted one early
+or late are all caught (two earlier tests were too weak to catch the last two and were strengthened).

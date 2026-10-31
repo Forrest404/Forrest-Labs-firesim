@@ -6,7 +6,7 @@
  * Weather object the advanced panel edits, so there is no separate preset logic anywhere.
  */
 
-import type { DrynessPreset, SimSettings, Weather, WeatherKeyframe } from './types';
+import type { DrynessPreset, EnsembleSpec, SimSettings, Weather, WeatherKeyframe } from './types';
 
 export interface DrynessPresetValues {
   label: string;
@@ -119,4 +119,30 @@ export function scheduleFromPreset(id: WeatherPresetId, weather: Weather): Weath
     temperatureC: weather.temperatureC + (st.temperatureDeltaC ?? 0),
     relativeHumidity: Math.min(1, Math.max(0.02, weather.relativeHumidity + (st.humidityDelta ?? 0))),
   }));
+}
+
+/** Default ensemble: moderate uncertainty in wind and moisture, exact ignition. */
+export const DEFAULT_ENSEMBLE_SPEC: EnsembleSpec = {
+  runs: 50,
+  windSpeedRelSigma: 0.25,
+  windDirSigmaDeg: 15,
+  moistureSigma: 0.02,
+  ignitionJitterCells: 0,
+  baseSeed: 1,
+};
+
+/** "How uncertain are the conditions?" as data: sigmas for the ensemble perturbations. */
+export type UncertaintyLevel = 'low' | 'medium' | 'high';
+
+export const UNCERTAINTY_PRESETS: Record<UncertaintyLevel, { label: string; windSpeedRelSigma: number; windDirSigmaDeg: number; moistureSigma: number }> = {
+  low: { label: 'Low (wind ±10 %, ±6°)', windSpeedRelSigma: 0.1, windDirSigmaDeg: 6, moistureSigma: 0.01 },
+  medium: { label: 'Medium (wind ±25 %, ±15°)', windSpeedRelSigma: 0.25, windDirSigmaDeg: 15, moistureSigma: 0.02 },
+  high: { label: 'High (wind ±40 %, ±30°)', windSpeedRelSigma: 0.4, windDirSigmaDeg: 30, moistureSigma: 0.04 },
+};
+export const UNCERTAINTY_ORDER: UncertaintyLevel[] = ['low', 'medium', 'high'];
+export const ENSEMBLE_RUN_OPTIONS = [25, 50, 100, 200];
+
+export function ensembleSpecFrom(runs: number, level: UncertaintyLevel, ignitionJitterCells: number, baseSeed: number): EnsembleSpec {
+  const u = UNCERTAINTY_PRESETS[level];
+  return { runs, windSpeedRelSigma: u.windSpeedRelSigma, windDirSigmaDeg: u.windDirSigmaDeg, moistureSigma: u.moistureSigma, ignitionJitterCells, baseSeed };
 }

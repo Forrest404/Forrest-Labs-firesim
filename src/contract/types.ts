@@ -214,3 +214,49 @@ export interface SimResult {
 }
 
 export type DrynessPreset = 'low' | 'medium' | 'high' | 'extreme';
+
+/**
+ * How an ensemble perturbs the scenario. Every run k draws its perturbations from a hash of
+ * (baseSeed, k, parameter), so an ensemble is exactly reproducible.
+ */
+export interface EnsembleSpec {
+  /** Number of runs (1-500). */
+  runs: number;
+  /** Relative sigma of wind speed (mean-preserving lognormal), e.g. 0.25 = about +-25 %. Also scales schedule keyframes. */
+  windSpeedRelSigma: number;
+  /** Sigma of wind direction, degrees (added to the starting direction and every schedule keyframe). */
+  windDirSigmaDeg: number;
+  /** Sigma added to dead fuel moisture, as a fraction (0.02 = 2 percentage points). */
+  moistureSigma: number;
+  /** Ignition cell is moved to a random burnable cell within this many cells (0 = exact). */
+  ignitionJitterCells: number;
+  /** Seed for all perturbations (and the per-run scenario seeds). */
+  baseSeed: number;
+}
+
+/** Number of equal time slices over the run in EnsembleResult.burnedByBin. */
+export const ENSEMBLE_TIME_BINS = 24;
+
+export interface EnsembleResult {
+  runs: number;
+  width: number;
+  height: number;
+  durationSeconds: number;
+  /** Fraction of runs in which each cell had burned by the end of the run, 0-1. */
+  burnProbability: Float32Array;
+  /**
+   * Per time slice and cell, the number of runs in which the cell ignited during that slice:
+   * index = bin * (width * height) + cell, slice b covers (b, b+1] * durationSeconds / ENSEMBLE_TIME_BINS.
+   * Use probabilityAt() to turn it into P(burned by time t).
+   */
+  burnedByBin: Uint16Array;
+  /** Mean arrival time over the runs that burned the cell (Infinity if none) and the earliest one. */
+  meanArrivalS: Float32Array;
+  earliestArrivalS: Float32Array;
+  /** Burned area (ha) of every run, in run order, and summary quantiles. */
+  areasHa: Float64Array;
+  area: { meanHa: number; minHa: number; p10Ha: number; p50Ha: number; p90Ha: number; maxHa: number };
+  /** Average number of ember spot fires per run (0 when spotting is off). */
+  meanSpotFires: number;
+  runtimeMs: number;
+}

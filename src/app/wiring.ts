@@ -3,7 +3,7 @@
  * viewer objects are created in response to state changes.
  */
 
-import { FuelClass, scheduleFromPreset, validateScenario, windTowardDeg } from '../contract';
+import { FuelClass, ensembleSpecFrom, scheduleFromPreset, validateScenario, windTowardDeg } from '../contract';
 import type { Scenario } from '../contract';
 import { scenarioFromArea } from '../data/bundle';
 import { loadDemoArea } from '../data/demoAreas';
@@ -22,6 +22,7 @@ import type { PickedCell, Picker } from '../viewer/picking';
 import type { Notices } from '../ui/notices';
 import { STR } from '../ui/strings';
 import { OverlayPainter } from './overlayPainter';
+import { ProbabilityPainter } from './probabilityPainter';
 import type { Preview } from './overlayPainter';
 import { SimCancelledError, SimClient } from './simClient';
 import type { Store } from './state';
@@ -30,14 +31,18 @@ interface AreaContext {
   burn: GridLayer;
   fuel: GridLayer;
   slope: GridLayer;
+  prob: GridLayer;
   outline: GridOutline;
   painter: OverlayPainter;
+  probPainter: ProbabilityPainter;
 }
 
 export interface Wiring {
   selectArea(name: string): Promise<void>;
   simulate(): Promise<void>;
   cancel(): void;
+  runEnsemble(): Promise<void>;
+  cancelEnsemble(): void;
   topDown(): void;
   resetView(): void;
   picker: Picker;
@@ -80,6 +85,8 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
   function disposeArea(): void {
     if (!ctx) return;
     ctx.painter.destroy();
+    ctx.probPainter.destroy();
+    ctx.prob.destroy();
     ctx.burn.destroy();
     ctx.fuel.destroy();
     ctx.slope.destroy();
@@ -99,7 +106,8 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     slope.paint((d) => paintSlope(d, slopeDeg));
     const burn = new GridLayer(viewer, grid, { zIndex: 3 });
     const outline = createGridOutline(viewer, grid);
-    ctx = { burn, fuel, slope, outline, painter: new OverlayPainter(burn, grid) };
+    const prob = new GridLayer(viewer, grid, { zIndex: 4 });
+    ctx = { burn, fuel, slope, prob, outline, painter: new OverlayPainter(burn, grid), probPainter: new ProbabilityPainter(prob, grid.width * grid.height) };
     applyDebug();
     repaint();
     marker.set(grid, s.ignition);
@@ -118,6 +126,10 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     if (!ctx) return;
     const s = store.get();
     ctx.painter.schedule(s.result, s.interventions, s.playback.t, s.settings, preview);
+    // The probability map sits above the single run; the single run fades back so it stays readable.
+    const showProb = s.showProbability && !!s.ensemble.result;
+    ctx.burn.setAlpha(showProb ? 0.3 : 1);
+    ctx.probPainter.schedule(showProb ? s.ensemble.result : null, s.playback.t);
     if (s.area) {
       const toward = (windTowardDeg(s.weather.windFromDeg) * Math.PI) / 180;
       effects.update({
@@ -140,6 +152,12 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     if (s.debug !== prev.debug) applyDebug();
     if (s.ignition !== prev.ignition && s.area) marker.set(s.area.grid, s.ignition);
     if (s.result !== prev.result || s.playback.t !== prev.playback.t || s.interventions !== prev.interventions || s.settings !== prev.settings) repaint();
+    if (s.ensemble.result !== prev.ensemble.result || s.showProbability !== prev.showProbability) repaint();
+    // An ensemble describes the inputs it was run with: flag it stale when any of them change.
+    if (s.ensemble.result && !s.ensemble.stale && (s.weather !== prev.weather || s.weatherPreset !== prev.weatherPreset || s.settings !== prev.settings
+      || s.durationSeconds !== prev.durationSeconds || s.ignition !== prev.ignition || s.interventions !== prev.interventions || s.seed !== prev.seed)) {
+      store.set({ ensemble: { ...s.ensemble, stale: true } });
+    }
     if (s.tool !== prev.tool) picker.setDragMode(s.tool !== 'ignite');
     if (s.effects !== prev.effects) {
       effects.setEnabled(s.effects.particles);
@@ -166,6 +184,8 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
         result: null,
         resultStale: false,
         simRunning: false,
+        ensemble: { ...store.get().ensemble, running: false, progress: 0, result: null, stale: false, error: null },
+        showProbability: false,
         playback: { ...store.get().playback, t: 0, playing: false },
         weather: { ...store.get().weather, windFromDeg: area.meta.defaultWindFromDeg ?? store.get().weather.windFromDeg },
       });
@@ -217,9 +237,35 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     }
   }
 
+  async function runEnsemble(): Promise<void> {
+    const scenario = buildScenario();
+    if (typeof scenario === 'string') {
+      store.set({ ensemble: { ...store.get().ensemble, error: scenario } });
+      return;
+    }
+    const e0 = store.get().ensemble;
+    const spec = ensembleSpecFrom(e0.runs, e0.uncertainty, e0.ignitionJitterCells, store.get().seed);
+    store.set({ ensemble: { ...e0, running: true, progress: 0, error: null }, simRunning: false });
+    try {
+      const result = await sim.runEnsemble(scenario, spec, (fraction) => store.set({ ensemble: { ...store.get().ensemble, progress: fraction } }));
+      store.set({ ensemble: { ...store.get().ensemble, running: false, progress: 1, result, stale: false, error: null }, showProbability: true });
+    } catch (err) {
+      if (err instanceof SimCancelledError) {
+        store.set({ ensemble: { ...store.get().ensemble, running: false, progress: 0 } });
+        return;
+      }
+      store.set({ ensemble: { ...store.get().ensemble, running: false, error: `${STR.ensembleFailed} ${err instanceof Error ? err.message : String(err)}` } });
+    }
+  }
+
   return {
     selectArea,
     simulate,
+    runEnsemble,
+    cancelEnsemble: () => {
+      sim.cancelAll();
+      store.set({ ensemble: { ...store.get().ensemble, running: false, progress: 0 } });
+    },
     cancel: () => {
       sim.cancelAll();
       store.set({ simRunning: false });

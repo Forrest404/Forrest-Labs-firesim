@@ -37,6 +37,8 @@ async function main(): Promise<void> {
     selectArea: (name) => void wiringRef?.selectArea(name),
     simulate: () => void wiringRef?.simulate(),
     cancel: () => wiringRef?.cancel(),
+    runEnsemble: () => void wiringRef?.runEnsemble(),
+    cancelEnsemble: () => wiringRef?.cancelEnsemble(),
     topDown: () => wiringRef?.topDown(),
     resetView: () => wiringRef?.resetView(),
   });

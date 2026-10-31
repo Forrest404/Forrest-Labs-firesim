@@ -7,7 +7,7 @@
 
 import { ELEVATION_NODATA, MAX_GRID_DIM, inGrid } from './conventions';
 import { FUEL_CLASS_COUNT } from './types';
-import type { Scenario } from './types';
+import type { EnsembleSpec, Scenario } from './types';
 
 export function validateScenario(s: Scenario): string[] {
   const errors: string[] = [];
@@ -102,4 +102,15 @@ export function validateScenario(s: Scenario): string[] {
 export function assertValidScenario(s: Scenario): void {
   const errors = validateScenario(s);
   if (errors.length > 0) throw new Error(`Invalid scenario: ${errors.join('; ')}`);
+}
+
+export function validateEnsembleSpec(e: EnsembleSpec): string[] {
+  const errors: string[] = [];
+  if (!Number.isInteger(e.runs) || e.runs < 1 || e.runs > 500) errors.push(`runs must be an integer 1-500, got ${e.runs}`);
+  if (!(e.windSpeedRelSigma >= 0 && e.windSpeedRelSigma <= 2)) errors.push('windSpeedRelSigma must be 0-2');
+  if (!(e.windDirSigmaDeg >= 0 && e.windDirSigmaDeg <= 180)) errors.push('windDirSigmaDeg must be 0-180');
+  if (!(e.moistureSigma >= 0 && e.moistureSigma <= 0.3)) errors.push('moistureSigma must be 0-0.3');
+  if (!(e.ignitionJitterCells >= 0 && e.ignitionJitterCells <= 50)) errors.push('ignitionJitterCells must be 0-50');
+  if (!Number.isInteger(e.baseSeed)) errors.push('baseSeed must be an integer');
+  return errors;
 }
