@@ -69,6 +69,12 @@ export const DEFAULT_SETTINGS: SimSettings = {
   waterMoistureBoost: 0.5,
   burnoutEnabled: true,
   spottingEnabled: false,
+  spottingIntensityKwM: 2000,
+  spottingEmbers: 2,
+  spottingRangeScale: 1,
+  // Chosen so spotting is clearly visible in a 3 h demo (about 2-5x the area at 10 m/s) without
+  // engulfing the map; the real value is highly uncertain and far smaller per ember.
+  spottingIgnitionProb: 0.02,
 };
 
 /** 6 simulated hours. */

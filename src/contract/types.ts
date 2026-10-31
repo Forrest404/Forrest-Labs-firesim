@@ -117,8 +117,16 @@ export interface SimSettings {
   waterMoistureBoost: number;
   /** If true, a cell stops spreading after its fuel's burn duration (affects delayed ignition through drying cells). */
   burnoutEnabled: boolean;
-  /** Stub. Ember spotting is not implemented in v0; must be false. */
+  /** Ember spotting on/off. Off by default: with it off a firebreak is an absolute barrier. */
   spottingEnabled: boolean;
+  /** Spotting: potential head-fire intensity (kW/m) a burning cell needs before it throws embers. */
+  spottingIntensityKwM: number;
+  /** Spotting: embers per qualifying cell at the threshold; grows with sqrt(intensity / threshold), max 8. */
+  spottingEmbers: number;
+  /** Spotting: multiplier on the mean flight distance (1 = default). */
+  spottingRangeScale: number;
+  /** Spotting: chance that an ember landing on dry burnable fuel ignites it (before the moisture factor). */
+  spottingIgnitionProb: number;
 }
 
 export interface Scenario {
@@ -145,6 +153,8 @@ export interface SimStats {
   burnedAreaHa: number;
   /** Fastest cell-to-cell spread rate observed, m/s. */
   maxSpreadRateMps: number;
+  /** Number of cells ignited by embers (0 when spotting is off). */
+  spotFires: number;
   /** Largest Byram fireline intensity, kW/m (indicative, see SimResult.firelineIntensityKwM). */
   maxIntensityKwM: number;
   /** Largest Byram flame length, m. */
@@ -169,6 +179,13 @@ export interface SimResult {
   firelineIntensityKwM: Float32Array;
   /** Byram (1959) flame length, m: 0.0775 I^0.46 with I in kW/m. Zero for cells that never burn. */
   flameLengthM: Float32Array;
+  /**
+   * Cell that ignited each cell, -1 for ignition cells and cells that never burn. Within about two
+   * cells for ordinary spread; farther away for ember spot fires.
+   */
+  sourceCell: Int32Array;
+  /** 1 where the cell was ignited by an ember (a spot fire), else 0. */
+  ignitedByEmber: Uint8Array;
   stats: SimStats;
 }
 

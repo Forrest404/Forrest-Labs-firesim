@@ -100,7 +100,12 @@ describe('validateScenario', () => {
     expect(validateScenario(s3).some((e) => e.includes('outside grid'))).toBe(true);
 
     const s4 = tinyScenario();
-    s4.settings.spottingEnabled = true;
-    expect(validateScenario(s4).some((e) => e.includes('spotting'))).toBe(true);
+    s4.settings.spottingEnabled = true; // allowed now
+    expect(validateScenario(s4)).toEqual([]);
+    s4.settings.spottingIgnitionProb = 1.5;
+    s4.settings.spottingEmbers = 20;
+    const e4 = validateScenario(s4);
+    expect(e4.some((e) => e.includes('spottingIgnitionProb'))).toBe(true);
+    expect(e4.some((e) => e.includes('spottingEmbers'))).toBe(true);
   });
 });

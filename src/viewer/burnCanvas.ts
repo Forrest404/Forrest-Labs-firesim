@@ -46,6 +46,8 @@ export interface BurnPaintOptions {
   firebreak?: Uint8Array;
   /** 0..1 current wetness per cell (by time t). */
   wetness?: Float32Array;
+  /** 1 where the cell was ignited by an ember: shown as a pale flash while it is flaming. */
+  spot?: Uint8Array;
 }
 
 /**
@@ -62,7 +64,14 @@ export function paintBurn(data: Uint8ClampedArray, arrival: Float32Array, t: num
     let alpha = 0;
     if (a !== NEVER_ARRIVES && a <= t) {
       const age = t - a;
-      if (age < win) {
+      if (age < win && o.spot && o.spot[i]) {
+        // Ember spot fire: bright white-yellow, fading to the normal flame colours.
+        const k = age / win;
+        r = 255;
+        g = Math.round(255 - 60 * k);
+        b = Math.round(200 * (1 - k));
+        alpha = 245;
+      } else if (age < win) {
         const k = age / win; // 0 = just ignited
         r = 255;
         g = Math.round(230 * (1 - k) * (1 - k) + 40);

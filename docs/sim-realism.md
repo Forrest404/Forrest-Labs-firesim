@@ -120,3 +120,37 @@ but not a prediction. The UI shows a coarse class (low < 350, moderate < 1700, h
 extreme kW/m), the usual rule-of-thumb breakpoints for how hard a fire is to suppress; they are
 not a safety rating. Flame particles are scaled to the flame length (clamped 1.5-30 m). This is
 the input the spotting feature (SIM-10) uses.
+
+## SIM-10. Ember spotting (`src/sim/spotting.ts`, `settings.spottingEnabled`, off by default)
+
+With spotting off, a firebreak or river is an absolute barrier. With it on, a burning cell whose
+POTENTIAL head-fire intensity (wind-driven, steepest uphill; a property of the cell, not of the
+route the fire took) reaches `spottingIntensityKwM` throws embers downwind that can fly over water,
+roads and firebreaks. Per ember: distance lognormal around `range x 15 m x U x sqrt(flame length)`
+(sigma 0.6, at least 2.3 cells), direction downwind +-25 degrees, flight time distance / (0.7 U),
+then a 30 s ignition delay; success `spottingIgnitionProb x (1 - m/Mx)^2`, and it fails on
+non-burnable cells, cells wetter than extinction at landing time, and cells already firebroken.
+Embers are extra POSITIVE-delay edges, so the solver stays a correct shortest-path search.
+
+Determinism: every draw is a pure hash of (seed, source cell, ember number, stream) in
+`src/sim/hash.ts`, not a stream, so a firebreak elsewhere cannot reshuffle unrelated embers.
+(ForeFire's own re-ignition uses `std::random_device`; ours must be replayable.)
+`SimResult.sourceCell` and `ignitedByEmber` record provenance (which cell ignited each cell, and
+whether by ember), `stats.spotFires` counts them, and the overlay flashes spot fires pale.
+
+Calibration: the default ignition chance is 0.02. At 0.3 each burning cell started about 0.7 new
+fires and the whole map burned in 3 h (supercritical). Measured at 3 h, 10 m/s, extreme: `p = 0.03`
+gives roughly 2-5x the area of spotting off, `p = 0.01` about 1.5-3x. Real per-ember ignition is
+far smaller and very uncertain; 0.02 was picked so the effect is visible in a demo. All constants
+are placeholders for Albini's (1979, 1983) spotting-distance models, not calibrated.
+
+Invariants: spotting off is byte-identical to before; a threshold above any intensity changes
+nothing; enabling spotting never makes any cell burn later (fuzz, burnout off); provenance holds
+(every burned cell has an earlier source, ordinary spread is local, spot fires are at least 2
+cells away and at least the 30 s delay later). Not asserted with spotting on: causality through
+neighbours (embers legitimately land far from any burned cell) and monotonicity under water
+(landing success depends on moisture at landing time).
+
+Known gap found while tuning: the default ignition for the real Boulder Creek bundle burns only
+2 ha (it appears to be boxed in); `defaultIgnition()` in `src/data/ignition.ts` needs a better
+choice (`demo-ship` slot).

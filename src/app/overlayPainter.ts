@@ -73,6 +73,7 @@ export class OverlayPainter {
         flameWindowS,
         firebreak: this.firebreak,
         wetness: this.wetness,
+        spot: a.result?.ignitedByEmber,
       }),
     );
   }

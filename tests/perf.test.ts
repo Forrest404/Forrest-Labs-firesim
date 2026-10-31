@@ -83,6 +83,19 @@ describe('performance', () => {
     }
   });
 
+  it('spotting at its heaviest (8 embers per cell, low threshold, gale) on 300 x 300 stays under 2 s', () => {
+    const base = bigScenario(300, 300);
+    for (let i = 0; i < base.fuel.length; i++) if (base.fuel[i] === FuelClass.GRASS) base.fuel[i] = FuelClass.FOREST_CONIFER;
+    const s = { ...base, weather: { ...base.weather, windSpeedMps: 18 }, settings: { ...DEFAULT_SETTINGS, spottingEnabled: true, spottingEmbers: 8, spottingIntensityKwM: 200, spottingRangeScale: 2, spottingIgnitionProb: 0.5 } };
+    simulate(s);
+    const t0 = performance.now();
+    const r = simulate(s);
+    const ms = performance.now() - t0;
+    console.log(`300x300 heavy spotting: ${ms.toFixed(1)} ms, burned ${r.stats.burnedCells}, spot fires ${r.stats.spotFires}`);
+    expect(r.stats.spotFires).toBeGreaterThan(100);
+    expect(ms).toBeLessThan(2000);
+  });
+
   it('simulates a 300 x 300 grid (the cap) under 2 s', () => {
     const s = bigScenario(300, 300);
     const t0 = performance.now();

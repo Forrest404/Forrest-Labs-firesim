@@ -21,6 +21,14 @@ interface NumField {
 }
 
 const FIELDS: NumField[] = [
+  { label: STR.advSpotThreshold, min: 100, max: 20000, step: 100, unit: 'kW/m', get: (s) => s.settings.spottingIntensityKwM,
+    set: (v, s) => ({ settings: { ...s.settings, spottingIntensityKwM: v } }) },
+  { label: STR.advSpotEmbers, min: 0, max: 8, step: 1, get: (s) => s.settings.spottingEmbers,
+    set: (v, s) => ({ settings: { ...s.settings, spottingEmbers: Math.round(v) } }) },
+  { label: STR.advSpotRange, min: 0.25, max: 4, step: 0.25, unit: '×', get: (s) => s.settings.spottingRangeScale,
+    set: (v, s) => ({ settings: { ...s.settings, spottingRangeScale: v } }) },
+  { label: STR.advSpotProb, min: 0, max: 100, step: 5, unit: '%', get: (s) => Math.round(s.settings.spottingIgnitionProb * 100),
+    set: (v, s) => ({ settings: { ...s.settings, spottingIgnitionProb: v / 100 } }) },
   { label: STR.advIsoSpeed, min: 0.01, max: 2, step: 0.01, unit: 'm/s', get: (s) => s.settings.isoSpeedMps,
     set: (v, s) => ({ settings: { ...s.settings, isoSpeedMps: v } }) },
   { label: STR.advTemperature, min: -10, max: 50, step: 1, unit: '°C', get: (s) => s.weather.temperatureC,
@@ -69,9 +77,12 @@ export function mountSettingsAdvanced(container: HTMLElement, store: Store): voi
   burnout.onchange = () => store.update((s) => ({ settings: { ...s.settings, burnoutEnabled: burnout.checked }, ...staleIfResult(s) }));
   const round = el('input', { type: 'checkbox' }) as HTMLInputElement;
   round.onchange = () => store.update((s) => ({ settings: { ...s.settings, neighbourhood: round.checked ? 16 : 8 }, ...staleIfResult(s) }));
+  const spotting = el('input', { type: 'checkbox' }) as HTMLInputElement;
+  spotting.onchange = () => store.update((s) => ({ settings: { ...s.settings, spottingEnabled: spotting.checked }, ...staleIfResult(s) }));
+  details.append(el('label', {}, el('span', {}, STR.advSpotting), spotting), el('div', { class: 'muted' }, STR.spottingNote));
   details.append(el('label', {}, el('span', {}, STR.advRoundShape), round));
   details.append(el('label', {}, el('span', {}, STR.advBurnout), burnout));
-  for (const label of [STR.advGridSize, STR.advSpotting, STR.advCrownFire, STR.advTimeVaryingWeather]) {
+  for (const label of [STR.advGridSize, STR.advCrownFire, STR.advTimeVaryingWeather]) {
     details.append(el('label', { class: 'disabled', title: STR.comingSoon }, el('span', {}, `${label} — ${STR.comingSoon}`), el('input', { type: 'checkbox', disabled: true })));
   }
   details.append(el('div', { class: 'muted' }, STR.advancedNote));
@@ -86,6 +97,7 @@ export function mountSettingsAdvanced(container: HTMLElement, store: Store): voi
     burnout.checked = s.settings.burnoutEnabled;
     model.value = s.settings.rateModel;
     round.checked = s.settings.neighbourhood === 16;
+    spotting.checked = s.settings.spottingEnabled;
     if (details.open !== s.advancedOpen) details.open = s.advancedOpen;
   });
 }

@@ -77,7 +77,11 @@ export function validateScenario(s: Scenario): string[] {
   if (!['factors', 'rothermel', 'iso'].includes(s.settings.rateModel)) errors.push(`unknown rateModel ${String(s.settings.rateModel)}`);
   if (s.settings.neighbourhood !== 8 && s.settings.neighbourhood !== 16) errors.push('neighbourhood must be 8 or 16');
   if (!(s.settings.isoSpeedMps >= 0)) errors.push('isoSpeedMps must be >= 0');
-  if (s.settings.spottingEnabled) errors.push('spottingEnabled is a stub and must be false in v0');
+  const st = s.settings;
+  if (!(st.spottingIntensityKwM > 0)) errors.push('spottingIntensityKwM must be > 0');
+  if (!(st.spottingEmbers >= 0 && st.spottingEmbers <= 8)) errors.push('spottingEmbers must be 0-8');
+  if (!(st.spottingRangeScale >= 0)) errors.push('spottingRangeScale must be >= 0');
+  if (!(st.spottingIgnitionProb >= 0 && st.spottingIgnitionProb <= 1)) errors.push('spottingIgnitionProb must be 0-1');
 
   return errors;
 }

@@ -18,6 +18,7 @@ import { buildEventLayers } from './events';
 import { MinHeap } from './heap';
 import { byramIntensityKwM, flameLengthM } from './intensity';
 import { createRateFn } from './models';
+import { createSpotter } from './spotting';
 import type { EdgeInput } from './models';
 import { mulberry32 } from './prng';
 import { NEIGHBOR_OFFSETS, KING_MOVES, cosAgainstWind } from './rates';
@@ -36,6 +37,8 @@ export function simulate(scenario: Scenario): SimResult {
 
   const arrival = new Float32Array(n).fill(NEVER_ARRIVES);
   const rateAtIgnition = new Float32Array(n);
+  const sourceCell = new Int32Array(n).fill(-1);
+  const viaEmber = new Uint8Array(n);
   const done = new Uint8Array(n);
   const events = buildEventLayers(scenario.interventions, n, settings);
 
@@ -78,6 +81,22 @@ export function simulate(scenario: Scenario): SimResult {
 
   const crossing: Crossing = { t: Infinity, rate: 0 };
   const moves = settings.neighbourhood;
+
+  // Ember spotting (off unless settings.spottingEnabled): embers become extra, positive-delay edges.
+  let curSource = -1;
+  const spotter = settings.spottingEnabled
+    ? createSpotter({
+        settings, seed: scenario.seed, width, height, cellSizeM, fuel, elevation, baseMoisture,
+        windSpeedMps: weather.windSpeedMps, windX, windY, events, rateFn, edge,
+      })
+    : null;
+  const emitEmber = (target: number, tArr: number): void => {
+    if (tArr > duration || tArr >= events.breakT[target] || tArr >= arrival[target]) return;
+    arrival[target] = tArr;
+    sourceCell[target] = curSource;
+    viaEmber[target] = 1;
+    heap.push(tArr, target);
+  };
   let maxRate = 0;
 
   while (heap.size > 0) {
@@ -85,6 +104,10 @@ export function simulate(scenario: Scenario): SimResult {
     const i = heap.pop();
     if (done[i]) continue;
     done[i] = 1;
+    if (spotter) {
+      curSource = i;
+      spotter.spot(i, t, emitEmber);
+    }
 
     const row = (i / width) | 0;
     const col = i - row * width;
@@ -141,6 +164,8 @@ export function simulate(scenario: Scenario): SimResult {
       if (m1 >= 0 && (tArr >= events.breakT[m1] || tArr >= events.breakT[m2])) continue;
       if (tArr < arrival[j]) {
         arrival[j] = tArr;
+        sourceCell[j] = i;
+        viaEmber[j] = 0;
         rateAtIgnition[j] = rate;
         if (rate > maxRate) maxRate = rate;
         heap.push(tArr, j);
@@ -151,6 +176,16 @@ export function simulate(scenario: Scenario): SimResult {
   // Firebreak cells cleared at t=0 are non-burnable from the start; make sure none report an arrival.
   let burnedCells = 0;
   for (let i = 0; i < n; i++) if (arrival[i] !== NEVER_ARRIVES) burnedCells++;
+
+  // Spot fires have no spread edge: use the cell's potential head-fire rate for their intensity.
+  let spotFires = 0;
+  if (spotter) {
+    for (let i = 0; i < n; i++) {
+      if (!viaEmber[i] || arrival[i] === NEVER_ARRIVES) continue;
+      rateAtIgnition[i] = spotter.headRate(i, arrival[i]);
+      spotFires++;
+    }
+  }
 
   // Ignition cells have no incoming edge: give them the strongest spread they started.
   for (const ig of scenario.ignition) {
@@ -174,7 +209,7 @@ export function simulate(scenario: Scenario): SimResult {
   let maxFlame = 0;
   for (let i = 0; i < n; i++) {
     if (arrival[i] === NEVER_ARRIVES) continue;
-    if (maxRate > 0) intensity[i] = rateAtIgnition[i] / maxRate;
+    if (maxRate > 0) intensity[i] = Math.min(1, rateAtIgnition[i] / maxRate);
     const bed = FUELS[fuel[i] as FuelClass].bed;
     const kwPerM = byramIntensityKwM(bed.heatContentJkg, bed.loadKgM2, rateAtIgnition[i]);
     firelineIntensity[i] = kwPerM;
@@ -188,10 +223,13 @@ export function simulate(scenario: Scenario): SimResult {
     intensity,
     firelineIntensityKwM: firelineIntensity,
     flameLengthM: flameLength,
+    sourceCell,
+    ignitedByEmber: viaEmber,
     stats: {
       burnedCells,
       burnedAreaHa: burnedCells * cellAreaHa(grid),
       maxSpreadRateMps: maxRate,
+      spotFires,
       maxIntensityKwM: maxIntensity,
       maxFlameLengthM: maxFlame,
       runtimeMs: now() - t0,
