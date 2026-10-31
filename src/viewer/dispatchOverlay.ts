@@ -107,10 +107,14 @@ export function createDispatchOverlay(viewer: Viewer): DispatchOverlay {
       m.point.show = show;
       if (show) {
         m.point.position = Cartesian3.fromDegrees(k.lon, k.lat, u.airborne ? k.altitudeM : 0) as unknown as Entity['position'];
-        const status = `${m.order.unitName}\n${k.status}`;
+        // Finished units keep their dot but lose the label, or a busy fire reads as a wall of text.
+        const status = k.phase === 'completed' ? '' : `${m.order.unitName}\n${k.status}`;
         if (status !== m.lastStatus) {
           m.lastStatus = status;
-          if (m.point.label) m.point.label.text = new ConstantProperty(status);
+          if (m.point.label) {
+            m.point.label.text = new ConstantProperty(status);
+            m.point.label.show = new ConstantProperty(status !== '');
+          }
         }
       }
       const pts = k.activeLonLats;

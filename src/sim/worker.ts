@@ -28,9 +28,8 @@ ctx.onmessage = (event) => {
         cancelled.delete(msg.id);
         return;
       }
-      const transfer: Transferable[] = [plan.baseline.arrivalTime.buffer, plan.contained.arrivalTime.buffer];
-      if (plan.baseline.intensity) transfer.push(plan.baseline.intensity.buffer);
-      if (plan.contained.intensity && plan.contained.intensity !== plan.baseline.intensity) transfer.push(plan.contained.intensity.buffer);
+      // With no orders the contained run is the baseline itself: never transfer a buffer twice.
+      const transfer = [...new Set<Transferable>([plan.baseline.arrivalTime.buffer, plan.contained.arrivalTime.buffer, plan.baseline.intensity?.buffer, plan.contained.intensity?.buffer].filter((b): b is ArrayBuffer => !!b))];
       ctx.postMessage({ type: 'planResult', id: msg.id, plan }, transfer);
     } catch (err) {
       ctx.postMessage({ type: 'error', id: msg.id, message: err instanceof Error ? err.message : String(err) });
