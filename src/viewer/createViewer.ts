@@ -5,9 +5,11 @@
  */
 
 import {
+  Credit,
   EllipsoidTerrainProvider,
   ImageryLayer,
   OpenStreetMapImageryProvider,
+  UrlTemplateImageryProvider,
   Viewer,
 } from 'cesium';
 import type { Cesium3DTileset } from 'cesium';
@@ -16,6 +18,11 @@ import { tryAddGoogleTiles } from './googleTiles';
 export type ViewerMode = 'google' | 'fallback';
 /** What is drawn under the overlays: the Google tileset (when loaded) or the OSM globe. */
 export type Backdrop = 'tiles' | 'globe';
+/** Globe imagery: OpenStreetMap streets or Esri World Imagery (satellite). Display only. */
+export type Basemap = 'map' | 'satellite';
+
+const SATELLITE_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+const SATELLITE_CREDIT = 'Imagery © Esri, Maxar, Earthstar Geographics, and the GIS User Community';
 
 export interface ViewerHandle {
   viewer: Viewer;
@@ -28,6 +35,8 @@ export interface ViewerHandle {
    * fallback mode or after a late tile failure (the globe is already the only backdrop then).
    */
   setBackdrop(mode: Backdrop): void;
+  /** Swaps the globe imagery. The satellite layer is created on first use. Display only. */
+  setBasemap(basemap: Basemap): void;
 }
 
 export interface CreateViewerOptions {
@@ -39,8 +48,9 @@ export interface CreateViewerOptions {
 
 export async function createViewer(o: CreateViewerOptions): Promise<ViewerHandle> {
   const osm = new OpenStreetMapImageryProvider({ url: 'https://tile.openstreetmap.org/' });
+  const osmLayer = new ImageryLayer(osm);
   const viewer = new Viewer(o.container, {
-    baseLayer: new ImageryLayer(osm),
+    baseLayer: osmLayer,
     terrainProvider: new EllipsoidTerrainProvider(),
     animation: false,
     timeline: false,
@@ -59,6 +69,16 @@ export async function createViewer(o: CreateViewerOptions): Promise<ViewerHandle
   // Double-click on an entity would otherwise fly the camera to it; we handle clicks ourselves.
   viewer.screenSpaceEventHandler.removeInputAction(2 /* LEFT_DOUBLE_CLICK */);
 
+  let satelliteLayer: ImageryLayer | null = null;
+  const setBasemap = (basemap: Basemap): void => {
+    if (basemap === 'satellite' && !satelliteLayer) {
+      const provider = new UrlTemplateImageryProvider({ url: SATELLITE_URL, credit: new Credit(SATELLITE_CREDIT), maximumLevel: 19 });
+      satelliteLayer = viewer.imageryLayers.addImageryProvider(provider);
+    }
+    osmLayer.show = basemap === 'map';
+    if (satelliteLayer) satelliteLayer.show = basemap === 'satellite';
+  };
+
   let tileset: Cesium3DTileset | null = null;
   let tilesAlive = false;
   const setBackdrop = (mode: Backdrop): void => {
@@ -69,7 +89,7 @@ export async function createViewer(o: CreateViewerOptions): Promise<ViewerHandle
 
   const key = (o.googleApiKey ?? '').trim();
   if (!key) {
-    return { viewer, mode: 'fallback', fallbackReason: 'No VITE_GOOGLE_MAPS_API_KEY set.', setBackdrop };
+    return { viewer, mode: 'fallback', fallbackReason: 'No VITE_GOOGLE_MAPS_API_KEY set.', setBackdrop, setBasemap };
   }
   const result = await tryAddGoogleTiles(viewer, key, (reason) => {
     tilesAlive = false;
@@ -78,7 +98,7 @@ export async function createViewer(o: CreateViewerOptions): Promise<ViewerHandle
   if (result.ok) {
     tileset = result.tileset;
     tilesAlive = true;
-    return { viewer, mode: 'google', fallbackReason: '', setBackdrop };
+    return { viewer, mode: 'google', fallbackReason: '', setBackdrop, setBasemap };
   }
-  return { viewer, mode: 'fallback', fallbackReason: result.reason, setBackdrop };
+  return { viewer, mode: 'fallback', fallbackReason: result.reason, setBackdrop, setBasemap };
 }

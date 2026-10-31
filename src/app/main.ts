@@ -61,7 +61,7 @@ async function main(): Promise<void> {
   store.set({ viewerMode: handle.mode });
   if (handle.mode === 'fallback') notices.persistent('fallback', `${STR.fallbackBanner} ${handle.fallbackReason}`);
 
-  const wiring = wire(handle.viewer, store, notices, { setBackdrop: handle.setBackdrop });
+  const wiring = wire(handle.viewer, store, notices, { setBackdrop: handle.setBackdrop, setBasemap: handle.setBasemap });
   wiringRef = wiring;
   mountTools(slots.tools, store, createToolsController(store, wiring));
   startClock(store);

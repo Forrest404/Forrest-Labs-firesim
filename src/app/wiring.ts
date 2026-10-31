@@ -12,9 +12,10 @@ import { computeSlopeAspect } from '../data/terrain';
 import { paintFuel, paintSlope } from '../viewer/burnCanvas';
 import { GridLayer } from '../viewer/burnLayer';
 import { flyToGlobe, flyToGrid, flyToPoint, flyTopDown } from '../viewer/camera';
-import type { Backdrop } from '../viewer/createViewer';
+import type { Backdrop, Basemap } from '../viewer/createViewer';
 import { gridCenter } from '../data/geo';
 import { createHotspotLayer } from '../viewer/hotspotLayer';
+import { createRegionLayer } from '../viewer/regionLayer';
 import type { Viewer } from 'cesium';
 import { createGridOutline } from '../viewer/gridOutline';
 import type { GridOutline } from '../viewer/gridOutline';
@@ -57,6 +58,8 @@ export interface Wiring {
 export interface WireOptions {
   /** Switches the backdrop between Google tiles and the globe (see createViewer). */
   setBackdrop?: (mode: Backdrop) => void;
+  /** Swaps the globe imagery (streets / satellite). */
+  setBasemap?: (basemap: Basemap) => void;
 }
 
 export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireOptions = {}): Wiring {
@@ -68,8 +71,21 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
   // Live-fires detections. Picks arrive from a Cesium event, so the store write is deferred anyway.
   const hotspots = createHotspotLayer(viewer, (id) => {
     if (store.get().view !== 'live') return;
-    queueMicrotask(() => store.update((st) => (st.live.selectedId === id ? {} : { live: { ...st.live, selectedId: id } })));
+    queueMicrotask(() => store.update((st) => {
+      const L = st.live;
+      if (L.selectedId === id && (id !== null || L.selectedRegionId === null)) return {};
+      return { live: { ...L, selectedId: id, selectedRegionId: null } };
+    }));
   });
+  const regions = createRegionLayer(viewer, (id) => {
+    if (store.get().view !== 'live') return;
+    queueMicrotask(() => store.update((st) => (st.live.selectedRegionId === id ? {} : { live: { ...st.live, selectedRegionId: id, selectedId: null } })));
+  });
+  const applyLiveLayers = (s: AppState): void => {
+    const live = s.view === 'live';
+    hotspots.setVisible(live && s.live.layers.dots);
+    regions.setVisible(live && s.live.layers.regions);
+  };
   const simShown = (): boolean => store.get().view === 'sim';
   let ctx: AreaContext | null = null;
   let draw: { start(c: PickedCell): void; move(c: PickedCell): void; end(): void } | null = null;
@@ -140,7 +156,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
     if (!live) picker.setDragMode(s.tool !== 'ignite');
     marker.setVisible(!live);
     effects.setEnabled(!live && s.effects.particles);
-    hotspots.setVisible(live);
+    applyLiveLayers(s);
     if (ctx) {
       ctx.burn.setVisible(!live);
       applyDebug();
@@ -177,7 +193,11 @@ export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireO
     if (s.area !== prev.area) buildArea();
     if (s.view !== prev.view) applyView(s);
     if (s.live.filtered !== prev.live.filtered) hotspots.set(s.live.filtered, Date.now());
+    if (s.live.regions !== prev.live.regions) regions.set(s.live.regions, Date.now());
     if (s.live.selectedId !== prev.live.selectedId) hotspots.setSelected(s.live.selectedId);
+    if (s.live.selectedRegionId !== prev.live.selectedRegionId) regions.setSelected(s.live.selectedRegionId);
+    if (s.live.layers !== prev.live.layers) applyLiveLayers(s);
+    if (s.live.basemap !== prev.live.basemap) opts.setBasemap?.(s.live.basemap);
     if (!ctx) return;
     if (s.debug !== prev.debug) applyDebug();
     if (s.ignition !== prev.ignition && s.area) marker.set(s.area.grid, s.ignition);

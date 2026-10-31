@@ -4,11 +4,12 @@ import {
   MAX_DAYS,
   SOURCE_SETS,
   ageHours,
-  clusterHotspots,
+  convexHull,
   filterHotspots,
   firmsAreaUrl,
   normaliseConfidence,
   parseFirmsCsv,
+  regionsFromHotspots,
 } from '../src/data/firms';
 
 const KEY = 'ffffffffffffffffffffffffffffffff';
@@ -151,37 +152,61 @@ describe('filterHotspots', () => {
   });
 });
 
-describe('clusterHotspots', () => {
+describe('convexHull', () => {
+  it('drops interior and collinear points and returns a counter-clockwise ring', () => {
+    const hull = convexHull([[0, 0], [2, 0], [2, 2], [0, 2], [1, 1], [1, 0]]);
+    expect(hull).toEqual([[0, 0], [2, 0], [2, 2], [0, 2]]);
+    expect(convexHull([[0, 0], [1, 1]])).toHaveLength(2);
+  });
+});
+
+describe('regionsFromHotspots', () => {
   const all = [...parseFirmsCsv(VIIRS), ...parseFirmsCsv(MODIS)];
 
-  it('bins nearby detections and sums their FRP', () => {
-    const clusters = clusterHotspots(all, 0.25);
-    expect(clusters[0].id).toBe('146:-476'); // the 88.3 MW Sierra point is the largest single bin
-    expect(clusters[0].count).toBe(1);
-    const aus = clusters.find((c) => c.count === 2)!;
+  it('links detections within ~2 km and keeps the rest apart', () => {
+    const regions = regionsFromHotspots(all);
+    // Six detections; only the two Australian ones (VIIRS + MODIS, ~1.5 km apart) share a region.
+    expect(regions).toHaveLength(5);
+    const aus = regions.find((r) => r.count === 2)!;
     expect(aus).toBeDefined();
     expect(aus.frpSum).toBeCloseTo(40, 9);
     expect(aus.frpMax).toBe(27.4);
-    expect(aus.latestAt).toBe(Date.UTC(2026, 9, 31, 4, 30));
     expect(aus.sampleId).toMatch(/^MAqua:/);
-    // FRP-weighted centroid sits between the two points, nearer the 27.4 MW one.
-    expect(aus.lat).toBeGreaterThan(-15.831);
-    expect(aus.lat).toBeLessThan(-15.8213);
+    expect(aus.id).toBe(`R:${aus.sampleId}`);
+    expect(aus.latestAt).toBe(Date.UTC(2026, 9, 31, 4, 30));
+    // FRP-weighted centroid between the two points, nearer the 27.4 MW one.
     expect(Math.abs(aus.lat - -15.831)).toBeLessThan(Math.abs(aus.lat - -15.8213));
+    // The hull encloses both points and the bbox spans both footprints.
+    expect(aus.hull.length).toBeGreaterThanOrEqual(4);
+    expect(aus.bbox.south).toBeLessThan(-15.831);
+    expect(aus.bbox.north).toBeGreaterThan(-15.8213);
+    expect(aus.bbox.west).toBeLessThan(131.102);
+    expect(aus.bbox.east).toBeGreaterThan(131.1125);
+    // Two Colorado MODIS points are ~10 km apart: separate regions.
+    expect(regions.filter((r) => r.lon < -105 && r.lon > -106)).toHaveLength(2);
   });
 
-  it('sorts by summed FRP and honours the limit', () => {
-    const sums = clusterHotspots(all, 0.25).map((c) => c.frpSum);
+  it('gives a single detection a footprint rectangle of scan x track km', () => {
+    const [h] = parseFirmsCsv(VIIRS); // scan 0.39 km, track 0.36 km
+    const [r] = regionsFromHotspots([h]);
+    expect(r.hull).toHaveLength(4);
+    expect(r.areaKm2).toBeCloseTo(0.39 * 0.36, 2);
+    expect(r.lat).toBeCloseTo(h.lat, 9);
+    expect(r.lon).toBeCloseTo(h.lon, 9);
+  });
+
+  it('sorts by summed FRP, largest first', () => {
+    const sums = regionsFromHotspots(all).map((r) => r.frpSum);
     expect(sums).toEqual([...sums].sort((a, b) => b - a));
-    expect(clusterHotspots(all, 0.25, 2)).toHaveLength(2);
-    expect(clusterHotspots([], 0.25)).toEqual([]);
+    expect(sums[0]).toBe(88.3);
+    expect(regionsFromHotspots([])).toEqual([]);
   });
 
-  it('falls back to a plain centroid when FRP is zero', () => {
-    const zero = parseFirmsCsv(VIIRS).slice(0, 1).map((h) => ({ ...h, frp: 0 }));
-    const [c] = clusterHotspots(zero);
-    expect(c.lat).toBe(zero[0].lat);
-    expect(c.lon).toBe(zero[0].lon);
+  it('honours the linkage distance', () => {
+    // With a 1-degree linkage the two Colorado points (0.09 deg apart) join as well.
+    expect(regionsFromHotspots(all, 1)).toHaveLength(4);
+    // At 0.01 deg the Australian pair sits in diagonally adjacent cells and must still join.
+    expect(regionsFromHotspots(all, 0.01)).toHaveLength(5);
   });
 });
 

@@ -146,8 +146,12 @@ fire perimeters and the tab is not for safety decisions.
 - Needs a free `VITE_FIRMS_MAP_KEY` in `.env.local` (see Environment). Nothing is fetched without it.
 - Pick the source and the window (last 24 h to 3 days); filter by confidence, radiative power
   (FRP, MW) and day/night pass. Colour is age (yellow = newest), size is FRP.
-- "Largest fires" lists the 0.25° bins with the most summed FRP; click to fly there. Click a dot
-  for its details.
+- **Fire regions** outline groups of detections within about 2 km of each other (the convex hull
+  of their pixel footprints) with count, total and peak FRP, footprint area and latest observation.
+  They are derived from the points, not mapped perimeters. "Largest fires" lists the regions with
+  the most summed FRP; click to fly there. Click a region or a dot for its details.
+- **Layers**: detections and fire regions are independent toggles. **Basemap**: OpenStreetMap or
+  satellite (Esri World Imagery, key-free, display only).
 - Results are cached for 10 minutes and a manual refresh is honoured at most once a minute, because
   one key allows 5000 transactions per 10 minutes and the deployed site shares one key between all
   visitors.
@@ -159,7 +163,8 @@ fire perimeters and the tab is not for safety decisions.
 ## Attribution
 
 Fire detections (Live fires tab): NASA FIRMS, VIIRS and MODIS near-real-time products (NASA open
-data; cite "NASA FIRMS"). Land cover © OpenStreetMap contributors (ODbL). Elevation: AWS Terrain Tiles (Mapzen Terrarium;
+data; cite "NASA FIRMS"). Satellite basemap (Live fires tab, optional): Esri World Imagery © Esri, Maxar,
+Earthstar Geographics, and the GIS User Community (display only). Land cover © OpenStreetMap contributors (ODbL). Elevation: AWS Terrain Tiles (Mapzen Terrarium;
 underlying sources per <https://registry.opendata.aws/terrain-tiles/>). Basemap tiles ©
 OpenStreetMap. 3D tiles (optional): Google. Rendering: CesiumJS.
 

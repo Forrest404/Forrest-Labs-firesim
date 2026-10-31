@@ -182,7 +182,14 @@ Companion files: [DECISIONS.md](DECISIONS.md) (judgement calls), [FEATURES.md](F
 - Verified without a key (fallback globe): key-missing card with link, refresh disabled, nothing
   fetched. With a bogus key: FIRMS answers 400 without CORS headers, so the browser reports
   "NASA FIRMS did not answer…" (see D20); nothing crashes.
-- Not verified by a human: real mouse clicks on dots (the pick path uses `scene.pick` with a 6 px
+- Fire regions + satellite basemap (D21): `regionsFromHotspots` (tested: linkage, adjacency,
+  hull, footprint area; mutation-checked on the neighbour linkage), `src/viewer/regionLayer.ts`
+  (one batched `GroundPrimitive`, highlight primitive for the selection), `live.layers` and
+  `live.basemap`, `ViewerHandle.setBasemap`. Headless with a real key: 52,302 filtered detections
+  gave 12,899 regions (largest: 676 detections, 7,390 MW, ~800 km², 21-vertex hull), region
+  fly-to fills the region card and highlights the list entry, the satellite basemap pulled 56
+  Esri tiles, toggling regions off removes the hulls, selecting a point clears the region.
+- Not verified by a human: real mouse clicks on dots or regions (the pick path uses `scene.pick` with a 6 px
   box and was exercised only through `__firesim.live.flyToCluster`), the phone layout of the live
   pane, and behaviour when Google tiles fail *while* the live view is open.
 

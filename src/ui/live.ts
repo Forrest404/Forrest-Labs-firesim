@@ -1,13 +1,14 @@
 /**
- * Live fires pane: NASA FIRMS detections. Status + source/day-range, filters, the largest fires
- * (by summed radiative power), and the selected detection. Reads `state.live`, writes only
- * through LiveActions. Lists are rebuilt only when their input changes (D19).
+ * Live fires pane: NASA FIRMS detections. Status + source/day-range, layers (dots, fire regions,
+ * basemap), filters, the largest fire regions (by summed radiative power), and the selected
+ * region or detection. Reads `state.live`, writes only through LiveActions. Lists are rebuilt
+ * only when their input changes (D19).
  */
 
 import type { LiveActions } from '../app/liveController';
 import type { AppState, Store } from '../app/state';
-import { FIRMS_KEY_URL, clusterKey } from '../data/firms';
-import type { Hotspot, HotspotCluster, LiveSource } from '../data/firms';
+import { FIRMS_KEY_URL } from '../data/firms';
+import type { FireRegion, Hotspot, LiveSource } from '../data/firms';
 import { chip, iconButton, row, section, segmented, slider, toggle } from './controls';
 import { el, formatAge, formatUtc } from './el';
 import { STR } from './strings';
@@ -19,6 +20,11 @@ const SOURCES: { value: LiveSource; label: string }[] = [
   { value: 'modis', label: STR.liveSourceModis },
 ];
 const DAYS = [1, 2, 3] as const;
+const LIST_LIMIT = 10;
+
+function formatArea(km2: number): string {
+  return km2 < 10 ? `${km2.toFixed(1)} km²` : `${Math.round(km2).toLocaleString()} km²`;
+}
 
 export function mountLive(container: HTMLElement, store: Store, actions: LiveActions): void {
   // --- Detections card -------------------------------------------------------------------
@@ -40,6 +46,17 @@ export function mountLive(container: HTMLElement, store: Store, actions: LiveAct
     el('a', { href: FIRMS_KEY_URL, target: '_blank', rel: 'noopener noreferrer' }, STR.liveKeyLink),
   );
   main.body.append(status, controls, errorText, empty, keyMissing, el('div', { class: 'muted hint' }, STR.liveHonesty));
+
+  // --- Layers card -----------------------------------------------------------------------
+  const layers = section('layers', STR.liveLayers);
+  const dots = toggle(STR.liveLayerDots, (on) => actions.setLayers({ dots: on }));
+  const regionsToggle = toggle(STR.liveLayerRegions, (on) => actions.setLayers({ regions: on }));
+  const basemap = segmented(
+    [{ value: 'map', label: STR.liveBasemapMap }, { value: 'satellite', label: STR.liveBasemapSatellite }],
+    (v) => actions.setBasemap(v as 'map' | 'satellite'),
+    { ariaLabel: STR.liveBasemap, class: 'small' },
+  );
+  layers.body.append(dots.root, regionsToggle.root, row(STR.liveBasemap, basemap.root), el('div', { class: 'muted hint' }, STR.liveRegionsHint));
 
   // --- Filters card ----------------------------------------------------------------------
   const filters = section('sliders', STR.liveFilters);
@@ -63,7 +80,15 @@ export function mountLive(container: HTMLElement, store: Store, actions: LiveAct
   const largest = section('flame', STR.liveLargest);
   const list = el('ol', { class: 'clusters' });
   largest.body.append(list);
-  const clusterButtons = new Map<string, HTMLButtonElement>();
+  const regionButtons = new Map<string, HTMLButtonElement>();
+
+  // --- Selected region card --------------------------------------------------------------
+  const clearRegionBtn = iconButton('x', STR.liveClear, () => actions.selectRegion(null), { class: 'tiny' });
+  const region = section('layers', STR.liveRegion, { trailing: clearRegionBtn });
+  const regionKv = el('dl', { class: 'kv' });
+  const regionFly = el('button', { type: 'button', onclick: () => { const id = store.get().live.selectedRegionId; if (id) actions.flyToRegion(id); } }, STR.liveFlyHere);
+  region.body.append(regionKv, regionFly);
+  region.root.hidden = true;
 
   // --- Selected detection card -----------------------------------------------------------
   const clearBtn = iconButton('x', STR.liveClear, () => actions.select(null), { class: 'tiny' });
@@ -73,12 +98,13 @@ export function mountLive(container: HTMLElement, store: Store, actions: LiveAct
   selected.body.append(kv, flyBtn);
   selected.root.hidden = true;
 
-  container.append(main.root, filters.root, largest.root, selected.root, el('div', { class: 'muted hint' }, STR.liveAttribution));
+  container.append(main.root, layers.root, filters.root, largest.root, region.root, selected.root, el('div', { class: 'muted hint' }, STR.liveAttribution));
 
   // --- Rendering -------------------------------------------------------------------------
   let byId = new Map<string, Hotspot>();
+  let regionById = new Map<string, FireRegion>();
   let lastHotspots: Hotspot[] | null = null;
-  let lastClusters: HotspotCluster[] | null = null;
+  let lastRegions: FireRegion[] | null = null;
 
   const renderMeta = (s: AppState): void => {
     const L = s.live;
@@ -87,23 +113,37 @@ export function mountLive(container: HTMLElement, store: Store, actions: LiveAct
     else meta.textContent = `${STR.liveUpdated} ${formatAge(L.fetchedAt)}`;
   };
 
-  const renderClusters = (s: AppState): void => {
+  const renderList = (s: AppState): void => {
     const L = s.live;
-    if (L.clusters !== lastClusters) {
-      lastClusters = L.clusters;
-      clusterButtons.clear();
-      list.replaceChildren(...L.clusters.map((c) => {
-        const b = el('button', { type: 'button', onclick: () => actions.flyToCluster(c.id) },
-          el('span', { class: 'frp' }, `${Math.round(c.frpSum)} MW`),
-          el('span', { class: 'sub' }, `${c.count} ${STR.liveDetections} · ${c.lat.toFixed(2)}, ${c.lon.toFixed(2)} · ${formatAge(c.latestAt)}`),
+    if (L.regions !== lastRegions) {
+      lastRegions = L.regions;
+      regionById = new Map(L.regions.map((r) => [r.id, r]));
+      regionButtons.clear();
+      list.replaceChildren(...L.regions.slice(0, LIST_LIMIT).map((r) => {
+        const b = el('button', { type: 'button', onclick: () => actions.flyToRegion(r.id) },
+          el('span', { class: 'frp' }, `${Math.round(r.frpSum)} MW`),
+          el('span', { class: 'sub' }, `${r.count} ${STR.liveDetections} · ${formatArea(r.areaKm2)} · ${formatAge(r.latestAt)}`),
         ) as HTMLButtonElement;
-        clusterButtons.set(c.id, b);
+        regionButtons.set(r.id, b);
         return el('li', {}, b);
       }));
     }
-    const sel = L.selectedId ? byId.get(L.selectedId) : undefined;
-    const selKey = sel ? clusterKey(sel.lat, sel.lon) : null;
-    for (const [id, b] of clusterButtons) b.classList.toggle('on', id === selKey);
+    for (const [id, b] of regionButtons) b.classList.toggle('on', id === L.selectedRegionId);
+  };
+
+  const renderRegion = (s: AppState): void => {
+    const r = s.live.selectedRegionId ? regionById.get(s.live.selectedRegionId) : undefined;
+    region.root.hidden = !r;
+    if (!r) return;
+    const pairs: [string, string][] = [
+      [STR.liveRegionCount, String(r.count)],
+      [STR.liveRegionFrpSum, `${Math.round(r.frpSum)} MW`],
+      [STR.liveRegionFrpMax, `${r.frpMax.toFixed(1)} MW`],
+      [STR.liveRegionArea, formatArea(r.areaKm2)],
+      [STR.liveRegionLatest, `${formatUtc(r.latestAt)} (${formatAge(r.latestAt)})`],
+      [STR.liveRegionCentre, `${r.lat.toFixed(3)}, ${r.lon.toFixed(3)}`],
+    ];
+    regionKv.replaceChildren(...pairs.flatMap(([k, v]) => [el('dt', {}, k), el('dd', {}, v)]));
   };
 
   const renderSelected = (s: AppState): void => {
@@ -141,11 +181,15 @@ export function mountLive(container: HTMLElement, store: Store, actions: LiveAct
     empty.hidden = !(L.status === 'ready' && L.filtered.length === 0);
     source.set(L.source);
     days.set(L.days);
+    dots.input.checked = L.layers.dots;
+    regionsToggle.input.checked = L.layers.regions;
+    basemap.set(L.basemap);
     hideLow.input.checked = L.filters.hideLow;
     if (document.activeElement !== minFrp) minFrp.value = String(L.filters.minFrp);
     minFrpVal.textContent = `${L.filters.minFrp} MW`;
     pass.set(L.filters.daynight);
-    renderClusters(s);
+    renderList(s);
+    renderRegion(s);
     renderSelected(s);
   };
 

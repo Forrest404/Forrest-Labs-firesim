@@ -184,9 +184,15 @@ export function filterHotspots(hs: Hotspot[], f: HotspotFilters): Hotspot[] {
   return hs.filter((h) => (!f.hideLow || h.confidence !== 'low') && h.frp >= f.minFrp && (dn === null || h.daynight === dn));
 }
 
-export interface HotspotCluster {
-  /** Bin key "latIndex:lonIndex". */
+/** Linkage distance for fire regions, degrees (~2 km): detections closer than this join a region. */
+export const REGION_LINK_DEG = 0.02;
+
+/** A connected group of detections, outlined by the convex hull of their pixel footprints. */
+export interface FireRegion {
+  /** Stable while the strongest member stays: "R:" + that member's id. */
   id: string;
+  /** Convex hull ring, [lon, lat] pairs, counter-clockwise, not closed. */
+  hull: [number, number][];
   /** FRP-weighted centroid. */
   lat: number;
   lon: number;
@@ -196,52 +202,144 @@ export interface HotspotCluster {
   latestAt: number;
   /** Id of the member with the highest FRP. */
   sampleId: string;
+  /** Hull area, km². */
+  areaKm2: number;
+  bbox: BBox;
 }
 
-/** Bin size used by the UI's "largest fires" list, degrees. */
-export const CLUSTER_CELL_DEG = 0.25;
+const KM_PER_DEG = 111.32;
+const DEFAULT_PIXEL_KM = 0.375;
 
-export function clusterKey(lat: number, lon: number, cellDeg = CLUSTER_CELL_DEG): string {
-  return `${Math.floor(lat / cellDeg)}:${Math.floor(lon / cellDeg)}`;
-}
-
-/** Bins detections on a cellDeg grid and returns the top `limit` bins by summed FRP. */
-export function clusterHotspots(hs: Hotspot[], cellDeg = CLUSTER_CELL_DEG, limit = 10): HotspotCluster[] {
-  interface Acc { c: HotspotCluster; wLat: number; wLon: number; sLat: number; sLon: number }
-  const bins = new Map<string, Acc>();
-  for (const h of hs) {
-    const id = clusterKey(h.lat, h.lon, cellDeg);
-    let a = bins.get(id);
-    if (!a) {
-      a = { c: { id, lat: 0, lon: 0, count: 0, frpSum: 0, frpMax: -Infinity, latestAt: -Infinity, sampleId: h.id }, wLat: 0, wLon: 0, sLat: 0, sLon: 0 };
-      bins.set(id, a);
-    }
-    const w = Math.max(0, h.frp);
-    a.c.count++;
-    a.c.frpSum += w;
-    if (h.frp > a.c.frpMax) {
-      a.c.frpMax = h.frp;
-      a.c.sampleId = h.id;
-    }
-    if (h.acquiredAt > a.c.latestAt) a.c.latestAt = h.acquiredAt;
-    a.wLat += h.lat * w;
-    a.wLon += h.lon * w;
-    a.sLat += h.lat;
-    a.sLon += h.lon;
+/** Andrew's monotone chain. Returns the hull counter-clockwise without the closing point. */
+export function convexHull(points: [number, number][]): [number, number][] {
+  const pts = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  if (pts.length < 3) return pts;
+  const cross = (o: [number, number], a: [number, number], b: [number, number]): number =>
+    (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lower: [number, number][] = [];
+  for (const p of pts) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+    lower.push(p);
   }
-  const out: HotspotCluster[] = [];
-  for (const a of bins.values()) {
-    if (a.c.frpSum > 0) {
-      a.c.lat = a.wLat / a.c.frpSum;
-      a.c.lon = a.wLon / a.c.frpSum;
-    } else {
-      a.c.lat = a.sLat / a.c.count;
-      a.c.lon = a.sLon / a.c.count;
+  const upper: [number, number][] = [];
+  for (let i = pts.length - 1; i >= 0; i--) {
+    const p = pts[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+    upper.push(p);
+  }
+  lower.pop();
+  upper.pop();
+  return lower.concat(upper);
+}
+
+/** Shoelace area of a lon/lat ring, km², using a local equirectangular scale at the ring's mean latitude. */
+function ringAreaKm2(ring: [number, number][]): number {
+  if (ring.length < 3) return 0;
+  const meanLat = ring.reduce((a, p) => a + p[1], 0) / ring.length;
+  const kx = KM_PER_DEG * Math.max(0.01, Math.cos((meanLat * Math.PI) / 180));
+  let sum = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const [x1, y1] = ring[i];
+    const [x2, y2] = ring[(i + 1) % ring.length];
+    sum += x1 * kx * y2 * KM_PER_DEG - x2 * kx * y1 * KM_PER_DEG;
+  }
+  return Math.abs(sum) / 2;
+}
+
+/**
+ * Groups detections into fire regions: single-linkage on a `linkDeg` grid (8-neighbourhood), then
+ * the convex hull of every member's pixel footprint (scan × track km, centred on the point).
+ * Sorted by summed FRP, largest first.
+ */
+export function regionsFromHotspots(hs: Hotspot[], linkDeg = REGION_LINK_DEG): FireRegion[] {
+  const n = hs.length;
+  if (n === 0) return [];
+  const parent = new Int32Array(n);
+  for (let i = 0; i < n; i++) parent[i] = i;
+  const find = (i: number): number => {
+    while (parent[i] !== i) {
+      parent[i] = parent[parent[i]];
+      i = parent[i];
     }
-    out.push(a.c);
+    return i;
+  };
+  const union = (a: number, b: number): void => {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent[rb] = ra;
+  };
+  const cells = new Map<string, number>();
+  const ci = new Int32Array(n);
+  const cj = new Int32Array(n);
+  for (let i = 0; i < n; i++) {
+    ci[i] = Math.floor(hs[i].lat / linkDeg);
+    cj[i] = Math.floor(hs[i].lon / linkDeg);
+    const key = `${ci[i]}:${cj[i]}`;
+    const first = cells.get(key);
+    if (first === undefined) cells.set(key, i);
+    else union(first, i);
+  }
+  // Half the 8-neighbourhood is enough: the other half is visited from the neighbour's side.
+  const offsets = [[0, 1], [1, -1], [1, 0], [1, 1]];
+  for (const [key, first] of cells) {
+    const [a, b] = key.split(':').map(Number);
+    for (const [di, dj] of offsets) {
+      const other = cells.get(`${a + di}:${b + dj}`);
+      if (other !== undefined) union(first, other);
+    }
+  }
+  const groups = new Map<number, number[]>();
+  for (let i = 0; i < n; i++) {
+    const r = find(i);
+    const g = groups.get(r);
+    if (g) g.push(i);
+    else groups.set(r, [i]);
+  }
+  const out: FireRegion[] = [];
+  for (const members of groups.values()) {
+    const corners: [number, number][] = [];
+    let count = 0, frpSum = 0, frpMax = -Infinity, latestAt = -Infinity, sampleId = '';
+    let wLat = 0, wLon = 0, sLat = 0, sLon = 0;
+    let west = Infinity, south = Infinity, east = -Infinity, north = -Infinity;
+    for (const i of members) {
+      const h = hs[i];
+      const halfLat = ((h.track || DEFAULT_PIXEL_KM) / 2) / KM_PER_DEG;
+      const halfLon = ((h.scan || DEFAULT_PIXEL_KM) / 2) / (KM_PER_DEG * Math.max(0.01, Math.cos((h.lat * Math.PI) / 180)));
+      corners.push([h.lon - halfLon, h.lat - halfLat], [h.lon + halfLon, h.lat - halfLat], [h.lon + halfLon, h.lat + halfLat], [h.lon - halfLon, h.lat + halfLat]);
+      const w = Math.max(0, h.frp);
+      count++;
+      frpSum += w;
+      if (h.frp > frpMax) {
+        frpMax = h.frp;
+        sampleId = h.id;
+      }
+      if (h.acquiredAt > latestAt) latestAt = h.acquiredAt;
+      wLat += h.lat * w;
+      wLon += h.lon * w;
+      sLat += h.lat;
+      sLon += h.lon;
+      west = Math.min(west, h.lon - halfLon);
+      east = Math.max(east, h.lon + halfLon);
+      south = Math.min(south, h.lat - halfLat);
+      north = Math.max(north, h.lat + halfLat);
+    }
+    const hull = convexHull(corners);
+    out.push({
+      id: `R:${sampleId}`,
+      hull,
+      lat: frpSum > 0 ? wLat / frpSum : sLat / count,
+      lon: frpSum > 0 ? wLon / frpSum : sLon / count,
+      count,
+      frpSum,
+      frpMax,
+      latestAt,
+      sampleId,
+      areaKm2: ringAreaKm2(hull),
+      bbox: { west, south, east, north },
+    });
   }
   out.sort((x, y) => y.frpSum - x.frpSum || y.count - x.count);
-  return out.slice(0, Math.max(0, limit));
+  return out;
 }
 
 export function ageHours(h: Hotspot, nowMs: number): number {

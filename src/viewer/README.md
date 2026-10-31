@@ -9,7 +9,8 @@ fallback (`googleTiles.ts`), the burn overlay (`burnCanvas.ts` draws pixels from
 (`gridOutline.ts`), camera helpers (`camera.ts`), picking (`picking.ts`: screen -> lon/lat ->
 cell via `src/data/geo.ts`), particle flames and smoke (`particles.ts`). Live fires: `hotspotLayer.ts`
 (PointPrimitiveCollection, age colour, FRP size, own click handler); `createViewer` exposes
-`setBackdrop('tiles' | 'globe')` because the live view always draws on the globe.
+`setBackdrop('tiles' | 'globe')` because the live view always draws on the globe. `regionLayer.ts` drapes fire-region hulls as one
+batched `GroundPrimitive`. `setBasemap('map' | 'satellite')` swaps OSM for Esri World Imagery (lazy).
 
 **Must not import:** `src/ui`, `src/sim` internals. It may import `src/contract` and `src/data/geo`.
 

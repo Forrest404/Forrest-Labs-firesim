@@ -6,9 +6,9 @@
 import { DEFAULT_DURATION_SECONDS, DEFAULT_SETTINGS, DEFAULT_WEATHER } from '../contract';
 import type { CellRef, Intervention, SimResult, SimSettings, Weather } from '../contract';
 import type { DemoArea, DemoAreaIndexEntry } from '../data/bundle';
-import type { ViewerMode } from '../viewer/createViewer';
+import type { Basemap, ViewerMode } from '../viewer/createViewer';
 import { DEFAULT_FILTERS } from '../data/firms';
-import type { Hotspot, HotspotCluster, HotspotFilters, LiveSource } from '../data/firms';
+import type { FireRegion, Hotspot, HotspotFilters, LiveSource } from '../data/firms';
 
 export type ToolId = 'ignite' | 'firebreak' | 'water';
 
@@ -16,6 +16,13 @@ export type ToolId = 'ignite' | 'firebreak' | 'water';
 export type ViewId = 'sim' | 'live';
 
 export type LiveStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+export interface LiveLayers {
+  /** Individual detections as points. */
+  dots: boolean;
+  /** Fire regions: hulls around linked detections. */
+  regions: boolean;
+}
 
 export interface LiveState {
   /** False when no VITE_FIRMS_MAP_KEY was compiled in. */
@@ -30,10 +37,13 @@ export interface LiveState {
   hotspots: Hotspot[];
   /** Derived from hotspots + filters; written in the same update as either. */
   filtered: Hotspot[];
-  /** Derived top bins by summed FRP, for the "largest fires" list. */
-  clusters: HotspotCluster[];
+  /** Derived from filtered: linked detections with hulls, sorted by summed FRP. */
+  regions: FireRegion[];
+  layers: LiveLayers;
+  basemap: Basemap;
   fetchedAt: number | null;
   selectedId: string | null;
+  selectedRegionId: string | null;
 }
 
 export interface PlaybackState {
@@ -110,9 +120,12 @@ export function initialLive(): LiveState {
     error: null,
     hotspots: [],
     filtered: [],
-    clusters: [],
+    regions: [],
+    layers: { dots: true, regions: true },
+    basemap: 'map',
     fetchedAt: null,
     selectedId: null,
+    selectedRegionId: null,
   };
 }
 

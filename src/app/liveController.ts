@@ -7,14 +7,15 @@
  * so anything triggered from a subscriber is deferred with queueMicrotask.
  */
 
-import { clusterHotspots, filterHotspots } from '../data/firms';
+import { filterHotspots, regionsFromHotspots } from '../data/firms';
 import type { Hotspot, HotspotFilters, LiveSource } from '../data/firms';
 import { FirmsError } from '../data/firmsClient';
 import type { FirmsClient, FirmsErrorKind } from '../data/firmsClient';
 import type { Notices } from '../ui/notices';
 import { STR } from '../ui/strings';
 import { redact } from '../viewer/redact';
-import type { LiveState, Store, ViewId } from './state';
+import type { Basemap } from '../viewer/createViewer';
+import type { LiveLayers, LiveState, Store, ViewId } from './state';
 
 export interface LiveActions {
   setView(view: ViewId): void;
@@ -22,17 +23,21 @@ export interface LiveActions {
   setSource(source: LiveSource): void;
   setDays(days: 1 | 2 | 3): void;
   setFilters(patch: Partial<HotspotFilters>): void;
+  setLayers(patch: Partial<LiveLayers>): void;
+  setBasemap(basemap: Basemap): void;
   select(id: string | null): void;
+  selectRegion(id: string | null): void;
   flyToHotspot(id: string): void;
-  flyToCluster(id: string): void;
+  flyToRegion(id: string): void;
 }
 
 const HOTSPOT_RANGE_M = 60_000;
-const CLUSTER_RANGE_M = 150_000;
+const REGION_RANGE_MIN_M = 15_000;
+const REGION_RANGE_MAX_M = 400_000;
 
-function derive(hotspots: Hotspot[], filters: HotspotFilters): Pick<LiveState, 'filtered' | 'clusters'> {
+function derive(hotspots: Hotspot[], filters: HotspotFilters): Pick<LiveState, 'filtered' | 'regions'> {
   const filtered = filterHotspots(hotspots, filters);
-  return { filtered, clusters: clusterHotspots(filtered) };
+  return { filtered, regions: regionsFromHotspots(filtered) };
 }
 
 export function createLiveController(
@@ -68,6 +73,7 @@ export function createLiveController(
         status: 'ready',
         error: null,
         selectedId: null,
+        selectedRegionId: null,
       }));
       if (force && r.fromCache) notices.show(STR.liveUpToDate, 'info', 2500);
     } catch (err) {
@@ -89,8 +95,13 @@ export function createLiveController(
   });
 
   const select = (id: string | null): void => {
-    if (store.get().live.selectedId === id) return;
-    patchLive(() => ({ selectedId: id }));
+    const L = store.get().live;
+    if (L.selectedId === id && (id === null ? L.selectedRegionId === null : true)) return;
+    patchLive(() => ({ selectedId: id, selectedRegionId: null }));
+  };
+  const selectRegion = (id: string | null): void => {
+    if (store.get().live.selectedRegionId === id) return;
+    patchLive(() => ({ selectedRegionId: id, selectedId: null }));
   };
 
   return {
@@ -100,7 +111,7 @@ export function createLiveController(
         return {
           view,
           playback: { ...s.playback, playing: false },
-          live: view === 'sim' ? { ...s.live, selectedId: null } : s.live,
+          live: view === 'sim' ? { ...s.live, selectedId: null, selectedRegionId: null } : s.live,
         };
       });
     },
@@ -122,21 +133,33 @@ export function createLiveController(
         const filters = { ...live.filters, ...patch };
         const d = derive(live.hotspots, filters);
         const keep = live.selectedId !== null && d.filtered.some((h) => h.id === live.selectedId);
-        return { filters, ...d, selectedId: keep ? live.selectedId : null };
+        const keepRegion = live.selectedRegionId !== null && d.regions.some((r) => r.id === live.selectedRegionId);
+        return { filters, ...d, selectedId: keep ? live.selectedId : null, selectedRegionId: keepRegion ? live.selectedRegionId : null };
       });
     },
+    setLayers(patch) {
+      patchLive((live) => ({ layers: { ...live.layers, ...patch } }));
+    },
+    setBasemap(basemap) {
+      if (store.get().live.basemap === basemap) return;
+      patchLive(() => ({ basemap }));
+    },
     select,
+    selectRegion,
     flyToHotspot(id) {
       const h = store.get().live.filtered.find((x) => x.id === id);
       if (!h) return;
       select(id);
       flyTo(h.lon, h.lat, HOTSPOT_RANGE_M);
     },
-    flyToCluster(id) {
-      const c = store.get().live.clusters.find((x) => x.id === id);
-      if (!c) return;
-      select(c.sampleId);
-      flyTo(c.lon, c.lat, CLUSTER_RANGE_M);
+    flyToRegion(id) {
+      const r = store.get().live.regions.find((x) => x.id === id);
+      if (!r) return;
+      selectRegion(id);
+      const b = r.bbox;
+      const kx = 111_320 * Math.max(0.01, Math.cos((r.lat * Math.PI) / 180));
+      const diag = Math.hypot((b.east - b.west) * kx, (b.north - b.south) * 111_320);
+      flyTo(r.lon, r.lat, Math.min(REGION_RANGE_MAX_M, Math.max(REGION_RANGE_MIN_M, diag * 3)));
     },
   };
 }

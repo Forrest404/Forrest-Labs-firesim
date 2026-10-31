@@ -78,10 +78,9 @@ export function createHotspotLayer(viewer: Viewer, onPick: (id: string | null) =
   handler.setInputAction((e: ScreenSpaceEventHandler.PositionedEvent) => {
     if (!collection.show) return;
     const picked = scene.pick(e.position, 6, 6) as { collection?: unknown; id?: unknown; primitive?: { id?: unknown } } | undefined;
-    let id: string | null = null;
-    if (picked && picked.collection === collection && typeof picked.id === 'string') id = picked.id;
-    else if (picked?.primitive && typeof picked.primitive.id === 'string' && byId.has(picked.primitive.id)) id = picked.primitive.id;
-    onPick(id);
+    if (picked && picked.collection === collection && typeof picked.id === 'string') onPick(picked.id);
+    else if (picked?.primitive && typeof picked.primitive.id === 'string' && byId.has(picked.primitive.id)) onPick(picked.primitive.id);
+    else if (!picked) onPick(null); // clicked empty globe: clear; hits on other layers are theirs to handle
   }, ScreenSpaceEventType.LEFT_CLICK);
 
   const restore = (): void => {

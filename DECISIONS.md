@@ -232,3 +232,32 @@ a possible later "historical compare" feature).
 - **Sim objects in the live view.** Grid layers, outline, marker and particles are hidden, the
   grid picker is disabled, Space/Escape/Cmd+Z are gated to the sim tab; sim state (area, result,
   playback position) survives the switch and the camera flies back to the grid.
+
+## D21. Live fires: fire regions and a satellite basemap
+
+- **Fire regions are derived, not downloaded.** FIRMS publishes points, not perimeters. A region
+  is the set of detections linked by single-linkage on a 0.02° (~2 km) grid with 8-neighbour
+  cells (`regionsFromHotspots`), outlined by the convex hull of every member's pixel footprint
+  (scan × track km around the point, so a lone detection is a ~375 m rectangle, not a dot with
+  no area). Regions carry count, summed and peak FRP, hull area (shoelace, local scale) and the
+  latest observation. The copy says they are footprints of detections, not mapped perimeters.
+  Why a hull and not a raster: a few thousand polygons batch into one `GroundPrimitive` and pick
+  per instance; a global raster would need its own tiling. Why 2 km: VIIRS pixels are 375 m and
+  neighbouring pixels of one fire are never further apart than a few pixels; 2 km also bridges
+  the gap between a NOAA-20 and a SNPP overpass of the same fire.
+- **"Largest fires" lists regions**, replacing the earlier 0.25° bins (D20): a bin cut fires in
+  half and merged unrelated ones. Ids are `R:` + the strongest member's id, so a selection
+  survives a filter change as long as that member stays.
+- **Layers are toggles, not modes.** Detections and regions are independent switches in the
+  store (`live.layers`), both on by default; the region layer hides with the live view like the
+  dots. Selecting a region clears the point selection and vice versa; a click on empty globe
+  clears both (only the dots layer treats "picked nothing" as a miss, so the two click handlers
+  on one canvas never fight).
+- **Satellite basemap = Esri World Imagery, display only.** Key-free tiles from
+  `server.arcgisonline.com` (`UrlTemplateImageryProvider`, Cesium shows the Esri credit), created
+  lazily on first use and toggled with `show`, so the default stays OpenStreetMap and costs
+  nothing until asked for. Same rule as Google tiles (D9): imagery is never a simulation input.
+  Considered NASA GIBS (open, daily, 250 m) and rejected for the live view because a fire at
+  60 km range needs sub-100 m imagery to read the terrain; GIBS stays a candidate for a
+  "satellite image of the day" overlay. The toggle lives in the Live fires pane only; in the
+  simulation it would be invisible under Google tiles.
