@@ -146,3 +146,25 @@ constantly and the `| undefined` noise would hurt more than help. TypeScript pin
 Branch `scaffold/v0` from `main`. `plan.md` (untracked, written earlier this session) is committed
 with the Stage 1 docs because `DECISIONS.md` references it. One commit per stage. Nothing pushed.
 A teammate branch `feature/gemini-agent` exists on the remote (adds `docs/research/eaton-fire-data.md`); untouched.
+
+## D17. Google 3D tiles: key plumbing, failure detection and cost controls
+
+The key reaches the viewer only via `import.meta.env.VITE_GOOGLE_MAPS_API_KEY` (read once in
+`src/app/main.ts`, passed to `createViewer`). It is never stored in a tracked file, never logged,
+and every error message that could contain a tile URL passes through `src/viewer/redact.ts`
+(URLs and `key=` fragments are stripped) before it reaches a banner or console.
+
+Fallback triggers, all leading to the same OSM globe plus banner: empty key; root tileset fetch
+failure (any HTTP status or network error); 3 auth/quota failures (401/403/429) or 25 other tile
+failures inside any sliding 30 s window after start. The old fixed 30 s window after boot was
+replaced because a quota can run out mid-session. There is no automatic switch back to Google
+mode; reload the page.
+
+Cost: `maximumScreenSpaceError` 20 (default 16), `preloadFlightDestinations` off,
+`cullRequestsWhileMoving` on, `dynamicScreenSpaceError` on, cache 512 MB. No geocoder exists, so
+`onlyUsingWithGoogleGeocoder` is set to silence Cesium's warning.
+
+Draping and picking on tiles: `ClassificationType.BOTH` (D5) is the right setting for classifying
+onto 3D Tiles, and `scene.pickPosition` (D6) is the tile-aware path. Neither has been exercised
+with a real key on the build machine (no key available). If the overlay does not drape, keep the
+fallback as default and revisit per PROGRESS.md "Known issues".

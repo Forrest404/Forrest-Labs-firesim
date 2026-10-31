@@ -145,6 +145,17 @@ Companion files: [DECISIONS.md](DECISIONS.md) (judgement calls), [FEATURES.md](F
 - [x] Works with no network apart from map tiles (bundles are static); synthetic areas labelled
 - [x] PROGRESS / DECISIONS / FEATURES / README complete; branch tagged `v0`
 
+### Google tiles key plumbing (`feature/google-tiles`)
+
+- `.env.example` now documents how to obtain and restrict a key; `.env.local` is created empty
+  and confirmed gitignored (`git check-ignore`). History check: only `.env.example` was ever
+  tracked, no key value in any commit.
+- `src/viewer/googleTiles.ts`: sliding-window failure detection (auth/quota fast path), cost
+  controls, URL/key redaction (`src/viewer/redact.ts`, tested in `tests/redact.test.ts`).
+- README "Google 3D tiles setup" section; DECISIONS D17.
+- Still not exercised with a real key (none on the build machine). First run with a key: check
+  overlay alignment against the grid outline and click-to-ignite accuracy.
+
 ## Known issues / not verified
 
 - **Google Photorealistic 3D Tiles path not exercised** (no key on the build machine): draping of
