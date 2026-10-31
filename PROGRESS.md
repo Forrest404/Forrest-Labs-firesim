@@ -219,6 +219,12 @@ Companion files: [DECISIONS.md](DECISIONS.md) (judgement calls), [FEATURES.md](F
   box and was exercised only through `__firesim.live.flyToCluster`), the phone layout of the live
   pane, and behaviour when Google tiles fail *while* the live view is open.
 
+## Visual system v2 (D24, 2026-10-31)
+
+- Chrome and copy pass only (styles.css overrides, strings, panel, live pane, area picker,
+  index title, Cesium credit). Verified headlessly on desktop and 390 px: no glass, no glow,
+  underline tabs, serif wordmark and numbers, no placeholders, one disclaimer per view.
+
 ## Known issues / not verified
 
 - **Google Photorealistic 3D Tiles path verified headlessly** (2026-10-31, real key in

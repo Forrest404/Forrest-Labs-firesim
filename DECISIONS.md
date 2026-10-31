@@ -319,3 +319,20 @@ a possible later "historical compare" feature).
   60 km range needs sub-100 m imagery to read the terrain; GIBS stays a candidate for a
   "satellite image of the day" overlay. The toggle lives in the Live fires pane only; in the
   simulation it would be invisible under Google tiles.
+
+## D24. Visual system v2: flat, two typefaces, no glass
+
+An audit against the published "generated UI" tell lists found the panel matched almost all of
+the chrome tells (glass blur, hairline border plus wide shadow, glows, Inter only, icon and
+all-caps label on every card, cards nested in cards, pill tabs, status-dot ring, gradient logo
+tile, one spacing value, middle-dot separators, "coming soon" placeholders, a disclaimer in
+every sentence). The content was fine, so this pass changes only chrome and copy:
+- Flat solid panel, sections divided by rules instead of bordered cards; 4 px corners; no
+  shadows or glows; underline tabs; outlined chips with one filled state.
+- Two local typefaces (no network fonts, D19): Avenir Next / Segoe UI for UI text, Iowan Old
+  Style / Palatino / Georgia for the wordmark, the clock and the headline numbers.
+- One honesty line per view (the pill), attribution once (the footer); separators are commas
+  and full stops; thousands separators everywhere; placeholder rows hidden; the ion logo
+  replaced by a text credit since ion is never used.
+The overrides sit at the end of `styles.css` so the old rules can still be diffed; folding
+them in is a follow-up.

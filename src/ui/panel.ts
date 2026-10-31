@@ -39,10 +39,11 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
   }, { class: 'collapse' });
   collapseBtn.setAttribute('aria-expanded', 'true');
   const header = el('header', { class: 'brand' },
-    el('div', { class: 'brand-left' }, el('span', { class: 'logo' }, icon('flame', 18)), el('h1', {}, STR.appTitle)),
+    el('div', { class: 'brand-left' }, el('h1', {}, STR.appTitle)),
     el('div', { class: 'brand-right' }, modePill, collapseBtn),
   );
-  const honesty = el('div', { class: 'honesty', title: STR.honestyDetail, tabindex: '0' }, icon('info', 14), el('span', {}, STR.honestyNotice));
+  const honestyText = el('span', {}, STR.honestyNotice);
+  const honesty = el('div', { class: 'honesty', title: STR.honestyDetail, tabindex: '0' }, icon('info', 14), honestyText);
 
   // Sections
   const area = section('map', STR.areaLabel);
@@ -114,6 +115,9 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
       simPane.hidden = s.view !== 'sim';
       livePane.hidden = s.view !== 'live';
       footer.textContent = s.view === 'live' ? STR.liveFooter : STR.footer;
+      honestyText.textContent = s.view === 'live' ? STR.honestyNoticeLive : STR.honestyNotice;
+      honesty.title = s.view === 'live' ? STR.liveHonesty : STR.honestyDetail;
+      modePill.hidden = s.view === 'live';
     }
     advanced.root.classList.toggle('open', s.advancedOpen);
     advanced.header.setAttribute('aria-expanded', s.advancedOpen ? 'true' : 'false');
