@@ -43,9 +43,10 @@ async function main(): Promise<void> {
     cancel: () => wiringRef?.cancel(),
     topDown: () => wiringRef?.topDown(),
     resetView: () => wiringRef?.resetView(),
+    groundView: () => wiringRef?.groundView(),
   });
   mountSettingsAdvanced(slots.advanced, store);
-  mountRealVsSim(document.getElementById('app') as HTMLElement, store);
+  mountRealVsSim(document.getElementById('app') as HTMLElement, store, () => wiringRef?.groundView());
 
   notices.persistent('loading', STR.loadingArea, 'info');
   const handle = await createViewer({

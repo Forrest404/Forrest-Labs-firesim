@@ -369,3 +369,5 @@ details > *:not(summary) { animation: fade-in var(--t-med) var(--ease) both; }
 .rvs-stat.hero strong { font-size: 28px; color: #22d3ee; }
 .rvs-note { font-size: 11px; color: var(--muted); line-height: 1.4; }
 .rvs-start-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #111; border: 2px solid #fff; vertical-align: -1px; margin-right: 6px; }
+button.icon-btn.active, .rvs-ground.active { color: #22d3ee; border-color: rgba(34, 211, 238, 0.6); background: rgba(34, 211, 238, 0.12); }
+.rvs-ground { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; min-height: 30px; padding: 0 10px; }

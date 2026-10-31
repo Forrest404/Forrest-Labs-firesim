@@ -174,6 +174,7 @@ export const STR = {
   sideBySideWindCheck: 'Wind reversed',
   sideBySideRealSize: 'reached real size at',
   sideBySideNotYet: 'growing… press play',
+  cameraGround: 'Ground view (follow the fire)',
   sideBySideStart: 'Same start point on both (official ignition)',
   sideBySideRevealNote: 'The real fire is drawn growing outward from the start to its official final shape; its hour-by-hour spread was not recorded.',
 } as const;

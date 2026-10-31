@@ -12,7 +12,8 @@ import { defaultIgnition } from '../data/ignition';
 import { computeSlopeAspect } from '../data/terrain';
 import { paintFuel, paintSlope } from '../viewer/burnCanvas';
 import { GridLayer } from '../viewer/burnLayer';
-import { flyToGrid, flyTopDown } from '../viewer/camera';
+import { flyToGrid, flyToGround, flyTopDown, groundPose } from '../viewer/camera';
+import { cellCenterLonLat, lonLatToCell } from '../data/geo';
 import type { Viewer } from 'cesium';
 import { createGridOutline } from '../viewer/gridOutline';
 import { createReferenceOutline } from '../viewer/referenceOutline';
@@ -33,6 +34,10 @@ import type { Store } from './state';
 
 /** Playback speed for "Real vs simulation": Crozier reaches real size (~11 h) in about 20 s. */
 const REAL_VS_SIM_SPEED = 2048;
+/** Ground view: cells that ignited this recently count as the front the camera watches. */
+const GROUND_FRONT_WINDOW_S = 1800;
+/** Ground view re-aims at most this often while playing, gliding between poses. */
+const GROUND_FOLLOW_INTERVAL_MS = 700;
 
 interface AreaContext {
   burn: GridLayer;
@@ -55,6 +60,8 @@ export interface Wiring {
   cancel(): void;
   topDown(): void;
   resetView(): void;
+  /** Toggles the ground view that follows the fire front. */
+  groundView(): void;
   picker: Picker;
   /** Hook for the tools controller: receives picks when a drawing tool is active. */
   setDrawHandlers(h: { start(c: PickedCell): void; move(c: PickedCell): void; end(): void } | null): void;
@@ -115,7 +122,15 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     slope.paint((d) => paintSlope(d, slopeDeg));
     const burn = new GridLayer(viewer, grid, { zIndex: 3 });
     const outline = createGridOutline(viewer, grid);
-    const reference = s.area.reference ? createReferenceOutline(viewer, s.area.reference.rings) : null;
+    const area = s.area;
+    // On 3D tiles the wall stands on the real ground; on the flat fallback globe it starts at 0 m.
+    const groundAt = s.viewerMode === 'google'
+      ? (lon: number, lat: number): number => {
+        const c = lonLatToCell(grid, lon, lat);
+        return c ? area.elevation[c.row * grid.width + c.col] : 0;
+      }
+      : undefined;
+    const reference = area.reference ? createReferenceOutline(viewer, area.reference.rings, { groundAt }) : null;
     ctx = { burn, fuel, slope, outline, reference, painter: new OverlayPainter(burn, grid) };
     applyDebug();
     repaint();
@@ -163,7 +178,46 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
       effects.setQuality(s.effects.quality);
       repaint();
     }
+    if (s.groundFollow && s.playback.t !== prev.playback.t) followFront(false);
   });
+
+  /** Where the fire is burning at playback time: centroid of the recent front, else of the burn, else the ignition. */
+  function fireFront(): { lon: number; lat: number; groundM: number } | null {
+    const s = store.get();
+    if (!s.area) return null;
+    const { grid } = s.area;
+    const W = grid.width;
+    const arr = s.result?.arrivalTime;
+    let fr = 0, fc = 0, fn = 0, br = 0, bc = 0, bn = 0;
+    if (arr) {
+      for (let i = 0; i < arr.length; i++) {
+        const a = arr[i];
+        if (!(a <= s.playback.t)) continue;
+        const r = (i / W) | 0;
+        const c = i - r * W;
+        br += r; bc += c; bn++;
+        if (s.playback.t - a < GROUND_FRONT_WINDOW_S) { fr += r; fc += c; fn++; }
+      }
+    }
+    const cell = fn ? { row: fr / fn, col: fc / fn } : bn ? { row: br / bn, col: bc / bn } : s.ignition;
+    if (!cell) return null;
+    const row = Math.round(cell.row);
+    const col = Math.round(cell.col);
+    const { lon, lat } = cellCenterLonLat(grid, row, col);
+    const groundM = s.viewerMode === 'google' ? s.area.elevation[row * W + col] : 0;
+    return { lon, lat, groundM };
+  }
+
+  let lastFollow = 0;
+  function followFront(immediate: boolean): void {
+    const now = performance.now();
+    if (!immediate && now - lastFollow < GROUND_FOLLOW_INTERVAL_MS) return;
+    lastFollow = now;
+    const front = fireFront();
+    if (!front) return;
+    const pose = groundPose(front, front.groundM, windTowardDeg(store.get().weather.windFromDeg));
+    flyToGround(viewer, pose, immediate ? 1.8 : GROUND_FOLLOW_INTERVAL_MS / 1000);
+  }
 
   async function selectArea(name: string): Promise<void> {
     const entry = store.get().areas.find((a) => a.name === name);
@@ -186,6 +240,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
         compare: false,
         controls: null,
         sideBySide: false,
+        groundFollow: false,
         resultStale: false,
         simRunning: false,
         playback: { ...store.get().playback, t: 0, playing: false },
@@ -275,7 +330,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     if (!run) return;
     // Jump to the moment the run is as big as the real fire: the fair point to compare shapes.
     const s = store.get();
-    store.set({ compare: true, playback: { ...s.playback, playing: false, t: run.fairT ?? s.durationSeconds } });
+    store.set({ compare: true, groundFollow: false, playback: { ...s.playback, playing: false, t: run.fairT ?? s.durationSeconds } });
     flyTopDown(viewer, run.grid);
   }
 
@@ -283,7 +338,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     const run = await runRealFire();
     if (!run) return;
     // Play from ignition so the right-hand map grows live; the card pauses itself at real size.
-    store.set({ sideBySide: true, compare: false, playback: { t: 0, playing: true, speed: REAL_VS_SIM_SPEED } });
+    store.set({ sideBySide: true, compare: false, groundFollow: false, playback: { t: 0, playing: true, speed: REAL_VS_SIM_SPEED } });
     flyTopDown(viewer, run.grid);
   }
 
@@ -299,11 +354,22 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     },
     topDown: () => {
       const g = store.get().area?.grid;
+      store.set({ groundFollow: false });
       if (g) flyTopDown(viewer, g);
     },
     resetView: () => {
       const g = store.get().area?.grid;
+      store.set({ groundFollow: false });
       if (g) flyToGrid(viewer, g);
+    },
+    groundView: () => {
+      const on = !store.get().groundFollow;
+      store.set({ groundFollow: on });
+      if (on) followFront(true);
+      else {
+        const g = store.get().area?.grid;
+        if (g) flyToGrid(viewer, g);
+      }
     },
     picker,
     setDrawHandlers: (h) => {

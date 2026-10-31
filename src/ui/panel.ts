@@ -18,6 +18,7 @@ import { STR } from './strings';
 export interface PanelActions extends AreaPickerActions, PlaybackActions {
   topDown(): void;
   resetView(): void;
+  groundView(): void;
 }
 
 export interface PanelSlots {
@@ -52,8 +53,10 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
   const tools = section('axe', STR.toolsTitle);
   const advanced = section('sliders', STR.advancedTitle, { class: 'adv' });
 
+  const groundBtn = iconButton('camera', STR.cameraGround, () => actions.groundView());
   const view = section('eye', STR.viewTitle, {
     trailing: el('div', { class: 'row tight' },
+      groundBtn,
       iconButton('topdown', STR.cameraTopDown, () => actions.topDown()),
       iconButton('compass', STR.cameraReset, () => actions.resetView()),
     ),
@@ -77,6 +80,8 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
   mountDebug(debugBody, store);
 
   store.subscribe((s) => {
+    groundBtn.classList.toggle('active', s.groundFollow);
+    groundBtn.setAttribute('aria-pressed', s.groundFollow ? 'true' : 'false');
     modePill.classList.toggle('live', s.viewerMode === 'google');
     (modePill.querySelector('.pill-text') as HTMLElement).textContent = STR.viewerMode[s.viewerMode];
     particles.input.checked = s.effects.particles;

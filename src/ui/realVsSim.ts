@@ -29,7 +29,7 @@ const FRONT: [number, number, number] = [255, 214, 90];
 const EDGE: [number, number, number] = [34, 211, 238];
 const FRONT_WINDOW_S = 1800;
 
-export function mountRealVsSim(container: HTMLElement, store: Store): void {
+export function mountRealVsSim(container: HTMLElement, store: Store, groundView: () => void): void {
   const realCanvas = el('canvas', { class: 'rvs-map', 'aria-label': STR.sideBySideReal }) as HTMLCanvasElement;
   const simCanvas = el('canvas', { class: 'rvs-map', 'aria-label': STR.sideBySideSim }) as HTMLCanvasElement;
   const realArea = el('div', { class: 'rvs-big' });
@@ -39,8 +39,9 @@ export function mountRealVsSim(container: HTMLElement, store: Store): void {
   const covered = el('div', { class: 'rvs-stat' });
   const windCheck = el('div', { class: 'rvs-stat' });
   const close = iconButton('x', STR.sideBySideClose, () => store.set({ sideBySide: false }), { class: 'rvs-close' });
+  const ground = el('button', { type: 'button', class: 'rvs-ground', onclick: () => groundView() }, icon('camera', 16), el('span', {}, STR.cameraGround)) as HTMLButtonElement;
   const card = el('div', { class: 'rvs', role: 'region', 'aria-label': STR.sideBySideTitle },
-    el('div', { class: 'rvs-head' }, el('h2', {}, icon('target', 16), el('span', {}, STR.sideBySideTitle)), close),
+    el('div', { class: 'rvs-head' }, el('h2', {}, icon('target', 16), el('span', {}, STR.sideBySideTitle)), el('div', { class: 'row tight' }, ground, close)),
     el('div', { class: 'rvs-maps' },
       el('figure', {}, realCanvas, el('figcaption', {}, el('span', { class: 'rvs-tag real' }, STR.sideBySideReal), realArea, el('div', { class: 'rvs-sub' }, STR.sideBySideAreaReal))),
       el('figure', {}, simCanvas, el('figcaption', {}, el('span', { class: 'rvs-tag sim' }, STR.sideBySideSim), simArea, simSub)),
@@ -61,6 +62,7 @@ export function mountRealVsSim(container: HTMLElement, store: Store): void {
 
   store.subscribe((s, prev) => {
     const ref = s.area?.reference;
+    ground.classList.toggle('active', s.groundFollow);
     card.hidden = !s.sideBySide || !ref || !s.area;
     if (card.hidden || !ref || !s.area) return;
 

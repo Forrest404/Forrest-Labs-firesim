@@ -62,6 +62,8 @@ export interface AppState {
   controls: ControlRun[] | null;
   /** The "Real vs simulation" card: the real perimeter and our run side by side. */
   sideBySide: boolean;
+  /** Ground view: the camera stays low in front of the fire front while it plays. */
+  groundFollow: boolean;
   /** True when inputs changed since `result` was computed. */
   resultStale: boolean;
   simRunning: boolean;
@@ -102,6 +104,7 @@ export function initialState(): AppState {
     compare: false,
     controls: null,
     sideBySide: false,
+    groundFollow: false,
     resultStale: false,
     simRunning: false,
     simError: null,
