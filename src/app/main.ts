@@ -5,7 +5,9 @@ import { loadDemoAreaIndex } from '../data/demoAreas';
 import { createNotices } from '../ui/notices';
 import { mountPanel } from '../ui/panel';
 import { STR } from '../ui/strings';
+import { mountCompass } from '../viewer/compass';
 import { createViewer } from '../viewer/createViewer';
+import { startFlight } from '../viewer/flight';
 import { mountSettingsAdvanced } from '../ui/settingsAdvanced';
 import { mountTools } from '../ui/tools';
 import { startClock } from './clock';
@@ -59,6 +61,8 @@ async function main(): Promise<void> {
   if (handle.mode === 'fallback') notices.persistent('fallback', `${STR.fallbackBanner} ${handle.fallbackReason}`);
 
   const wiring = wire(handle.viewer, store, notices);
+  mountCompass(handle.viewer); // north-pointing compass, turn and tilt
+  startFlight(handle.viewer); // WASD / QE / RF free flight
   wiringRef = wiring;
   mountTools(slots.tools, store, createToolsController(store, wiring));
   startClock(store);
@@ -89,7 +93,7 @@ async function main(): Promise<void> {
 
   if (import.meta.env.DEV) {
     // Dev/test hook (not in production builds): lets headless tests and teammates poke the app.
-    (window as unknown as { __firesim: unknown }).__firesim = { store, wiring };
+    (window as unknown as { __firesim: unknown }).__firesim = { store, wiring, viewer: handle.viewer };
   }
   console.log('[app] ready', { mode: handle.mode });
 }
