@@ -444,3 +444,95 @@ button.icon-btn.active, .rvs-ground.active { color: #22d3ee; border-color: rgba(
 #panel .live-forecast:empty { display: none; }
 #panel .live-forecast .ring-row { display: grid; grid-template-columns: 12px 1fr auto; align-items: center; gap: 8px; font-size: 13px; }
 #panel .live-forecast .ring-swatch { width: 12px; height: 4px; border-radius: 2px; }
+
+/* ---------- Visual system v2 (overrides) ----------
+   Flat panel, two typefaces, three spacing values, no glass, no glow. Later rules win; the
+   earlier blocks are kept so the old look can be diffed, and will be folded in next pass. */
+:root {
+  --panel: #15181d;
+  --radius: 6px;
+  --radius-sm: 4px;
+  --shadow: none;
+  --font-ui: "Avenir Next", "Segoe UI", "Helvetica Neue", system-ui, sans-serif;
+  --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  font-family: var(--font-ui);
+  font-size: 13.5px;
+}
+#panel { background: var(--panel); backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: none; border: 1px solid var(--border-strong); gap: 0; padding: 12px 14px 14px; animation: none; }
+#panel.collapsed { padding: 8px; }
+
+/* Header: wordmark, no logo tile, no status glow */
+.logo { display: none; }
+.brand { padding: 2px 0 10px; }
+.brand h1 { font-family: var(--font-display); font-size: 21px; font-weight: 600; letter-spacing: 0; }
+.pill { border-radius: 4px; height: 22px; font-weight: 500; color: var(--muted); background: transparent; border: 1px solid var(--border-strong); }
+.pill .dot { width: 6px; height: 6px; }
+.pill.live .dot { box-shadow: none; }
+.honesty { background: transparent; border: 0; border-radius: 0; padding: 0 2px 10px; color: var(--muted); font-weight: 500; font-size: 12.5px; cursor: default; }
+.honesty .icon { color: var(--accent); }
+
+/* Tabs: underline, not a pill box */
+.tabs { background: transparent; border: 0; border-bottom: 1px solid var(--border-strong); border-radius: 0; padding: 0; gap: 18px; margin-bottom: 2px; }
+.tabs > button { flex: none; border-radius: 0; padding: 6px 2px 8px; min-height: 0; font-size: 13.5px; font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tabs > button[aria-selected="true"] { background: transparent; box-shadow: none; border-bottom-color: var(--accent); }
+.tabs > button .icon { display: none; }
+
+/* Sections: flat groups divided by rules instead of nested cards */
+.pane { gap: 0; }
+.card { background: transparent; border: 0; border-radius: 0; padding: 12px 0 14px; gap: 8px; }
+.card + .card, .pane > .card:first-child { border-top: 1px solid var(--border); }
+.card:hover { border-color: var(--border); }
+.section-head { min-height: 22px; }
+.section-head h2 { font-size: 13.5px; font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--fg); }
+.section-head h2 .icon { display: none; }
+.section-body { gap: 8px; }
+.sub { gap: 6px; }
+.ctl-row { min-height: 30px; gap: 10px; }
+.card.adv .section-head { margin: 0; padding: 0; border-radius: 0; }
+.card.adv .section-head:hover { background: transparent; }
+.card.adv.open .section-body { padding-top: 4px; }
+.card.adv label.disabled { display: none; }
+.footer { font-size: 11px; line-height: 1.45; padding: 10px 2px 0; border-top: 1px solid var(--border); }
+
+/* Controls: crisp 4 px corners, one filled state, no shadows */
+button { border-radius: 4px; }
+button:active:not(:disabled) { transform: none; }
+button.icon-btn { border-radius: 4px; }
+button.primary { background: var(--accent); box-shadow: none; border-radius: 4px; }
+button.primary:hover:not(:disabled) { background: #ff8a35; box-shadow: none; }
+button.primary.big { border-radius: 4px; min-height: 40px; font-size: 14px; }
+button.primary.stale { animation: none; outline: 2px solid var(--accent-2); outline-offset: 2px; }
+.seg { background: transparent; border: 0; border-radius: 0; padding: 0; gap: 6px; }
+.seg > button { border: 1px solid var(--border-strong); border-radius: 4px; padding: 3px 10px; font-weight: 500; color: var(--muted); }
+.seg > button.on { background: var(--fg); color: var(--bg); border-color: var(--fg); box-shadow: none; }
+.seg > button.ghost.on { background: transparent; color: var(--accent-2); border-color: var(--accent); box-shadow: none; }
+.seg.small > button { padding: 2px 8px; }
+.seg.tools > button.on .icon { color: var(--bg); transform: none; }
+.seg.tools > button .icon { transition: none; }
+.chip { border-radius: 4px; font-weight: 500; }
+.chip.stat { font-family: var(--font-display); font-size: 13px; background: transparent; border: 1px solid var(--accent); color: var(--fg); }
+.clock { font-family: var(--font-display); font-size: 22px; font-weight: 600; }
+ol.clusters button { border-radius: 4px; }
+ol.clusters button .frp { font-family: var(--font-display); font-size: 14px; color: var(--fg); }
+ol.clusters button.on { background: transparent; border-color: var(--accent); }
+.kv { font-size: 12.5px; }
+.kv dd { font-family: var(--font-display); }
+select { border-radius: 4px; font-weight: 500; }
+.card.adv input[type="number"] { border-radius: 4px; }
+.card.adv select { border-radius: 4px; }
+.dial:hover, .dial.dragging { box-shadow: none; border-color: var(--accent); }
+.dial .needle .icon { filter: none; }
+input[type="range"]::-webkit-slider-thumb { box-shadow: none; }
+input[type="range"]:hover::-webkit-slider-thumb, input[type="range"]:active::-webkit-slider-thumb { transform: none; box-shadow: none; }
+.switch .track::after { box-shadow: none; }
+ul.interventions li { border-radius: 4px; }
+.legend-age { border-radius: 2px; }
+
+/* Notices: plain, no glass, no accent stripe */
+#notices .banner { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--surface); border: 1px solid var(--border-strong); border-left-width: 1px; border-radius: 4px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4); }
+#notices .banner.error, #notices .banner.info { border-left-color: var(--border-strong); }
+
+@media (max-width: 720px) {
+  #panel { padding: 16px 14px 14px; }
+}
+.sub-title { font-size: 12.5px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--muted); }

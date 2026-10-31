@@ -98,7 +98,7 @@ export function mountLive(container: HTMLElement, store: Store, actions: LiveAct
   selected.body.append(kv, flyBtn);
   selected.root.hidden = true;
 
-  container.append(main.root, layers.root, filters.root, largest.root, region.root, selected.root, el('div', { class: 'muted hint' }, STR.liveAttribution));
+  container.append(main.root, layers.root, filters.root, largest.root, region.root, selected.root);
 
   // --- Rendering -------------------------------------------------------------------------
   let byId = new Map<string, Hotspot>();
@@ -121,8 +121,8 @@ export function mountLive(container: HTMLElement, store: Store, actions: LiveAct
       regionButtons.clear();
       list.replaceChildren(...L.regions.slice(0, LIST_LIMIT).map((r) => {
         const b = el('button', { type: 'button', onclick: () => actions.flyToRegion(r.id) },
-          el('span', { class: 'frp' }, `${Math.round(r.frpSum)} MW`),
-          el('span', { class: 'sub' }, `${r.count} ${STR.liveDetections} · ${formatArea(r.areaKm2)} · ${formatAge(r.latestAt)}`),
+          el('span', { class: 'frp' }, `${Math.round(r.frpSum).toLocaleString()} MW`),
+          el('span', { class: 'sub' }, `${r.count.toLocaleString()} ${STR.liveDetections}, ${formatArea(r.areaKm2)}, ${formatAge(r.latestAt)}`),
         ) as HTMLButtonElement;
         regionButtons.set(r.id, b);
         return el('li', {}, b);
@@ -136,8 +136,8 @@ export function mountLive(container: HTMLElement, store: Store, actions: LiveAct
     region.root.hidden = !r;
     if (!r) return;
     const pairs: [string, string][] = [
-      [STR.liveRegionCount, String(r.count)],
-      [STR.liveRegionFrpSum, `${Math.round(r.frpSum)} MW`],
+      [STR.liveRegionCount, r.count.toLocaleString()],
+      [STR.liveRegionFrpSum, `${Math.round(r.frpSum).toLocaleString()} MW`],
       [STR.liveRegionFrpMax, `${r.frpMax.toFixed(1)} MW`],
       [STR.liveRegionArea, formatArea(r.areaKm2)],
       [STR.liveRegionLatest, `${formatUtc(r.latestAt)} (${formatAge(r.latestAt)})`],
@@ -156,7 +156,7 @@ export function mountLive(container: HTMLElement, store: Store, actions: LiveAct
       [STR.liveTime, `${formatUtc(h.acquiredAt)} (${formatAge(h.acquiredAt)})`],
       [STR.liveFrp, `${h.frp.toFixed(1)} MW`],
       [STR.liveConfidence, STR.liveConfidenceLabel[h.confidence]],
-      [STR.liveSatellite, `${h.satellite} · ${h.instrument}`],
+      [STR.liveSatellite, `${h.satellite} (${h.instrument})`],
       [STR.liveBrightness, `${h.brightness.toFixed(0)} K`],
       [STR.livePass, h.daynight === 'D' ? STR.livePassDay : STR.livePassNight],
     ];

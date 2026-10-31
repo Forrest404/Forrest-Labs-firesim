@@ -6,6 +6,7 @@
 
 import {
   Credit,
+  CreditDisplay,
   EllipsoidTerrainProvider,
   ImageryLayer,
   OpenStreetMapImageryProvider,
@@ -47,6 +48,8 @@ export interface CreateViewerOptions {
 }
 
 export async function createViewer(o: CreateViewerOptions): Promise<ViewerHandle> {
+  // Cesium ion is never used (D18), so show a plain CesiumJS credit instead of the ion logo.
+  CreditDisplay.cesiumCredit = new Credit('CesiumJS', false);
   const osm = new OpenStreetMapImageryProvider({ url: 'https://tile.openstreetmap.org/' });
   const osmLayer = new ImageryLayer(osm);
   const viewer = new Viewer(o.container, {

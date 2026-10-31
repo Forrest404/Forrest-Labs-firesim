@@ -4,7 +4,7 @@
  * Every tactic maps onto the two frozen intervention types: hand and dozer lines are `firebreak`
  * one cell wide; engine wet lines, helicopter buckets and airtanker retardant are `water` with
  * per-unit moisture boost and half-life (retardant = long half-life). Numbers are order-of-magnitude
- * realistic (see DECISIONS.md D24), not calibrated.
+ * realistic (see DECISIONS.md D27), not calibrated.
  */
 
 import { FuelClass } from '../contract';
