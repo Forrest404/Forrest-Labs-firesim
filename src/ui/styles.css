@@ -42,6 +42,18 @@ html, body { margin: 0; height: 100%; background: #0b0d10; overflow: hidden; }
 #panel .notice { background: rgba(255, 122, 26, 0.15); border: 1px solid rgba(255, 122, 26, 0.5); border-radius: 8px; padding: 8px 10px; margin: 6px 0 10px; font-weight: 600; }
 #panel .notice small { display: block; font-weight: 400; color: var(--muted); margin-top: 4px; }
 
+#panel .wind-arrow { display: inline-block; font-size: 18px; color: var(--accent); transition: transform 0.15s; width: 22px; text-align: center; }
+#panel .error-text { color: var(--danger); font-size: 12px; min-height: 0; }
+#panel .error-text:empty { display: none; }
+#panel .stats { color: var(--muted); font-size: 12px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+#panel .clock { min-width: 64px; }
+#panel button.stale { box-shadow: 0 0 0 2px rgba(255, 122, 26, 0.6); }
+#panel details summary { cursor: pointer; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 10px 0 6px; }
+#panel .legend { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 6px; }
+#panel .legend .swatch { display: inline-flex; align-items: center; gap: 4px; }
+#panel .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--border); }
+#panel .footer { margin-top: 12px; font-size: 11px; }
+
 #notices { position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
 #notices .banner { background: rgba(18, 20, 24, 0.92); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 8px; padding: 8px 12px; pointer-events: auto; }
 #notices .banner.error { border-left-color: var(--danger); }

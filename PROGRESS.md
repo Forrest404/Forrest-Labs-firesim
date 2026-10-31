@@ -10,7 +10,7 @@ Companion files: [DECISIONS.md](DECISIONS.md) (judgement calls), [FEATURES.md](F
 - [x] Stage 2: Sim core on the fixture
 - [x] Stage 3: Data (geo, raster, terrain, bundles, 2 real + 2 synthetic areas, build script)
 - [x] Stage 4: Cesium viewer spike
-- [ ] Stage 5: Overlay, playback, ignition (CRITICAL MILESTONE)
+- [x] Stage 5: Overlay, playback, ignition (CRITICAL MILESTONE)
 - [ ] Stage 6: Tools and advanced settings
 - [ ] Stage 7: Effects, hardening, hand-off, tag `v0`
 
@@ -82,13 +82,30 @@ Companion files: [DECISIONS.md](DECISIONS.md) (judgement calls), [FEATURES.md](F
 - Visual verification method: Chrome extension was not connected, so a small CDP script drives
   the installed Chrome headlessly (SwiftShader WebGL), captures console + screenshot.
 
+### Stage 5 — Core loop (critical milestone) ✅
+- `src/app/`: `state.ts` (store), `simClient.ts` (worker RPC, cancel, auto-respawn on crash),
+  `clock.ts` (playback), `overlayPainter.ts` (throttled repaint + live stats), `wiring.ts`
+  (store <-> viewer <-> worker), `main.ts`.
+- `src/viewer/picking.ts` (click + drag, pickPosition -> globe.pick -> ellipsoid fallbacks),
+  `ignitionMarker.ts`. `src/data/ignition.ts` picks a default ignition for areas without one.
+- `src/ui/`: panel, area picker (with disabled "Live — coming soon"), simple settings (wind km/h,
+  wind-from with toward-arrow, dryness presets as data, duration), playback (Simulate / cancel,
+  play/pause/restart, 1-256×, scrubber, clock, live ha), debug toggles, notices, `strings.ts`.
+- **Verified end to end headlessly:** page loads a real area, default ignition is set, Simulate runs
+  in the worker (5-6 ms), fire animates on the draped overlay (`stage5b/c.png`): 55 cells at 26 min,
+  1,751 cells / 158 ha at 4 h on the synthetic valley. Console clean except favicon 404.
+- Found while verifying: real areas had no suggested ignition so Simulate stayed disabled; fixed
+  with `defaultIgnition()` (nearest forest/shrub cell to the centre with burnable neighbours).
+- Known: `?area=<name>` picks the start area. `Space` toggles playback, `Escape` returns to the
+  ignition tool.
+
 ## Current stage
 
-Stage 5: Overlay, playback, ignition (critical milestone).
+Stage 6: Tools and advanced settings.
 
 ## Next
 
-Stage 6: Tools and advanced settings.
+Stage 7: Effects, hardening, hand-off.
 
 ## Known issues / not verified
 
