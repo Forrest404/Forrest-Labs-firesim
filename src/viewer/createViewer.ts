@@ -10,15 +10,24 @@ import {
   OpenStreetMapImageryProvider,
   Viewer,
 } from 'cesium';
+import type { Cesium3DTileset } from 'cesium';
 import { tryAddGoogleTiles } from './googleTiles';
 
 export type ViewerMode = 'google' | 'fallback';
+/** What is drawn under the overlays: the Google tileset (when loaded) or the OSM globe. */
+export type Backdrop = 'tiles' | 'globe';
 
 export interface ViewerHandle {
   viewer: Viewer;
   mode: ViewerMode;
   /** Why we are in fallback mode (empty in google mode). */
   fallbackReason: string;
+  /**
+   * Switches between the Google tileset and the globe. The live-fires view uses the globe so the
+   * far side of the Earth occludes points and no tiles stream for the whole planet. No-op in
+   * fallback mode or after a late tile failure (the globe is already the only backdrop then).
+   */
+  setBackdrop(mode: Backdrop): void;
 }
 
 export interface CreateViewerOptions {
@@ -50,11 +59,26 @@ export async function createViewer(o: CreateViewerOptions): Promise<ViewerHandle
   // Double-click on an entity would otherwise fly the camera to it; we handle clicks ourselves.
   viewer.screenSpaceEventHandler.removeInputAction(2 /* LEFT_DOUBLE_CLICK */);
 
+  let tileset: Cesium3DTileset | null = null;
+  let tilesAlive = false;
+  const setBackdrop = (mode: Backdrop): void => {
+    if (!tileset || !tilesAlive) return;
+    tileset.show = mode === 'tiles';
+    viewer.scene.globe.show = mode === 'globe';
+  };
+
   const key = (o.googleApiKey ?? '').trim();
   if (!key) {
-    return { viewer, mode: 'fallback', fallbackReason: 'No VITE_GOOGLE_MAPS_API_KEY set.' };
+    return { viewer, mode: 'fallback', fallbackReason: 'No VITE_GOOGLE_MAPS_API_KEY set.', setBackdrop };
   }
-  const result = await tryAddGoogleTiles(viewer, key, (reason) => o.onModeChange?.('fallback', reason));
-  if (result.ok) return { viewer, mode: 'google', fallbackReason: '' };
-  return { viewer, mode: 'fallback', fallbackReason: result.reason };
+  const result = await tryAddGoogleTiles(viewer, key, (reason) => {
+    tilesAlive = false;
+    o.onModeChange?.('fallback', reason);
+  });
+  if (result.ok) {
+    tileset = result.tileset;
+    tilesAlive = true;
+    return { viewer, mode: 'google', fallbackReason: '', setBackdrop };
+  }
+  return { viewer, mode: 'fallback', fallbackReason: result.reason, setBackdrop };
 }

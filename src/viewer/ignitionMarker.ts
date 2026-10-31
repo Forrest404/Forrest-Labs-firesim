@@ -7,10 +7,14 @@ import { cellCenterLonLat } from '../data/geo';
 
 export interface IgnitionMarker {
   set(grid: GridSpec, cell: CellRef | null): void;
+  /** Hides the marker without forgetting its cell (used while the live view is shown). */
+  setVisible(visible: boolean): void;
   destroy(): void;
 }
 
 export function createIgnitionMarker(viewer: Viewer, label: string): IgnitionMarker {
+  let hasCell = false;
+  let hidden = false;
   const entity: Entity = viewer.entities.add({
     show: false,
     position: Cartesian3.fromDegrees(0, 0),
@@ -35,15 +39,21 @@ export function createIgnitionMarker(viewer: Viewer, label: string): IgnitionMar
       disableDepthTestDistance: Number.POSITIVE_INFINITY,
     },
   });
+  const apply = (): void => {
+    entity.show = hasCell && !hidden;
+  };
   return {
     set(grid, cell) {
-      if (!cell) {
-        entity.show = false;
-        return;
+      hasCell = !!cell;
+      if (cell) {
+        const { lon, lat } = cellCenterLonLat(grid, cell.row, cell.col);
+        entity.position = Cartesian3.fromDegrees(lon, lat) as unknown as Entity['position'];
       }
-      const { lon, lat } = cellCenterLonLat(grid, cell.row, cell.col);
-      entity.position = Cartesian3.fromDegrees(lon, lat) as unknown as Entity['position'];
-      entity.show = true;
+      apply();
+    },
+    setVisible(visible) {
+      hidden = !visible;
+      apply();
     },
     destroy() {
       viewer.entities.remove(entity);

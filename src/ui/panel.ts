@@ -6,8 +6,10 @@
 import type { Store } from '../app/state';
 import { mountAreaPicker } from './areaPicker';
 import type { AreaPickerActions } from './areaPicker';
-import { iconButton, section, segmented, toggle } from './controls';
+import type { LiveActions } from '../app/liveController';
+import { iconButton, section, segmented, tabBar, toggle } from './controls';
 import { mountDebug } from './debug';
+import { mountLive } from './live';
 import { el } from './el';
 import { icon } from './icons';
 import { mountPlayback } from './playback';
@@ -15,7 +17,7 @@ import type { PlaybackActions } from './playback';
 import { mountSettingsSimple } from './settingsSimple';
 import { STR } from './strings';
 
-export interface PanelActions extends AreaPickerActions, PlaybackActions {
+export interface PanelActions extends AreaPickerActions, PlaybackActions, LiveActions {
   topDown(): void;
   resetView(): void;
 }
@@ -77,14 +79,31 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
   view.body.append(debugBody, el('div', { class: 'muted hint' }, STR.cameraHelp));
 
   const footer = el('footer', { class: 'muted footer' }, STR.footer);
-  root.append(header, honesty, area.root, settings.root, sim.root, tools.root, advanced.root, view.root, footer);
+  // Tabs: the simulator (everything above) or the live satellite detections.
+  const tabs = tabBar(
+    [{ value: 'sim', label: STR.tabSim, icon: 'flame' }, { value: 'live', label: STR.tabLive, icon: 'globe' }],
+    (v) => actions.setView(v),
+    { ariaLabel: STR.tabsLabel },
+  );
+  const simPane = el('div', { class: 'pane', role: 'tabpanel' }, area.root, settings.root, sim.root, tools.root, advanced.root, view.root);
+  const livePane = el('div', { class: 'pane', role: 'tabpanel' });
+  livePane.hidden = true;
+  tabs.set('sim');
+  root.append(header, honesty, tabs.root, simPane, livePane, footer);
 
   mountAreaPicker(area.body, store, actions);
   mountSettingsSimple(settings.body, store);
   mountPlayback(sim.body, store, actions);
   mountDebug(debugBody, store);
+  mountLive(livePane, store, actions);
 
-  store.subscribe((s) => {
+  store.subscribe((s, prev) => {
+    if (s.view !== prev.view) {
+      tabs.set(s.view);
+      simPane.hidden = s.view !== 'sim';
+      livePane.hidden = s.view !== 'live';
+      footer.textContent = s.view === 'live' ? STR.liveFooter : STR.footer;
+    }
     advanced.root.classList.toggle('open', s.advancedOpen);
     advanced.header.setAttribute('aria-expanded', s.advancedOpen ? 'true' : 'false');
     modePill.classList.toggle('live', s.viewerMode === 'google');

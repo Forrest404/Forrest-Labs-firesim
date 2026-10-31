@@ -33,6 +33,7 @@ Requires Node 20+ (built with Node 25, npm 11). No backend, no accounts, no ion 
 | Variable | Required | Purpose |
 |---|---|---|
 | `VITE_GOOGLE_MAPS_API_KEY` | no | Google Photorealistic 3D Tiles for the backdrop. Without it (or if tiles fail) the app falls back to an OpenStreetMap globe and shows a banner. |
+| `VITE_FIRMS_MAP_KEY` | no | NASA FIRMS map key for the **Live fires** tab (satellite active-fire detections). Free at <https://firms.modaps.eosdis.nasa.gov/api/map_key/>. Without it the tab explains how to get one. |
 
 Keys go in `.env.local` (gitignored). Never commit keys.
 
@@ -134,9 +135,31 @@ npm run build:demo-area -- --name my-area --label "My Area" --center <lon>,<lat>
 It writes `public/demo-areas/my-area.json` (~260 KB) and updates `index.json`. Record the source
 and licence in [data/README.md](data/README.md). Synthetic areas: `npm run make:synthetic`.
 
+## Live fires tab
+
+The panel has two tabs. **Simulation** is the simulator described above. **Live fires** shows
+near-real-time active-fire detections from [NASA FIRMS](https://firms.modaps.eosdis.nasa.gov/)
+anywhere on the globe: each dot is a satellite pixel (VIIRS ~375 m, NOAA-20 and Suomi NPP; or
+MODIS ~1 km) that contained a heat source, usually 1–3 hours after the overpass. Dots are not
+fire perimeters and the tab is not for safety decisions.
+
+- Needs a free `VITE_FIRMS_MAP_KEY` in `.env.local` (see Environment). Nothing is fetched without it.
+- Pick the source and the window (last 24 h to 3 days); filter by confidence, radiative power
+  (FRP, MW) and day/night pass. Colour is age (yellow = newest), size is FRP.
+- "Largest fires" lists the 0.25° bins with the most summed FRP; click to fly there. Click a dot
+  for its details.
+- Results are cached for 10 minutes and a manual refresh is honoured at most once a minute, because
+  one key allows 5000 transactions per 10 minutes and the deployed site shares one key between all
+  visitors.
+- The live view always draws on the OpenStreetMap globe (Google tiles are hidden there) so the far
+  side of the Earth hides its dots and no tiles stream for the whole planet.
+- FIRMS error replies cannot be read from a browser (no CORS headers), so an invalid or exhausted
+  key shows up as "NASA FIRMS did not answer".
+
 ## Attribution
 
-Land cover © OpenStreetMap contributors (ODbL). Elevation: AWS Terrain Tiles (Mapzen Terrarium;
+Fire detections (Live fires tab): NASA FIRMS, VIIRS and MODIS near-real-time products (NASA open
+data; cite "NASA FIRMS"). Land cover © OpenStreetMap contributors (ODbL). Elevation: AWS Terrain Tiles (Mapzen Terrarium;
 underlying sources per <https://registry.opendata.aws/terrain-tiles/>). Basemap tiles ©
 OpenStreetMap. 3D tiles (optional): Google. Rendering: CesiumJS.
 
@@ -151,6 +174,8 @@ project sub-path. Google 3D tiles on the live site need a repository secret
 `VITE_GOOGLE_MAPS_API_KEY` (Settings -> Secrets and variables -> Actions); restrict that key to
 `forrest404.github.io` and the Map Tiles API, since it ships in the public bundle. Without the
 secret the site runs on the OSM fallback globe.
+Optionally add `VITE_FIRMS_MAP_KEY` the same way to enable the Live fires tab (free, rate-limited,
+also shipped in the bundle).
 
 ## Working in parallel
 

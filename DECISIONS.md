@@ -195,3 +195,40 @@ no icon font, no network font). Rules that follow from it:
   `store.advancedOpen`.
 - Copy is shorter everywhere (hints are one line, "display only" wording lives in the mode pill
   tooltip and README); the honesty notice text itself is unchanged.
+
+## D20. Live fires tab: NASA FIRMS detections next to the simulator
+
+The panel now has two tabs, **Simulation** (everything that existed) and **Live fires**
+(`state.view`). The live tab shows near-real-time active-fire detections from the NASA FIRMS
+area API for the whole globe; the two 6 km demo grids almost never contain a detection, so a
+grid-only overlay would have been empty (verified 2026-10-31: zero rows over both areas, while
+Boulder Creek has 189 archived VIIRS rows from the August 2020 CZU fire via the `_SP` sources,
+a possible later "historical compare" feature).
+
+- **Key in the bundle.** `VITE_FIRMS_MAP_KEY` follows the Google key: `.env.local` locally, a
+  repo secret on Pages, compiled into the public bundle. FIRMS keys are free and rate-limited
+  only (5000 transactions / 10 min), so the exposure is a shared budget, not a bill. The key
+  travels as a URL path segment, so `redact()` now also masks a standalone 32-hex token.
+- **Browser fetch, no proxy.** Successful FIRMS replies carry `access-control-allow-origin: *`.
+  Error replies (400/401/403) do not, so from a browser an invalid or exhausted key is
+  indistinguishable from a network failure; the copy says so instead of guessing.
+- **Budget protection.** `firmsClient` caches per (source, days, area) for 10 minutes, dedupes
+  in-flight requests, and honours a forced refresh at most once a minute. Defaults (VIIRS =
+  NOAA-20 + SNPP, 1 day, world) cost two requests per visitor per 10 minutes; no polling.
+  `MAX_DAYS = 3` keeps the largest payload around 13 MB.
+- **Fetch lives in `data/`, not `app/`.** `data/` is Node-safe and `fetch` exists in Node 18+,
+  so cache, TTL, timeout and error mapping are unit-tested with an injected `fetch`.
+- **Globe backdrop in the live view.** Entering Live fires hides the Google tileset and shows the
+  OSM globe (`ViewerHandle.setBackdrop`); leaving restores it. Reasons: no height sampling from
+  Google tiles (D9), the far hemisphere occludes points naturally with the depth test on, and no
+  tiles stream for the whole planet. Points are `PointPrimitive`s at 300 m above the ellipsoid
+  (far above log-depth resolution at globe range, invisible up close), coloured by age and sized
+  by FRP; ~50k points rebuild in well under 100 ms.
+- **Dots, not perimeters.** Copy states the pixel size (375 m / 1 km), the 1–3 h latency and
+  "not for safety decisions"; the footer switches to the FIRMS attribution in the live view.
+- **Store rule made explicit.** A `store.set` inside a subscriber re-enters the listener loop
+  with a stale `prev`, so subscriber-triggered writes (auto-load on first tab entry, picks) are
+  deferred with `queueMicrotask`; the tab click does one combined update (view + pause).
+- **Sim objects in the live view.** Grid layers, outline, marker and particles are hidden, the
+  grid picker is disabled, Space/Escape/Cmd+Z are gated to the sim tab; sim state (area, result,
+  playback position) survives the switch and the camera flies back to the grid.

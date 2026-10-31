@@ -2,6 +2,7 @@
 import 'cesium/Build/Cesium/Widgets/widgets.css';
 import '../ui/styles.css';
 import { loadDemoAreaIndex } from '../data/demoAreas';
+import { createFirmsClient } from '../data/firmsClient';
 import { createNotices } from '../ui/notices';
 import { mountPanel } from '../ui/panel';
 import { STR } from '../ui/strings';
@@ -9,6 +10,7 @@ import { createViewer } from '../viewer/createViewer';
 import { mountSettingsAdvanced } from '../ui/settingsAdvanced';
 import { mountTools } from '../ui/tools';
 import { startClock } from './clock';
+import { createLiveController } from './liveController';
 import { createStore } from './state';
 import { createToolsController } from './toolsController';
 import { wire } from './wiring';
@@ -20,6 +22,9 @@ const viewerEl = document.getElementById('viewer') as HTMLElement;
 async function main(): Promise<void> {
   const notices = createNotices(noticesEl);
   const store = createStore();
+  // NASA FIRMS key: read once, handed to the client, never logged.
+  const firms = createFirmsClient({ key: import.meta.env.VITE_FIRMS_MAP_KEY as string | undefined });
+  store.update((s) => ({ live: { ...s.live, keyPresent: firms.hasKey() } }));
 
   // Surface anything unexpected instead of failing silently (teammates will see it immediately).
   let lastErr = '';
@@ -33,7 +38,9 @@ async function main(): Promise<void> {
 
   // Panel first so the honesty notice is visible even if the viewer fails.
   let wiringRef: ReturnType<typeof wire> | null = null;
+  const live = createLiveController(store, notices, firms, (lon, lat, r) => wiringRef?.flyToLonLat(lon, lat, r));
   const slots = mountPanel(panelEl, store, {
+    ...live,
     selectArea: (name) => void wiringRef?.selectArea(name),
     simulate: () => void wiringRef?.simulate(),
     cancel: () => wiringRef?.cancel(),
@@ -54,7 +61,7 @@ async function main(): Promise<void> {
   store.set({ viewerMode: handle.mode });
   if (handle.mode === 'fallback') notices.persistent('fallback', `${STR.fallbackBanner} ${handle.fallbackReason}`);
 
-  const wiring = wire(handle.viewer, store, notices);
+  const wiring = wire(handle.viewer, store, notices, { setBackdrop: handle.setBackdrop });
   wiringRef = wiring;
   mountTools(slots.tools, store, createToolsController(store, wiring));
   startClock(store);
@@ -76,6 +83,10 @@ async function main(): Promise<void> {
   // Keyboard: Escape returns to the ignition tool, Space toggles playback.
   window.addEventListener('keydown', (e) => {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
+    if (store.get().view === 'live') {
+      if (e.key === 'Escape') live.select(null);
+      return;
+    }
     if (e.key === 'Escape') store.set({ tool: 'ignite' });
     if (e.key === ' ' && store.get().result) {
       e.preventDefault();
@@ -85,7 +96,7 @@ async function main(): Promise<void> {
 
   if (import.meta.env.DEV) {
     // Dev/test hook (not in production builds): lets headless tests and teammates poke the app.
-    (window as unknown as { __firesim: unknown }).__firesim = { store, wiring };
+    (window as unknown as { __firesim: unknown }).__firesim = { store, wiring, live };
   }
   console.log('[app] ready', { mode: handle.mode });
 }

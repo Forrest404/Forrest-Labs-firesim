@@ -7,8 +7,34 @@ import { DEFAULT_DURATION_SECONDS, DEFAULT_SETTINGS, DEFAULT_WEATHER } from '../
 import type { CellRef, Intervention, SimResult, SimSettings, Weather } from '../contract';
 import type { DemoArea, DemoAreaIndexEntry } from '../data/bundle';
 import type { ViewerMode } from '../viewer/createViewer';
+import { DEFAULT_FILTERS } from '../data/firms';
+import type { Hotspot, HotspotCluster, HotspotFilters, LiveSource } from '../data/firms';
 
 export type ToolId = 'ignite' | 'firebreak' | 'water';
+
+/** Top-level panel tab: the simulator, or the live satellite fire detections. */
+export type ViewId = 'sim' | 'live';
+
+export type LiveStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+export interface LiveState {
+  /** False when no VITE_FIRMS_MAP_KEY was compiled in. */
+  keyPresent: boolean;
+  source: LiveSource;
+  days: 1 | 2 | 3;
+  filters: HotspotFilters;
+  status: LiveStatus;
+  /** User-facing, already redacted. */
+  error: string | null;
+  /** Raw result of the last fetch. */
+  hotspots: Hotspot[];
+  /** Derived from hotspots + filters; written in the same update as either. */
+  filtered: Hotspot[];
+  /** Derived top bins by summed FRP, for the "largest fires" list. */
+  clusters: HotspotCluster[];
+  fetchedAt: number | null;
+  selectedId: string | null;
+}
 
 export interface PlaybackState {
   /** Simulated seconds since ignition. */
@@ -61,6 +87,8 @@ export interface AppState {
   debug: DebugFlags;
   effects: EffectsFlags;
   advancedOpen: boolean;
+  view: ViewId;
+  live: LiveState;
 }
 
 export type Listener = (state: AppState, prev: AppState) => void;
@@ -70,6 +98,22 @@ export interface Store {
   set(patch: Partial<AppState>): void;
   update(fn: (s: AppState) => Partial<AppState>): void;
   subscribe(listener: Listener): () => void;
+}
+
+export function initialLive(): LiveState {
+  return {
+    keyPresent: false,
+    source: 'viirs',
+    days: 1,
+    filters: { ...DEFAULT_FILTERS },
+    status: 'idle',
+    error: null,
+    hotspots: [],
+    filtered: [],
+    clusters: [],
+    fetchedAt: null,
+    selectedId: null,
+  };
 }
 
 export function initialState(): AppState {
@@ -94,6 +138,8 @@ export function initialState(): AppState {
     debug: { outline: false, fuel: false, slope: false },
     effects: { particles: true, quality: 'medium' },
     advancedOpen: false,
+    view: 'sim',
+    live: initialLive(),
   };
 }
 

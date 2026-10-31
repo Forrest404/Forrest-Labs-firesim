@@ -18,5 +18,10 @@ Vitest, Node environment, pure modules only (no Cesium, no DOM). `npm test` runs
   the simulated fire".
 - `invariants.test.ts` — model invariants that hold for ANY parameters (causality, monotonicity in moisture/wind/slope, mirror and rotation symmetry, interventions never make fire arrive earlier, fuzzed over random scenarios). Every rate model in `MODELS` runs the same suite. Mutation-checked: injected sign bugs are caught.
 - `burnCanvas.test.ts` — overlay painters.
+- `firms.test.ts` — NASA FIRMS CSV parsing (VIIRS and MODIS column sets, malformed rows, dates),
+  URL builder, filters, clustering. Mutation-checked (confidence thresholds).
+- `firmsClient.test.ts` — fetch client with a stubbed `fetch`: cache TTL and refresh floor,
+  dedupe, error kinds, timeout, abort; the key never appears in errors.
+- `redact.test.ts` — URL / key= / 32-hex redaction.
 
 The viewer and UI are verified by hand or headlessly (see `PROGRESS.md`), not by unit tests.

@@ -5,7 +5,10 @@ Turns the world into a `Scenario` grid. Node-safe (used by `scripts/` and the br
 **Owns:** `geo.ts` (the ONLY lat/lon <-> cell conversion in the app), `raster.ts` (polygons and
 lines onto the grid), `terrain.ts` (Terrarium decode, slope/aspect, gap fill), `osm.ts` (OSM tags
 to `FuelClass`, Overpass query text, element to shapes), `bundle.ts` (demo-area JSON format),
-`synthetic.ts` (generated areas), `demoAreas.ts` (loader + `index.json`).
+`synthetic.ts` (generated areas), `demoAreas.ts` (loader + `index.json`). `firms.ts` (NASA FIRMS CSV parser,
+URL builder, filters, 0.25° clustering) and `firmsClient.ts` (fetch with timeout, 10-minute cache,
+error kinds; injectable `fetch` for tests) feed the Live fires tab. The FIRMS key only ever appears
+in the request URL.
 
 **Must not import:** Cesium, the DOM, `src/ui`, `src/viewer`, `src/sim`.
 

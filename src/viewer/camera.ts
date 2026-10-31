@@ -1,6 +1,6 @@
-/** Camera helpers for the grid: oblique fly-to, top-down, reset. */
+/** Camera helpers: grid fly-to (oblique, top-down) and globe/point fly-to for the live view. */
 
-import { BoundingSphere, HeadingPitchRange, Math as CesiumMath, Rectangle } from 'cesium';
+import { BoundingSphere, Cartesian3, HeadingPitchRange, Math as CesiumMath, Rectangle } from 'cesium';
 import type { Viewer } from 'cesium';
 import type { GridSpec } from '../contract';
 
@@ -24,6 +24,24 @@ export function flyTopDown(viewer: Viewer, grid: GridSpec, durationS = 1.2): voi
   viewer.camera.flyToBoundingSphere(sphere, {
     duration: durationS,
     offset: new HeadingPitchRange(0, CesiumMath.toRadians(-90), sphere.radius * 2.3),
+  });
+}
+
+/** Whole-globe view centred on a point, looking straight down. */
+export function flyToGlobe(viewer: Viewer, lon: number, lat: number, heightM = 12_000_000, durationS = 2): void {
+  viewer.camera.flyTo({
+    destination: Cartesian3.fromDegrees(lon, lat, heightM),
+    orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+    duration: durationS,
+  });
+}
+
+/** Oblique view of a point from `rangeM` away. */
+export function flyToPoint(viewer: Viewer, lon: number, lat: number, rangeM: number, durationS = 1.6): void {
+  const sphere = new BoundingSphere(Cartesian3.fromDegrees(lon, lat, 0), Math.max(1, rangeM / 3));
+  viewer.camera.flyToBoundingSphere(sphere, {
+    duration: durationS,
+    offset: new HeadingPitchRange(0, CesiumMath.toRadians(-50), rangeM),
   });
 }
 

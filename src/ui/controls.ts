@@ -88,3 +88,37 @@ export function iconButton(name: IconName, label: string, onClick: () => void, o
 export function chip(text = '', cls = ''): HTMLElement {
   return el('span', { class: `chip ${cls}`.trim() }, text);
 }
+
+export interface TabOption<T extends string> { value: T; label: string; icon: IconName }
+
+/** Top-level tab bar (role=tablist). Arrow keys move between tabs; `set(value)` syncs from the store. */
+export function tabBar<T extends string>(
+  options: TabOption<T>[],
+  onSelect: (value: T) => void,
+  opts: { ariaLabel?: string } = {},
+): { root: HTMLElement; set(value: T): void } {
+  const buttons = new Map<T, HTMLButtonElement>();
+  const root = el('div', { class: 'tabs', role: 'tablist', 'aria-label': opts.ariaLabel });
+  options.forEach((o, i) => {
+    const b = el('button', { type: 'button', role: 'tab', 'aria-selected': 'false', tabindex: '-1', onclick: () => onSelect(o.value) }, icon(o.icon, 16), el('span', {}, o.label)) as HTMLButtonElement;
+    b.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      const next = options[(i + (e.key === 'ArrowRight' ? 1 : options.length - 1)) % options.length];
+      onSelect(next.value);
+      buttons.get(next.value)?.focus();
+    });
+    buttons.set(o.value, b);
+    root.append(b);
+  });
+  return {
+    root,
+    set(value) {
+      for (const [v, b] of buttons) {
+        const on = v === value;
+        b.setAttribute('aria-selected', on ? 'true' : 'false');
+        b.tabIndex = on ? 0 : -1;
+      }
+    },
+  };
+}

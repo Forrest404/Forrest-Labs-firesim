@@ -30,6 +30,8 @@ export interface PickHandlers {
 export interface Picker {
   /** When true, left-drag draws instead of rotating the camera. */
   setDragMode(enabled: boolean): void;
+  /** When false, clicks and drags are ignored entirely (live view). */
+  setEnabled(enabled: boolean): void;
   pickCell(x: number, y: number): PickedCell | null;
   destroy(): void;
 }
@@ -38,6 +40,7 @@ export function createPicker(viewer: Viewer, getGrid: () => GridSpec | null, h: 
   const handler = new ScreenSpaceEventHandler(viewer.scene.canvas);
   const controller = viewer.scene.screenSpaceCameraController;
   let dragMode = false;
+  let enabled = true;
   let dragging = false;
   let lastKey = -1;
 
@@ -78,14 +81,14 @@ export function createPicker(viewer: Viewer, getGrid: () => GridSpec | null, h: 
   };
 
   handler.setInputAction((e: ScreenSpaceEventHandler.PositionedEvent) => {
-    if (dragMode) return;
+    if (!enabled || dragMode) return;
     const cell = pickCell(e.position.x, e.position.y);
     if (cell) h.onClick(cell);
     else h.onOutside?.();
   }, ScreenSpaceEventType.LEFT_CLICK);
 
   handler.setInputAction((e: ScreenSpaceEventHandler.PositionedEvent) => {
-    if (!dragMode) return;
+    if (!enabled || !dragMode) return;
     const cell = pickCell(e.position.x, e.position.y);
     if (!cell) {
       h.onOutside?.();
@@ -117,9 +120,13 @@ export function createPicker(viewer: Viewer, getGrid: () => GridSpec | null, h: 
   viewer.scene.canvas.addEventListener('pointerleave', endDrag);
 
   return {
-    setDragMode(enabled) {
-      dragMode = enabled;
-      if (!enabled) endDrag();
+    setDragMode(on) {
+      dragMode = on;
+      if (!on) endDrag();
+    },
+    setEnabled(on) {
+      enabled = on;
+      if (!on) endDrag();
     },
     pickCell,
     destroy() {

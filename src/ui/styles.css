@@ -313,6 +313,34 @@ details > *:not(summary) { animation: fade-in var(--t-med) var(--ease) both; }
 #notices .banner.info { border-left-color: var(--info); }
 #notices .banner.info .icon { color: var(--info); animation: spin 1.2s linear infinite; }
 
+/* ---------- Tabs & panes ---------- */
+.tabs { display: flex; gap: 4px; padding: 3px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; }
+.tabs > button {
+  flex: 1; background: transparent; border: 0; min-height: 34px; padding: 4px 8px; border-radius: 7px;
+  color: var(--muted); font-weight: 700; font-size: 12.5px; gap: 6px;
+}
+.tabs > button .icon { color: var(--muted); transition: color var(--t-fast); }
+.tabs > button[aria-selected="true"] { background: var(--surface-3); color: var(--fg); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35); }
+.tabs > button[aria-selected="true"] .icon { color: var(--accent); }
+.pane { display: flex; flex-direction: column; gap: 10px; }
+
+/* ---------- Live fires ---------- */
+.live-status { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; }
+.live-status .meta { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.loading .live-status { animation: shimmer 1.2s ease-in-out infinite; }
+.key-missing { font-size: 12px; line-height: 1.45; color: var(--muted); }
+.key-missing a { color: var(--accent-2); font-weight: 600; }
+.legend-age { height: 6px; border-radius: 3px; background: linear-gradient(to right, #fff6a0, #ffb347, #ff4a1a, #6e0b0b); margin-top: 2px; }
+ol.clusters { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+ol.clusters:empty { display: none; }
+ol.clusters button { width: 100%; justify-content: space-between; text-align: left; min-height: 38px; padding: 6px 10px; font-size: 12px; font-weight: 500; gap: 10px; }
+ol.clusters button .frp { color: var(--accent-2); font-weight: 700; font-variant-numeric: tabular-nums; flex: none; }
+ol.clusters button .sub { color: var(--muted); font-size: 11px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+ol.clusters button.on { border-color: var(--accent); background: var(--accent-soft); }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: 12px; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; font-variant-numeric: tabular-nums; }
+
 /* ---------- Responsive ---------- */
 @media (max-width: 720px) {
   #panel { width: auto; left: 8px; right: 8px; top: auto; bottom: 8px; max-height: 58%; animation-name: panel-up; padding-top: 18px; }

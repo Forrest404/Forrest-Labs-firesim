@@ -38,3 +38,21 @@ export const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 export function compass(deg: number): string {
   return COMPASS[Math.round((((deg % 360) + 360) % 360) / 45) % 8];
 }
+
+/** "just now", "5 min ago", "3 h ago", "2 d ago". */
+export function formatAge(ms: number, now = Date.now()): string {
+  const s = Math.max(0, Math.round((now - ms) / 1000));
+  if (s < 60) return 'just now';
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60);
+  if (h < 48) return `${h} h ago`;
+  return `${Math.round(h / 24)} d ago`;
+}
+
+/** "2026-10-31 04:12 UTC". */
+export function formatUtc(ms: number): string {
+  const d = new Date(ms);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())} UTC`;
+}

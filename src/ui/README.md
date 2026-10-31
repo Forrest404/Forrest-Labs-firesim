@@ -5,6 +5,8 @@ Plain TypeScript DOM UI (no framework). One side panel, notices, and a small `el
 **Owns:** `panel.ts` (layout), `settingsSimple.ts`, `settingsAdvanced.ts`, `playback.ts`,
 `tools.ts` (tool palette + intervention list), `notices.ts` (honesty notice, fallback banner,
 errors, loading), `debug.ts` (debug toggles), `strings.ts` (ALL user-facing text), `styles.css`.
+`live.ts` is the Live fires pane; `panel.ts` holds the Simulation / Live fires tab bar
+(`controls.tabBar`) and shows one pane at a time (`state.view`).
 
 **Must not import:** Cesium. UI talks to the viewer only through `src/app` wiring.
 

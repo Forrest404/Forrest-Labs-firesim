@@ -39,7 +39,7 @@ Coverage is the share of a 60 x 60 sample grid inside forest/scrub/water polygon
 | Elevation spot checks | Open-Meteo elevation API | No key | Working, used for the relief numbers above | CC BY 4.0 |
 | Weather, live and historical | Open-Meteo forecast and archive APIs | No key | Working | CC BY 4.0 |
 | Real fire perimeters | NIFC WFIGS Interagency Perimeters | No key | Working | US public domain |
-| Satellite hotspots | NASA FIRMS area API | Free MAP_KEY | Not tested | NASA open data |
+| Satellite hotspots | NASA FIRMS area API (`/api/area/csv/KEY/SOURCE/world/1`) | Free MAP_KEY (`VITE_FIRMS_MAP_KEY`) | **Working** in the Live fires tab: browser fetch (CORS `*` on success), tested 2026-10-31; NOAA-20 + SNPP 1-day world ≈ 47k rows / 4 MB in ~2 s | NASA open data |
 
 ## Ready-to-run commands
 

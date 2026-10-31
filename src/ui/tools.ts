@@ -45,6 +45,7 @@ export function mountTools(container: HTMLElement, store: Store, ctl: ToolsContr
 
   window.addEventListener('keydown', (e) => {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
+    if (store.get().view !== 'sim') return;
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
       e.preventDefault();
       if (e.shiftKey) ctl.redo();

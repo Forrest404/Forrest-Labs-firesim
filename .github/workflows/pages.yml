@@ -6,6 +6,9 @@
 # enable Google Photorealistic 3D Tiles. Without it the app falls back to the OSM globe.
 # The key is compiled into the public bundle, so restrict it to this site's domain and to the
 # Map Tiles API in Google Cloud Console (see README "Google 3D tiles setup").
+#
+# Optional: add a repository secret VITE_FIRMS_MAP_KEY to enable the "Live fires" tab (NASA FIRMS,
+# free, rate-limited; also compiled into the bundle). Without it the tab explains how to get a key.
 name: Deploy to GitHub Pages
 
 on:
@@ -40,6 +43,7 @@ jobs:
           # Project pages are served from https://<owner>.github.io/<repo>/
           BASE_PATH: /${{ github.event.repository.name }}/
           VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+          VITE_FIRMS_MAP_KEY: ${{ secrets.VITE_FIRMS_MAP_KEY }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

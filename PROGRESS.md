@@ -168,6 +168,24 @@ Companion files: [DECISIONS.md](DECISIONS.md) (judgement calls), [FEATURES.md](F
   dragged east), switches, simulate, speed, play, collapse, advanced toggle and a firebreak
   stroke all update the store; no exceptions or console errors.
 
+## Live fires tab (`feature/live-fires`, 2026-10-31)
+
+- New: `src/data/firms.ts` + `firmsClient.ts` (tested: 32 cases, mutation-checked), `src/viewer/hotspotLayer.ts`,
+  `src/app/liveController.ts`, `src/ui/live.ts`, `controls.tabBar`, `state.view` / `state.live`,
+  `ViewerHandle.setBackdrop`, `redact()` masks 32-hex keys. Decision D20.
+- **Verified headlessly with a real key** (installed Chrome, SwiftShader, Google mode, 1400x900):
+  clicking the tab fetches NOAA-20 + SNPP world/1 day (59,116 rows, 52,302 after the default
+  low-confidence filter), the globe view shows the dots, "Largest fires" fly-to selects the sample
+  point and fills the details card, a min-FRP filter changes the count without a refetch, a forced
+  refresh inside the 60 s floor makes no request, switching back restores the grid, tiles and marker,
+  and the key appears nowhere in console, exceptions or DOM. Screenshots in the session scratchpad.
+- Verified without a key (fallback globe): key-missing card with link, refresh disabled, nothing
+  fetched. With a bogus key: FIRMS answers 400 without CORS headers, so the browser reports
+  "NASA FIRMS did not answer…" (see D20); nothing crashes.
+- Not verified by a human: real mouse clicks on dots (the pick path uses `scene.pick` with a 6 px
+  box and was exercised only through `__firesim.live.flyToCluster`), the phone layout of the live
+  pane, and behaviour when Google tiles fail *while* the live view is open.
+
 ## Known issues / not verified
 
 - **Google Photorealistic 3D Tiles path verified headlessly** (2026-10-31, real key in

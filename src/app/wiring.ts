@@ -11,7 +11,10 @@ import { defaultIgnition } from '../data/ignition';
 import { computeSlopeAspect } from '../data/terrain';
 import { paintFuel, paintSlope } from '../viewer/burnCanvas';
 import { GridLayer } from '../viewer/burnLayer';
-import { flyToGrid, flyTopDown } from '../viewer/camera';
+import { flyToGlobe, flyToGrid, flyToPoint, flyTopDown } from '../viewer/camera';
+import type { Backdrop } from '../viewer/createViewer';
+import { gridCenter } from '../data/geo';
+import { createHotspotLayer } from '../viewer/hotspotLayer';
 import type { Viewer } from 'cesium';
 import { createGridOutline } from '../viewer/gridOutline';
 import type { GridOutline } from '../viewer/gridOutline';
@@ -24,7 +27,7 @@ import { STR } from '../ui/strings';
 import { OverlayPainter } from './overlayPainter';
 import type { Preview } from './overlayPainter';
 import { SimCancelledError, SimClient } from './simClient';
-import type { Store } from './state';
+import type { AppState, Store } from './state';
 
 interface AreaContext {
   burn: GridLayer;
@@ -47,14 +50,27 @@ export interface Wiring {
   setPreview(p: Preview | null): void;
   /** Dev/test helper: feeds a stroke (cell-space points) through the draw handlers as if dragged. */
   debugStroke(points: { x: number; y: number }[]): void;
+  /** Live view: oblique fly-to of a lon/lat from `rangeM` away. */
+  flyToLonLat(lon: number, lat: number, rangeM: number): void;
 }
 
-export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
+export interface WireOptions {
+  /** Switches the backdrop between Google tiles and the globe (see createViewer). */
+  setBackdrop?: (mode: Backdrop) => void;
+}
+
+export function wire(viewer: Viewer, store: Store, notices: Notices, opts: WireOptions = {}): Wiring {
   const sim = new SimClient();
   const marker = createIgnitionMarker(viewer, STR.ignitionLabel);
   const effects = createFireEffects(viewer);
   effects.setEnabled(store.get().effects.particles);
   effects.setQuality(store.get().effects.quality);
+  // Live-fires detections. Picks arrive from a Cesium event, so the store write is deferred anyway.
+  const hotspots = createHotspotLayer(viewer, (id) => {
+    if (store.get().view !== 'live') return;
+    queueMicrotask(() => store.update((st) => (st.live.selectedId === id ? {} : { live: { ...st.live, selectedId: id } })));
+  });
+  const simShown = (): boolean => store.get().view === 'sim';
   let ctx: AreaContext | null = null;
   let draw: { start(c: PickedCell): void; move(c: PickedCell): void; end(): void } | null = null;
   let preview: Preview | null = null;
@@ -103,15 +119,39 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     applyDebug();
     repaint();
     marker.set(grid, s.ignition);
-    flyToGrid(viewer, grid);
+    if (simShown()) flyToGrid(viewer, grid);
+    else burn.setVisible(false);
   }
 
   function applyDebug(): void {
     if (!ctx) return;
     const d = store.get().debug;
-    ctx.fuel.setVisible(d.fuel);
-    ctx.slope.setVisible(d.slope);
-    ctx.outline.setVisible(d.outline);
+    const on = simShown();
+    ctx.fuel.setVisible(on && d.fuel);
+    ctx.slope.setVisible(on && d.slope);
+    ctx.outline.setVisible(on && d.outline);
+  }
+
+  /** Tab switch: hide every sim object in the live view and show the detections, or the reverse. */
+  function applyView(s: AppState): void {
+    const live = s.view === 'live';
+    opts.setBackdrop?.(live ? 'globe' : 'tiles');
+    picker.setEnabled(!live);
+    if (!live) picker.setDragMode(s.tool !== 'ignite');
+    marker.setVisible(!live);
+    effects.setEnabled(!live && s.effects.particles);
+    hotspots.setVisible(live);
+    if (ctx) {
+      ctx.burn.setVisible(!live);
+      applyDebug();
+    }
+    if (live) {
+      const c = s.area ? gridCenter(s.area.grid) : { lon: 0, lat: 20 };
+      flyToGlobe(viewer, c.lon, c.lat);
+    } else if (s.area) {
+      flyToGrid(viewer, s.area.grid);
+      repaint();
+    }
   }
 
   function repaint(): void {
@@ -135,13 +175,16 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
 
   store.subscribe((s, prev) => {
     if (s.area !== prev.area) buildArea();
+    if (s.view !== prev.view) applyView(s);
+    if (s.live.filtered !== prev.live.filtered) hotspots.set(s.live.filtered, Date.now());
+    if (s.live.selectedId !== prev.live.selectedId) hotspots.setSelected(s.live.selectedId);
     if (!ctx) return;
     if (s.debug !== prev.debug) applyDebug();
     if (s.ignition !== prev.ignition && s.area) marker.set(s.area.grid, s.ignition);
     if (s.result !== prev.result || s.playback.t !== prev.playback.t || s.interventions !== prev.interventions || s.settings !== prev.settings) repaint();
     if (s.tool !== prev.tool) picker.setDragMode(s.tool !== 'ignite');
     if (s.effects !== prev.effects) {
-      effects.setEnabled(s.effects.particles);
+      effects.setEnabled(s.effects.particles && simShown());
       effects.setQuality(s.effects.quality);
       repaint();
     }
@@ -238,6 +281,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
       preview = p;
       repaint();
     },
+    flyToLonLat: (lon, lat, rangeM) => flyToPoint(viewer, lon, lat, rangeM),
     debugStroke: (points) => {
       if (!draw || points.length === 0) return;
       const toCell = (p: { x: number; y: number }): PickedCell => ({ x: p.x, y: p.y, row: Math.floor(p.y), col: Math.floor(p.x), lon: 0, lat: 0 });

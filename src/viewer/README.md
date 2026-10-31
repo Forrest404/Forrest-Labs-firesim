@@ -7,7 +7,9 @@ exported here.
 fallback (`googleTiles.ts`), the burn overlay (`burnCanvas.ts` draws pixels from `arrivalTime`,
 `burnLayer.ts` drapes the canvas on the scene), grid outline and corner markers
 (`gridOutline.ts`), camera helpers (`camera.ts`), picking (`picking.ts`: screen -> lon/lat ->
-cell via `src/data/geo.ts`), particle flames and smoke (`particles.ts`).
+cell via `src/data/geo.ts`), particle flames and smoke (`particles.ts`). Live fires: `hotspotLayer.ts`
+(PointPrimitiveCollection, age colour, FRP size, own click handler); `createViewer` exposes
+`setBackdrop('tiles' | 'globe')` because the live view always draws on the globe.
 
 **Must not import:** `src/ui`, `src/sim` internals. It may import `src/contract` and `src/data/geo`.
 
