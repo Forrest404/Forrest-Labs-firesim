@@ -6,8 +6,11 @@ import { createNotices } from '../ui/notices';
 import { mountPanel } from '../ui/panel';
 import { STR } from '../ui/strings';
 import { createViewer } from '../viewer/createViewer';
+import { mountSettingsAdvanced } from '../ui/settingsAdvanced';
+import { mountTools } from '../ui/tools';
 import { startClock } from './clock';
 import { createStore } from './state';
+import { createToolsController } from './toolsController';
 import { wire } from './wiring';
 
 const panelEl = document.getElementById('panel') as HTMLElement;
@@ -27,9 +30,7 @@ async function main(): Promise<void> {
     topDown: () => wiringRef?.topDown(),
     resetView: () => wiringRef?.resetView(),
   });
-  // Stage 6 fills these.
-  slots.tools.hidden = true;
-  slots.advanced.hidden = true;
+  mountSettingsAdvanced(slots.advanced, store);
 
   notices.persistent('loading', STR.loadingArea, 'info');
   const handle = await createViewer({
@@ -45,6 +46,7 @@ async function main(): Promise<void> {
 
   const wiring = wire(handle.viewer, store, notices);
   wiringRef = wiring;
+  mountTools(slots.tools, store, createToolsController(store, wiring));
   startClock(store);
 
   try {
@@ -70,6 +72,10 @@ async function main(): Promise<void> {
     }
   });
 
+  if (import.meta.env.DEV) {
+    // Dev/test hook (not in production builds): lets headless tests and teammates poke the app.
+    (window as unknown as { __firesim: unknown }).__firesim = { store, wiring };
+  }
   console.log('[app] ready', { mode: handle.mode });
 }
 

@@ -21,6 +21,7 @@ import type { PickedCell, Picker } from '../viewer/picking';
 import type { Notices } from '../ui/notices';
 import { STR } from '../ui/strings';
 import { OverlayPainter } from './overlayPainter';
+import type { Preview } from './overlayPainter';
 import { SimCancelledError, SimClient } from './simClient';
 import type { Store } from './state';
 
@@ -39,8 +40,12 @@ export interface Wiring {
   topDown(): void;
   resetView(): void;
   picker: Picker;
-  /** Hook for Stage 6 tools: receives picks when a drawing tool is active. */
+  /** Hook for the tools controller: receives picks when a drawing tool is active. */
   setDrawHandlers(h: { start(c: PickedCell): void; move(c: PickedCell): void; end(): void } | null): void;
+  /** Live stroke preview painted into the overlay. */
+  setPreview(p: Preview | null): void;
+  /** Dev/test helper: feeds a stroke (cell-space points) through the draw handlers as if dragged. */
+  debugStroke(points: { x: number; y: number }[]): void;
 }
 
 export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
@@ -48,6 +53,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
   const marker = createIgnitionMarker(viewer, STR.ignitionLabel);
   let ctx: AreaContext | null = null;
   let draw: { start(c: PickedCell): void; move(c: PickedCell): void; end(): void } | null = null;
+  let preview: Preview | null = null;
 
   const picker = createPicker(viewer, () => store.get().area?.grid ?? null, {
     onClick: (cell) => {
@@ -107,7 +113,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
   function repaint(): void {
     if (!ctx) return;
     const s = store.get();
-    ctx.painter.schedule(s.result, s.interventions, s.playback.t, s.settings);
+    ctx.painter.schedule(s.result, s.interventions, s.playback.t, s.settings, preview);
   }
 
   store.subscribe((s, prev) => {
@@ -204,6 +210,17 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     picker,
     setDrawHandlers: (h) => {
       draw = h;
+    },
+    setPreview: (p) => {
+      preview = p;
+      repaint();
+    },
+    debugStroke: (points) => {
+      if (!draw || points.length === 0) return;
+      const toCell = (p: { x: number; y: number }): PickedCell => ({ x: p.x, y: p.y, row: Math.floor(p.y), col: Math.floor(p.x), lon: 0, lat: 0 });
+      draw.start(toCell(points[0]));
+      for (const p of points.slice(1)) draw.move(toCell(p));
+      draw.end();
     },
   };
 }

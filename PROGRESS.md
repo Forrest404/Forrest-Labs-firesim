@@ -11,7 +11,7 @@ Companion files: [DECISIONS.md](DECISIONS.md) (judgement calls), [FEATURES.md](F
 - [x] Stage 3: Data (geo, raster, terrain, bundles, 2 real + 2 synthetic areas, build script)
 - [x] Stage 4: Cesium viewer spike
 - [x] Stage 5: Overlay, playback, ignition (CRITICAL MILESTONE)
-- [ ] Stage 6: Tools and advanced settings
+- [x] Stage 6: Tools and advanced settings
 - [ ] Stage 7: Effects, hardening, hand-off, tag `v0`
 
 ## Environment (Stage 0 recon)
@@ -99,13 +99,31 @@ Companion files: [DECISIONS.md](DECISIONS.md) (judgement calls), [FEATURES.md](F
 - Known: `?area=<name>` picks the start area. `Space` toggles playback, `Escape` returns to the
   ignition tool.
 
+### Stage 6 — Tools and advanced settings
+- `src/tools/`: `firebreak.ts` (polyline -> swath via the tested 4-connected rasteriser),
+  `water.ts` (brush), `history.ts` (undo/redo snapshots), `index.ts` (tool registry with the
+  `TODO(tools-v2)` extension point). 8 new tests (53 total), incl. "a firebreak drawn by the tool
+  stops the simulated fire".
+- `src/app/toolsController.ts`: strokes -> live preview -> timestamped `Intervention` (current
+  playback time, or t = 0 in "pre-clear" mode) -> re-simulate preserving playback time.
+- UI: palette (Ignition / Firebreak (clear trees) / Water spray), swath width / spray radius,
+  pre-clear toggle, Undo / Redo / Clear (also Cmd/Ctrl+Z, Shift for redo), intervention list with
+  remove buttons, `Escape` returns to Ignition. Advanced panel: temperature, humidity, dead fuel
+  moisture, wind variability, spread / wind / slope multipliers, water half-life and boost, seed,
+  burnout; grid size, spotting, crown fire and time-varying weather shown disabled, "coming soon".
+- **Verified headlessly** via the dev hook `window.__firesim` (DEV builds only): baseline 1,751
+  cells at 4 h -> 968 with a pre-clear firebreak across the downwind path -> 956 with water at
+  t = 30 min -> 968 after Undo; list and timestamps correct; no console errors.
+- Not verified: real mouse drags in Cesium (no interactive browser available); the pick/drag code
+  path is exercised only through `debugStroke()`.
+
 ## Current stage
 
-Stage 6: Tools and advanced settings.
+Stage 7: Effects, hardening, hand-off.
 
 ## Next
 
-Stage 7: Effects, hardening, hand-off.
+Tag `v0`, hand off.
 
 ## Known issues / not verified
 

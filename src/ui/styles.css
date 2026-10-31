@@ -53,6 +53,13 @@ html, body { margin: 0; height: 100%; background: #0b0d10; overflow: hidden; }
 #panel .legend .swatch { display: inline-flex; align-items: center; gap: 4px; }
 #panel .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--border); }
 #panel .footer { margin-top: 12px; font-size: 11px; }
+#panel ul.interventions { list-style: none; padding: 0; margin: 6px 0 0; font-size: 12px; }
+#panel ul.interventions li { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 3px 0; border-top: 1px dashed var(--border); }
+#panel button.small { padding: 1px 6px; font-size: 11px; margin: 0; }
+#panel label.disabled { opacity: 0.5; }
+#panel .num { display: inline-flex; align-items: center; gap: 4px; }
+#panel .num input { width: 72px; }
+#panel .unit { color: var(--muted); font-size: 12px; min-width: 24px; }
 
 #notices { position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
 #notices .banner { background: rgba(18, 20, 24, 0.92); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 8px; padding: 8px 12px; pointer-events: auto; }

@@ -8,6 +8,11 @@ import type { GridSpec, Intervention, SimResult, SimSettings } from '../contract
 import { paintBurn } from '../viewer/burnCanvas';
 import type { GridLayer } from '../viewer/burnLayer';
 
+export interface Preview {
+  type: 'firebreak' | 'water';
+  cells: number[];
+}
+
 export interface LiveStats {
   burnedCells: number;
   burnedAreaHa: number;
@@ -19,7 +24,7 @@ export class OverlayPainter {
   private dirty = false;
   private lastPaint = 0;
   private raf = 0;
-  private args: { result: SimResult | null; interventions: Intervention[]; t: number; settings: SimSettings } | null = null;
+  private args: { result: SimResult | null; interventions: Intervention[]; t: number; settings: SimSettings; preview: Preview | null } | null = null;
 
   constructor(
     private readonly layer: GridLayer,
@@ -32,8 +37,8 @@ export class OverlayPainter {
   }
 
   /** Request a repaint with the latest inputs (coalesced to one paint per frame). */
-  schedule(result: SimResult | null, interventions: Intervention[], t: number, settings: SimSettings): void {
-    this.args = { result, interventions, t, settings };
+  schedule(result: SimResult | null, interventions: Intervention[], t: number, settings: SimSettings, preview: Preview | null = null): void {
+    this.args = { result, interventions, t, settings, preview };
     this.dirty = true;
     if (!this.raf) this.raf = requestAnimationFrame(this.tick);
   }
@@ -54,6 +59,10 @@ export class OverlayPainter {
     const a = this.args;
     if (!a) return;
     this.buildMasks(a.interventions, a.t, a.settings);
+    if (a.preview) {
+      if (a.preview.type === 'firebreak') for (const c of a.preview.cells) this.firebreak[c] = 1;
+      else for (const c of a.preview.cells) this.wetness[c] = 1;
+    }
     const arrival = a.result?.arrivalTime ?? EMPTY;
     const flameWindowS = Math.max(300, Math.min(1800, a.settings.waterHalfLifeS * 1.5));
     this.layer.paint((data) =>
