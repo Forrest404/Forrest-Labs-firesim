@@ -72,7 +72,8 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
     (q) => store.update((s) => ({ effects: { ...s.effects, quality: q as 'low' | 'medium' | 'high' } })),
     { ariaLabel: STR.effectsQuality, class: 'small' },
   );
-  view.body.append(particles.root, el('div', { class: 'ctl-row' }, el('span', { class: 'ctl-label' }, STR.effectsQuality), quality.root));
+  const smoke = toggle(STR.effectsSmoke, (on) => store.update((s) => ({ effects: { ...s.effects, smoke: on } })), { title: STR.smokeHint });
+  view.body.append(particles.root, el('div', { class: 'ctl-row' }, el('span', { class: 'ctl-label' }, STR.effectsQuality), quality.root), smoke.root);
   const debugBody = el('div', { class: 'sub' });
   view.body.append(debugBody, el('div', { class: 'muted hint' }, STR.cameraHelp));
 
@@ -90,6 +91,7 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
     modePill.classList.toggle('live', s.viewerMode === 'google');
     (modePill.querySelector('.pill-text') as HTMLElement).textContent = STR.viewerMode[s.viewerMode];
     particles.input.checked = s.effects.particles;
+    smoke.input.checked = s.effects.smoke;
     quality.set(s.effects.quality);
     quality.setDisabled(!s.effects.particles);
   });

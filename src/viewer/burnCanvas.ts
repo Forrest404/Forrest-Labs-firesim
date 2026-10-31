@@ -40,8 +40,10 @@ export function paintSlope(data: Uint8ClampedArray, slopeDeg: Float32Array): voi
 }
 
 export interface BurnPaintOptions {
-  /** Seconds a cell stays in the "flaming" ramp before it looks charred. */
+  /** Seconds a cell stays in the "flaming" ramp before it looks charred (fallback when burnoutAt is absent). */
   flameWindowS: number;
+  /** Per-cell burnout time (arrival + the fuel's burn duration). When present it replaces flameWindowS. */
+  burnoutAt?: Float32Array;
   /** Cells that are cleared firebreaks (by time t). */
   firebreak?: Uint8Array;
   /** 0..1 current wetness per cell (by time t). */
@@ -53,9 +55,11 @@ export interface BurnPaintOptions {
  * orange -> red by recency. Burned: dark char. Firebreak: light grey. Wet: blue tint.
  */
 export function paintBurn(data: Uint8ClampedArray, arrival: Float32Array, t: number, o: BurnPaintOptions): void {
-  const win = Math.max(1, o.flameWindowS);
+  const winDefault = Math.max(1, o.flameWindowS);
+  const burnout = o.burnoutAt;
   for (let i = 0, p = 0; i < arrival.length; i++, p += 4) {
     const a = arrival[i];
+    const win = burnout ? Math.max(1, burnout[i] - a) : winDefault;
     let r = 0;
     let g = 0;
     let b = 0;

@@ -34,6 +34,8 @@ export interface DebugFlags {
 export interface EffectsFlags {
   particles: boolean;
   quality: 'low' | 'medium' | 'high';
+  /** Draped smoke-concentration layer (cosmetic model, see DECISIONS.md D20). */
+  smoke: boolean;
 }
 
 export interface AppState {
@@ -92,7 +94,7 @@ export function initialState(): AppState {
     tool: 'ignite',
     toolParams: { firebreakWidthCells: 3, waterRadiusCells: 3, preClear: false },
     debug: { outline: false, fuel: false, slope: false },
-    effects: { particles: true, quality: 'medium' },
+    effects: { particles: true, quality: 'medium', smoke: true },
     advancedOpen: false,
   };
 }

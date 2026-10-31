@@ -7,6 +7,16 @@ import { NEVER_ARRIVES, cellAreaHa } from '../contract';
 import type { GridSpec, Intervention, SimResult, SimSettings } from '../contract';
 import { paintBurn } from '../viewer/burnCanvas';
 import type { GridLayer } from '../viewer/burnLayer';
+import { paintSmoke } from '../viewer/smokeCanvas';
+import type { SmokeSample, SmokeTimeline } from './smoke';
+
+/** Wall-time budget per paint for stepping the smoke field toward the playback time. */
+const SMOKE_BUDGET_MS = 6;
+/** Larger per-frame budget used by the dedicated catch-up loop after a long scrub. */
+const SMOKE_CATCHUP_BUDGET_MS = 12;
+/** Nominal mass extinction of biomass smoke, m^2/kg. */
+const SMOKE_SIGMA_EXT = 4000;
+const SMOKE_MAX_ALPHA = 0.8;
 
 export interface Preview {
   type: 'firebreak' | 'water';
@@ -25,6 +35,12 @@ export class OverlayPainter {
   private lastPaint = 0;
   private raf = 0;
   private args: { result: SimResult | null; interventions: Intervention[]; t: number; settings: SimSettings; preview: Preview | null } | null = null;
+  private smokeLayer: GridLayer | null = null;
+  private timeline: SmokeTimeline | null = null;
+  private readonly smokeBuf: Float32Array;
+  private burnoutAt: Float32Array | null = null;
+  private lastSmoke: SmokeSample | null = null;
+  private catchUpRaf = 0;
 
   constructor(
     private readonly layer: GridLayer,
@@ -34,6 +50,28 @@ export class OverlayPainter {
     const n = grid.width * grid.height;
     this.firebreak = new Uint8Array(n);
     this.wetness = new Float32Array(n);
+    this.smokeBuf = new Float32Array(n);
+  }
+
+  /** Attaches (or detaches, with null) the smoke layer and the timeline that fills it. */
+  setSmoke(layer: GridLayer | null, timeline: SmokeTimeline | null): void {
+    this.smokeLayer = layer;
+    this.timeline = timeline;
+    this.lastSmoke = null;
+    if (layer && !timeline) layer.paint((d) => d.fill(0));
+  }
+
+  /** Per-cell burnout times for the per-fuel burning ramp (null falls back to the fixed window). */
+  setBurnout(burnoutAt: Float32Array | null): void {
+    this.burnoutAt = burnoutAt;
+  }
+
+  get lastSmokeSample(): SmokeSample | null {
+    return this.lastSmoke;
+  }
+
+  get smokeTimeline(): SmokeTimeline | null {
+    return this.timeline;
   }
 
   /** Request a repaint with the latest inputs (coalesced to one paint per frame). */
@@ -68,11 +106,37 @@ export class OverlayPainter {
     this.layer.paint((data) =>
       paintBurn(data, arrival.length ? arrival : this.emptyArrival(), a.t, {
         flameWindowS,
+        burnoutAt: a.result && this.burnoutAt ? this.burnoutAt : undefined,
         firebreak: this.firebreak,
         wetness: this.wetness,
       }),
     );
+    this.paintSmoke(a.t);
   }
+
+  private paintSmoke(t: number): void {
+    const layer = this.smokeLayer;
+    const tl = this.timeline;
+    if (!layer || !tl || !layer.isVisible) return;
+    const caughtUp = tl.advanceTo(t, SMOKE_BUDGET_MS);
+    const sample = tl.sampleAt(t, this.smokeBuf);
+    this.lastSmoke = sample;
+    const cellAreaM2 = this.grid.cellSizeM * this.grid.cellSizeM;
+    layer.paint((data) => paintSmoke(data, sample.conc, { cellAreaM2, sigmaExtM2PerKg: SMOKE_SIGMA_EXT, maxAlpha: SMOKE_MAX_ALPHA, smolderFrac: sample.smolderFrac }));
+    if (!caughtUp && !this.catchUpRaf) this.catchUpRaf = requestAnimationFrame(this.catchUp);
+  }
+
+  /** Steps the field every frame (not just every paint) after a long jump, then repaints. */
+  private readonly catchUp = (): void => {
+    this.catchUpRaf = 0;
+    const tl = this.timeline;
+    const a = this.args;
+    if (!tl || !a || !this.smokeLayer?.isVisible) return;
+    const done = tl.advanceTo(a.t, SMOKE_CATCHUP_BUDGET_MS, 1000);
+    this.dirty = true;
+    if (!this.raf) this.raf = requestAnimationFrame(this.tick);
+    if (!done) this.catchUpRaf = requestAnimationFrame(this.catchUp);
+  };
 
   private emptyCache: Float32Array | null = null;
   private emptyArrival(): Float32Array {
@@ -98,6 +162,7 @@ export class OverlayPainter {
 
   destroy(): void {
     if (this.raf) cancelAnimationFrame(this.raf);
+    if (this.catchUpRaf) cancelAnimationFrame(this.catchUpRaf);
   }
 }
 

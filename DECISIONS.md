@@ -195,3 +195,34 @@ no icon font, no network font). Rules that follow from it:
   `store.advancedOpen`.
 - Copy is shorter everywhere (hints are one line, "display only" wording lives in the mode pill
   tooltip and README); the honesty notice text itself is unchanged.
+
+## D20. Cosmetic smoke field (deterministic, not a dispersion model)
+
+Smoke is app/viewer code only (`src/app/smoke/`, `src/viewer/smokeCanvas.ts`); the contract
+and the spread model are untouched and nothing feeds back. The field is column-integrated
+particulate per cell on the sim grid, stepped on a 60 s lattice: closed-form per-fuel emission
+(uniform flaming over the fuel's `burnDurationS`, exponential smoldering tail per fuel, nominal
+emission factors 0.010 / 0.025 kg per kg fuel weighted 0.5-1.5 by the sim's relative intensity),
+semi-Lagrangian advection, three-box Gaussian diffusion (K = 15 + 10 u + 30 per km of plume
+top), 4 h first-order loss. A Briggs bent-over final rise from the summed flaming heat release
+gives one global plume top that scales transport speed (power-law profile) and diffusivity;
+column mass is not diluted by height. Wind is the scenario snapshot that produced the result
+(not the live, possibly edited weather) plus a seeded meander from `windVariabilityDeg` via
+mulberry32; no `Math.random` in the model. Checkpoints every 20 steps make scrubbing back a
+bitwise-identical replay; forward jumps catch up on a budgeted per-frame loop (12 ms).
+
+Terrain does not steer the drift: a column at plume height is not channelled by 30 m terrain
+and, with one wind vector and no boundary layer, an up-valley bias would be invented. Terrain is
+used only for particle emitter heights (D14).
+
+Particles are now driven by the field (emission weight, local plume rise, buoyancy decay, wind
+profile, hash turbulence) but Cesium's emitters still use their own randomness, so particle
+visuals are not reproducible; only the draped field is. Both the burn overlay and the smoke
+follow per-fuel burnout (`arrival + burnDurationS`, what the sim uses); the old
+`waterHalfLifeS * 1.5` window was never physically related to burning and remains only as the
+no-result fallback. With `burnoutEnabled = false` the sim spreads forever but visuals still use
+the per-fuel duration.
+
+Honesty: this is not a dispersion model validated against observations. No boundary layer, no
+terrain channelling, no chemistry; emission factors and extinction (4000 m^2/kg) are
+order-of-magnitude placeholders and opacity is illustrative.

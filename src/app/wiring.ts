@@ -22,12 +22,14 @@ import type { PickedCell, Picker } from '../viewer/picking';
 import type { Notices } from '../ui/notices';
 import { STR } from '../ui/strings';
 import { OverlayPainter } from './overlayPainter';
+import { SmokeTimeline } from './smoke';
 import type { Preview } from './overlayPainter';
 import { SimCancelledError, SimClient } from './simClient';
 import type { Store } from './state';
 
 interface AreaContext {
   burn: GridLayer;
+  smoke: GridLayer;
   fuel: GridLayer;
   slope: GridLayer;
   outline: GridOutline;
@@ -41,6 +43,8 @@ export interface Wiring {
   topDown(): void;
   resetView(): void;
   picker: Picker;
+  /** The smoke timeline of the current result (dev hook / headless checks). */
+  smokeTimeline(): SmokeTimeline | null;
   /** Hook for the tools controller: receives picks when a drawing tool is active. */
   setDrawHandlers(h: { start(c: PickedCell): void; move(c: PickedCell): void; end(): void } | null): void;
   /** Live stroke preview painted into the overlay. */
@@ -81,6 +85,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     if (!ctx) return;
     ctx.painter.destroy();
     ctx.burn.destroy();
+    ctx.smoke.destroy();
     ctx.fuel.destroy();
     ctx.slope.destroy();
     ctx.outline.destroy();
@@ -98,8 +103,12 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     const { slopeDeg } = computeSlopeAspect(s.area.elevation, grid.width, grid.height, grid.cellSizeM);
     slope.paint((d) => paintSlope(d, slopeDeg));
     const burn = new GridLayer(viewer, grid, { zIndex: 3 });
+    const smoke = new GridLayer(viewer, grid, { zIndex: 4 });
+    smoke.setVisible(s.effects.smoke);
     const outline = createGridOutline(viewer, grid);
-    ctx = { burn, fuel, slope, outline, painter: new OverlayPainter(burn, grid) };
+    const painter = new OverlayPainter(burn, grid);
+    painter.setSmoke(smoke, null);
+    ctx = { burn, smoke, fuel, slope, outline, painter };
     applyDebug();
     repaint();
     marker.set(grid, s.ignition);
@@ -120,6 +129,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     ctx.painter.schedule(s.result, s.interventions, s.playback.t, s.settings, preview);
     if (s.area) {
       const toward = (windTowardDeg(s.weather.windFromDeg) * Math.PI) / 180;
+      const sample = ctx.painter.lastSmokeSample;
       effects.update({
         grid: s.area.grid,
         arrival: s.result?.arrivalTime ?? null,
@@ -129,6 +139,10 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
         windY: Math.cos(toward),
         windSpeedMps: s.weather.windSpeedMps,
         useElevation: s.viewerMode === 'google',
+        playbackSpeed: s.playback.speed,
+        smoke: s.result && sample
+          ? { emission: sample.emission, refEmission: sample.refEmission, burnoutAt: sample.burnoutAt, plumeTopM: sample.plumeTopM, smolderFrac: sample.smolderFrac }
+          : null,
       });
     }
   }
@@ -138,11 +152,16 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     if (!ctx) return;
     if (s.debug !== prev.debug) applyDebug();
     if (s.ignition !== prev.ignition && s.area) marker.set(s.area.grid, s.ignition);
+    if (s.result !== prev.result && !s.result) {
+      ctx.painter.setSmoke(ctx.smoke, null);
+      ctx.painter.setBurnout(null);
+    }
     if (s.result !== prev.result || s.playback.t !== prev.playback.t || s.interventions !== prev.interventions || s.settings !== prev.settings) repaint();
     if (s.tool !== prev.tool) picker.setDragMode(s.tool !== 'ignite');
     if (s.effects !== prev.effects) {
       effects.setEnabled(s.effects.particles);
       effects.setQuality(s.effects.quality);
+      ctx.smoke.setVisible(s.effects.smoke);
       repaint();
     }
   });
@@ -200,6 +219,21 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     store.set({ simRunning: true, simError: null });
     try {
       const result = await sim.run(scenario);
+      if (ctx) {
+        // Smoke follows the scenario that produced this result, not the live (possibly edited) weather.
+        const timeline = new SmokeTimeline({
+          grid: scenario.grid,
+          fuel: scenario.fuel,
+          elevation: scenario.elevation,
+          arrival: result.arrivalTime,
+          intensity: result.intensity,
+          weather: scenario.weather,
+          seed: scenario.seed,
+          durationS: scenario.durationSeconds,
+        });
+        ctx.painter.setSmoke(ctx.smoke, timeline);
+        ctx.painter.setBurnout(timeline.burnoutAt);
+      }
       const s = store.get();
       const firstRun = !s.result;
       const t = Math.min(s.playback.t, s.durationSeconds);
@@ -231,6 +265,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
       if (g) flyToGrid(viewer, g);
     },
     picker,
+    smokeTimeline: () => ctx?.painter.smokeTimeline ?? null,
     setDrawHandlers: (h) => {
       draw = h;
     },

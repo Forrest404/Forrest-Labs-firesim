@@ -168,6 +168,21 @@ Companion files: [DECISIONS.md](DECISIONS.md) (judgement calls), [FEATURES.md](F
   dragged east), switches, simulate, speed, play, collapse, advanced toggle and a firebreak
   stroke all update the store; no exceptions or console errors.
 
+### Smoke plume (`feature/smoke`)
+
+- Deterministic smoke field in `src/app/smoke/` (emission, Briggs plume rise, seeded wind
+  meander, semi-Lagrangian advection, box-blur diffusion, loss, checkpointed timeline), draped
+  as a new GridLayer (zIndex 4) via `src/viewer/smokeCanvas.ts`; particles driven by the field;
+  "Smoke plume" switch in View. See D20.
+- `tests/smoke.test.ts` (18 tests): mass conservation, advection distance and sign, diffusion
+  symmetry/variance, emission closed form and cut-off, per-fuel burnout, plume/wind laws,
+  determinism, scrub-back == recompute, sampleAt interpolation, painters, perf (1.3 ms per
+  200x200 step on the build machine).
+- Headless (D16 method, served from a snapshot copy so teammate edits cannot reload the page):
+  with wind from 270 the 1 h / 6 h smoke centroids lie ~60 cells east of the ignition, with
+  wind from 0 ~60 cells south; scrubbing 24 h -> 1 h reproduces the 1 h field exactly; smoke
+  layer hides with the switch; no exceptions or console errors.
+
 ## Known issues / not verified
 
 - **Google Photorealistic 3D Tiles path verified headlessly** (2026-10-31, real key in
@@ -175,6 +190,9 @@ Companion files: [DECISIONS.md](DECISIONS.md) (judgement calls), [FEATURES.md](F
   onto the tiles (`ClassificationType.BOTH`), and a synthetic click on the tiles placed the
   ignition marker within 1 px of the click (pickPosition path). Particle heights on tiles still
   unchecked by a human. Earlier fallback suggestion (`ClassificationType.TERRAIN`) is not needed.
+- **Smoke**: particle physics runs on wall-clock time and Cesium's emitters are random, so only
+  the draped field is reproducible. No Worker yet: a 24 h forward scrub catches up over a few
+  seconds (12 ms per frame budget). FPS impact not measurable headlessly (SwiftShader).
 - **Real mouse drags** on the Cesium canvas were not exercised (no interactive browser); the
   pick/drag path runs only through `wiring.debugStroke()`. Click-to-ignite and drag-to-draw should
   be the first things a human checks.

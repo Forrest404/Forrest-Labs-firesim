@@ -4,7 +4,7 @@
 exported here.
 
 **Owns:** viewer creation (`createViewer.ts`), Google Photorealistic 3D Tiles with automatic
-fallback (`googleTiles.ts`), the burn overlay (`burnCanvas.ts` draws pixels from `arrivalTime`,
+fallback (`googleTiles.ts`), the smoke layer painter (`smokeCanvas.ts`, fed by `src/app/smoke`), the burn overlay (`burnCanvas.ts` draws pixels from `arrivalTime`,
 `burnLayer.ts` drapes the canvas on the scene), grid outline and corner markers
 (`gridOutline.ts`), camera helpers (`camera.ts`), picking (`picking.ts`: screen -> lon/lat ->
 cell via `src/data/geo.ts`), particle flames and smoke (`particles.ts`).

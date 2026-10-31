@@ -52,6 +52,8 @@ export const STR = {
 
   effectsTitle: 'Effects',
   effectsParticles: 'Flames & smoke',
+  effectsSmoke: 'Smoke plume',
+  smokeHint: 'Illustrative drift, not a dispersion model.',
   effectsQuality: 'Quality',
   qualityLow: 'Low',
   qualityMedium: 'Medium',
