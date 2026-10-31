@@ -154,6 +154,38 @@ describe('createFirmsClient', () => {
     expect(await kindOf(c.fetchHotspots({ source: 'modis', days: 1, signal: ac2.signal }))).toBe('cancelled');
   });
 
+  it('a refresh after aborting the in-flight request starts a new request instead of handing out the cancelled one', async () => {
+    // The live tab aborts the previous request on every refresh. Reusing the aborted in-flight
+    // promise left the new caller with a "cancelled" rejection and the tab stuck on loading.
+    let resolveFirst: ((r: Response) => void) | null = null;
+    let n = 0;
+    const f = ((_input: RequestInfo | URL, init?: RequestInit) => {
+      n++;
+      if (n === 1) {
+        return new Promise<Response>((resolve, reject) => {
+          resolveFirst = resolve;
+          init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+        });
+      }
+      return Promise.resolve(new Response(CSV, { status: 200 }));
+    }) as typeof fetch;
+    const c = createFirmsClient({ key: KEY, fetchImpl: f });
+    const first = new AbortController();
+    const p1 = c.fetchHotspots({ source: 'snpp', days: 1, signal: first.signal });
+    first.abort();
+    const second = new AbortController();
+    const p2 = c.fetchHotspots({ source: 'snpp', days: 1, force: true, signal: second.signal });
+    expect(await kindOf(p1)).toBe('cancelled');
+    const r = await p2;
+    expect(r.fromCache).toBe(false);
+    expect(r.hotspots).toHaveLength(1);
+    expect(n).toBe(2);
+    expect(resolveFirst).not.toBeNull();
+    // A third call now hits the cache that the second request filled, not the dead first one.
+    expect((await c.fetchHotspots({ source: 'snpp', days: 1 })).fromCache).toBe(true);
+    expect(n).toBe(2);
+  });
+
   it('does not cache failures', async () => {
     let n = 0;
     const s = stub(() => (n++ === 0 ? new Response('Invalid MAP_KEY.', { status: 400 }) : new Response(CSV)));

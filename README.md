@@ -188,4 +188,4 @@ Branch `feature/<slot>` from `main`, small PRs, `main` always builds. **Do not e
 `src/contract/` without announcing it in chat.** See [FEATURES.md](FEATURES.md) and
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
-<!-- TODO(demo-ship): 3-minute demo script, rehearsal notes. -->
+Demo script, settings, expected numbers and pre-flight checklist: `DEMO.md`.

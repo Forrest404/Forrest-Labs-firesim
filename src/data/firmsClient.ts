@@ -68,7 +68,8 @@ export function createFirmsClient(o: FirmsClientOptions): FirmsClient {
   const cacheTtlMs = o.cacheTtlMs ?? 10 * 60_000;
   const minRefreshMs = o.minRefreshMs ?? 60_000;
   const cache = new Map<string, CacheEntry>();
-  const inflight = new Map<string, Promise<FirmsFetchResult>>();
+  /** One request per cache key at a time; the signal tells whether that request was aborted. */
+  const inflight = new Map<string, { p: Promise<FirmsFetchResult>; signal: AbortSignal | undefined }>();
 
   async function fetchOne(url: string, signal: AbortSignal | undefined): Promise<Hotspot[]> {
     const controller = new AbortController();
@@ -137,11 +138,17 @@ export function createFirmsClient(o: FirmsClientOptions): FirmsClient {
         const age = now() - hit.fetchedAt;
         if (age < cacheTtlMs && (!o2.force || age < minRefreshMs)) return Promise.resolve({ ...hit, fromCache: true });
       }
+      // Reuse a request in flight, unless its caller has already aborted it (the live tab aborts
+      // the old request on every refresh): handing out the cancelled promise would leave the new
+      // caller with no request at all, and the tab stuck on "loading".
       const pending = inflight.get(cacheKey);
-      if (pending) return pending;
-      const p = fetchFresh(o2, cacheKey).finally(() => inflight.delete(cacheKey));
-      inflight.set(cacheKey, p);
-      return p;
+      if (pending && !pending.signal?.aborted) return pending.p;
+      const entry = { p: fetchFresh(o2, cacheKey), signal: o2.signal };
+      entry.p.catch(() => undefined).finally(() => {
+        if (inflight.get(cacheKey) === entry) inflight.delete(cacheKey);
+      });
+      inflight.set(cacheKey, entry);
+      return entry.p;
     },
   };
 }

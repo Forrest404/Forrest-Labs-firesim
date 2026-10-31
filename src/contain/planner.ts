@@ -108,7 +108,8 @@ export function planContainment(input: PlanInput, onProgress?: (fraction: number
   const homesAt = (r: SimResult): number => (homes ? homesReached(r.arrivalTime, homes, grid, duration) : 0);
 
   // Progress is a rough count of sims: baseline + per cycle, per unit, one per candidate.
-  const plannedSims = 1 + spec.cycles * stations.length * spec.candidates;
+  const budgetOptions = spec.lineBudgetM > 500 ? 2 : 1;
+  const plannedSims = 1 + spec.cycles * stations.length * spec.candidates * budgetOptions;
   const report = (): void => onProgress?.(Math.min(0.99, sims / Math.max(1, plannedSims)));
 
   const units: UnitState[] = stations.map((st) => {
@@ -134,18 +135,25 @@ export function planContainment(input: PlanInput, onProgress?: (fraction: number
       if (budgetCells <= 0) continue;
       // Time the line must hold at: roughly when this unit would finish building it.
       const buildS = u.airborne ? u.turnaroundS * Math.max(1, spec.dropsPerSortie - 1) : (spec.lineBudgetM / u.lineRateMpm) * 60 * 1.2;
-      const tLine = unit.availableAt + buildS * 0.8 + 300;
-      const cands = candidateLines(grid, fuel, homes, ignition, scenario.weather.windFromDeg, current.arrivalTime, tLine, budgetCells, spec.candidates, { exclude: taken, origin: unit.pos });
       let best: { sector: string; path: Pt[]; build: LineBuild; result: SimResult; score: number; savedHa: number } | null = null;
-      for (const cand of cands) {
-        const build = buildFor(unit, cand.path, cycle);
-        if (build.segments.length === 0) continue;
-        const result = run([...locked, ...build.segments]);
-        report();
-        const savedHa = currentBurned - result.stats.burnedAreaHa;
-        const homesSaved = homes ? currentHomes - homesAt(result) : 0;
-        const score = savedHa + 2 * homesSaved - spec.cutPenalty * build.clearedHa - (0.02 * build.lengthM) / 100;
-        if (!best || score > best.score) best = { sector: cand.sector, path: cand.path, build, result, score, savedHa };
+      // A long line sits on a late isochrone, far from the fire, and takes hours to finish. Big
+      // responses also try the same sectors at half the budget, closer in, so "Maximum" can never
+      // do worse than a smaller line would have (greedy lock-in otherwise prefers the far line).
+      const fractions = !u.airborne && spec.lineBudgetM > 500 ? [1, 0.5] : [1];
+      for (const frac of fractions) {
+        const cells = Math.max(1, Math.round(budgetCells * frac));
+        const tLineF = unit.availableAt + buildS * frac * 0.8 + 300;
+        const cands = candidateLines(grid, fuel, homes, ignition, scenario.weather.windFromDeg, current.arrivalTime, tLineF, cells, spec.candidates, { exclude: taken, origin: unit.pos });
+        for (const cand of cands) {
+          const build = buildFor(unit, cand.path, cycle, spec.lineBudgetM * frac);
+          if (build.segments.length === 0) continue;
+          const result = run([...locked, ...build.segments]);
+          report();
+          const savedHa = currentBurned - result.stats.burnedAreaHa;
+          const homesSaved = homes ? currentHomes - homesAt(result) : 0;
+          const score = savedHa + 2 * homesSaved - spec.cutPenalty * build.clearedHa - (0.02 * build.lengthM) / 100;
+          if (!best || score > best.score) best = { sector: cand.sector, path: cand.path, build, result, score, savedHa };
+        }
       }
       if (!best || best.score <= LOCK_THRESHOLD) continue;
       locked.push(...best.build.segments);
@@ -179,17 +187,15 @@ export function planContainment(input: PlanInput, onProgress?: (fraction: number
   onProgress?.(1);
   return { level: spec.level, spec, stations, orders, interventions: locked.slice(scenario.interventions.length), baseline, contained, metrics };
 
-  function buildFor(unit: UnitState, path: Pt[], cycle: number): LineBuild {
+  function buildFor(unit: UnitState, path: Pt[], cycle: number, budgetM: number): LineBuild {
     const u = UNITS[unit.station.type];
     const idPrefix = `resp-${unit.station.id}-c${cycle}`;
-    if (u.airborne) return buildDropSeries(grid, fuel, homes, path, u, unit.availableAt, spec.dropsPerSortie, duration, current.arrivalTime, idPrefix, unit.station.name);
-    // Walk or drive from the current position to the start of the line.
-    const [x0, y0] = path[0];
-    const distM = Math.hypot(x0 - unit.pos.col, y0 - unit.pos.row) * grid.cellSizeM;
-    const startT = unit.availableAt + (distM / 1000 / u.onGridKmh) * 3600;
+    // Fly, walk or drive from the current position (grid entry, or the last line) to the start of the line.
+    const startT = unit.availableAt + onGridS(unit, path);
+    if (u.airborne) return buildDropSeries(grid, fuel, homes, path, u, startT, spec.dropsPerSortie, duration, current.arrivalTime, idPrefix, unit.station.name);
     // Near homes nothing is cut: ground units switch to a wet line there.
     const first = lineCellsNearHomes(path);
-    return buildLineSegments(grid, fuel, homes, path, u, startT, spec.lineBudgetM, current.arrivalTime, idPrefix, {
+    return buildLineSegments(grid, fuel, homes, path, u, startT, budgetM, current.arrivalTime, idPrefix, {
       forestAllowed: u.type === 'dozer' ? spec.dozerInForest : u.forestAllowed,
       wet: first && u.tactic !== 'wetline',
       label: unit.station.name,

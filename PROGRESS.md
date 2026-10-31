@@ -249,6 +249,33 @@ Companion files: [DECISIONS.md](DECISIONS.md) (judgement calls), [FEATURES.md](F
 
 - None of the cut list was needed. Follow-fire camera was never planned beyond a stub (TODO in `camera.ts`).
 
+## Demo check with response teams (`feature/demo-integration`, 2026-10-31)
+
+- Snapshot of the worktree served on its own port (so other sessions' edits cannot reload the
+  page) and driven headlessly in Google 3D mode through `window.__firesim` and real DOM clicks.
+- **Response teams** (Boulder Creek, 1,339 homes): all four levels plan and render; stats chips,
+  order list, Without / With flip, outline, 3D units, dispatch cards, the enable switch (falls back
+  to the baseline run), the Dispatch button (enables and runs), stale hint after a weather change,
+  scrubbing while playing. Sanity on every plan: contained never burns more than the baseline,
+  every order has interventions, ETA after dispatch, nothing dispatched before the delay (after the
+  fix in D27's addendum).
+- **Everything else**: plain simulate, Space / Escape, firebreak and water strokes (pre-clear and
+  at playback time), undo and clear, hand-drawn line plus response, AI plan (built-in: 67 → 17 ha,
+  65 → 0 homes), all six effect switches and the quality chips, ground view, Red Flag day, Crozier
+  compare (67 / 37 / 11 % IoU) and Real vs simulation (pauses itself), responses on Alpirsbach and
+  both synthetic areas, the NIFC live-fire list. No exceptions or console errors in any run.
+- **Rehearsed script** (DEMO.md): 12 h, no response 176 ha / 262 homes; Standard 153 ha / 254;
+  Maximum 11 ha / 0; Red Flag + Maximum 47 % saved. Plans take 1-3 s in the worker.
+- **Live fires tab**: clicking the tab loads 66,607 detections (14,029 regions) in 2.3 s. Pressing
+  refresh while the first load is in flight left the tab on "loading" for good: the client handed
+  the new caller the aborted in-flight promise. Fixed in `firmsClient.ts` (an aborted in-flight
+  request is not reused), regression test added, re-checked in the browser.
+- **Not working / not verified**: "predict a live fire" fails in headless Chrome with a LANDFIRE
+  HTTP 500 that carries no CORS header ("Failed to fetch"), while the same URL answers 200 from
+  curl; it could not be checked in a real Chrome (extension not connected), so test it by hand
+  before promising it. Response popup and dispatch cards hidden under 720 px. Real mouse drags on
+  the 3D canvas still only exercised through `wiring.debugStroke`.
+
 ## Resume here
 
 Everything in the prompt is done and tagged `v0`. Next work happens in the `FEATURES.md` slots on
