@@ -78,6 +78,7 @@ export function validateScenario(s: Scenario): string[] {
   if (s.settings.neighbourhood !== 8 && s.settings.neighbourhood !== 16) errors.push('neighbourhood must be 8 or 16');
   if (!(s.settings.isoSpeedMps >= 0)) errors.push('isoSpeedMps must be >= 0');
   if (!(s.settings.fuelMoistureLagS >= 0)) errors.push('fuelMoistureLagS must be >= 0');
+  if (s.weatherStepS !== undefined && !(s.weatherStepS >= 30 && s.weatherStepS <= 3600)) errors.push('weatherStepS must be 30-3600');
   const sched = s.weatherSchedule ?? [];
   if (sched.length > 200) errors.push('weatherSchedule has more than 200 keyframes');
   let lastT = -Infinity;

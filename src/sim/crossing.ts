@@ -18,7 +18,6 @@ import { windTowardDeg } from '../contract';
 import { sprayContribution, sprayStartsAround, timeUntilMoisture } from './events';
 import type { EventLayers } from './events';
 import type { EdgeInput, RateFn } from './models';
-import { WEATHER_STEP_S } from './weather';
 import type { WeatherTimeline } from './weather';
 
 /** Spray contributions below this (moisture fraction) count as fully decayed. */
@@ -147,7 +146,7 @@ const DEG = Math.PI / 180;
 /**
  * Like crossWetEdge, but the WEATHER changes with time too (wind speed and direction, and the
  * lagged fuel moisture), for every edge. Same idea: integrate progress over time on an absolute grid
- * (WEATHER_STEP_S, or 60 s into a sprayed cell), with the weather piecewise constant at each
+ * (timeline.stepS, 600 s by default, or 60 s into a sprayed cell), with the weather piecewise constant at each
  * interval's midpoint, so the crossing time is non-decreasing in the start time (FIFO) and Dijkstra
  * stays correct. Used only when a weather schedule is present; steady weather keeps the closed form.
  *
@@ -173,7 +172,7 @@ export function crossTimeVarying(
   out.rate = 0;
   const { layers, timeline, rateFn, edge } = c;
   const sprayed = layers.hasWater && layers.sprayHead[j] >= 0;
-  const step = sprayed ? SPRAYED_STEP_S : WEATHER_STEP_S;
+  const step = sprayed ? SPRAYED_STEP_S : timeline.stepS;
   let tau = tStart;
   let remaining = dist;
   let lastRate = 0;

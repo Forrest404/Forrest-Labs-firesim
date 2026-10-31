@@ -162,6 +162,12 @@ export interface Scenario {
   weather: Weather;
   /** Optional weather changes after t = 0 (see WeatherKeyframe). Empty or missing = constant weather. */
   weatherSchedule?: WeatherKeyframe[];
+  /**
+   * Time resolution of the weather inside the solver, seconds (default 600). Weather is piecewise
+   * constant on an absolute grid of this size, so a smaller value lets a weather change take effect
+   * sooner (the live-edit path uses 120) at the cost of run time. Only used with a weatherSchedule.
+   */
+  weatherStepS?: number;
   /** Ignition cells at t = 0. The UI uses exactly one. */
   ignition: CellRef[];
   interventions: Intervention[];

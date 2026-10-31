@@ -14,13 +14,15 @@
  */
 
 import { deriveFuelMoisture } from '../contract';
-import type { Scenario } from '../contract';
+import type { Scenario, Weather, WeatherKeyframe } from '../contract';
 
-/** Weather is piecewise constant on this absolute grid inside the solver (see crossTimeVarying). */
+/** Default: weather is piecewise constant on this absolute grid inside the solver (see crossTimeVarying). */
 export const WEATHER_STEP_S = 600;
 const MOISTURE_TABLE_STEP_S = 60;
 
 export interface WeatherTimeline {
+  /** Resolution of the solver's weather grid, seconds. */
+  readonly stepS: number;
   speedAt(t: number): number;
   fromDegAt(t: number): number;
   temperatureAt(t: number): number;
@@ -56,6 +58,26 @@ function interp(pts: Point[], t: number, angular: boolean): number {
   return (((v0 + d * f) % 360) + 360) % 360;
 }
 
+/** The four time-varying weather quantities. */
+export interface WeatherState {
+  windSpeedMps: number;
+  /** Direction the wind blows FROM, degrees clockwise from north. */
+  windFromDeg: number;
+  temperatureC: number;
+  /** 0-1 */
+  relativeHumidity: number;
+}
+
+/** The weather at time t for a start state plus keyframes (same interpolation as the timeline, without the moisture table). */
+export function weatherAt(w: Weather, kf: WeatherKeyframe[] | undefined, t: number): WeatherState {
+  return {
+    windSpeedMps: Math.max(0, interp(series(w.windSpeedMps, kf, (k) => k.windSpeedMps), t, false)),
+    windFromDeg: interp(series(w.windFromDeg, kf, (k) => k.windFromDeg), t, true),
+    temperatureC: interp(series(w.temperatureC, kf, (k) => k.temperatureC), t, false),
+    relativeHumidity: Math.min(1, Math.max(0, interp(series(w.relativeHumidity, kf, (k) => k.relativeHumidity), t, false))),
+  };
+}
+
 export function createWeatherTimeline(s: Scenario): WeatherTimeline | null {
   const kf = s.weatherSchedule;
   if (!kf || kf.length === 0) return null;
@@ -78,6 +100,7 @@ export function createWeatherTimeline(s: Scenario): WeatherTimeline | null {
   }
 
   return {
+    stepS: s.weatherStepS ?? WEATHER_STEP_S,
     speedAt: (t) => Math.max(0, interp(speed, t, false)),
     fromDegAt: (t) => interp(from, t, true),
     temperatureAt: (t) => interp(temp, t, false),

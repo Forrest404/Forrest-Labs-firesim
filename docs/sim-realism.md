@@ -19,6 +19,7 @@ Nine features from the ForeFire review, each with tests and mutation checks. 264
 | 7 | Ensemble runs and burn-probability maps | SIM-12 | `src/sim/ensemble.ts` |
 | 8 | GeoJSON perimeters and probability lines | SIM-13 | `src/data/contours.ts`, `src/export/` |
 | 9 | Satellite land cover (ESA WorldCover / CORINE) | SIM-14 | `src/data/landcover.ts`, `scripts/` |
+| 10 | Live wind and dryness changes while playing | SIM-15 | `src/sim/live.ts`, `src/app/weatherEdit.ts` |
 
 Real bugs these tests found in code that already existed (each is described in its section):
 edges into sprayed cells were not FIFO, so a firebreak could make a wet cell burn EARLIER (SIM-4); a later
@@ -198,7 +199,7 @@ series, linearly interpolated, direction along the shorter arc, held after the l
 explicit moisture at t = 0 is respected; `dm/dt = (equilibrium - m) / lag`, tabulated at 60 s.
 
 Solver: with a schedule every edge is integrated over time (`crossTimeVarying`), the weather piecewise
-constant on an absolute 600 s grid (60 s into a sprayed cell, with spray starts as breakpoints), so
+constant on an absolute grid (`Scenario.weatherStepS`, default 600 s; the live path uses 120 s, see SIM-15) (60 s into a sprayed cell, with spray starts as breakpoints), so
 FIFO holds by construction and the shortest-path search stays correct, the same idea as SIM-4.
 Without a schedule nothing changes: 160 of 160 random scenarios without sprays are byte-identical to
 the previous commit. A constant schedule matches steady weather to 4 ms (rounding) without
@@ -325,3 +326,43 @@ pixel range, tie-break reversed, flipped row order, forest mapped to non-burnabl
 skipped in hybrid mode, tile naming by the wrong corner, a lost GeoTIFF y offset, a dropped openness
 rule, the wrong region and a farthest-candidate pick are all caught (two mutants were equivalent code
 and one tie-break rule needed its own test).
+
+## SIM-15. Live weather: change wind and dryness while the fire plays (`src/sim/live.ts`, `src/app/weatherEdit.ts`)
+
+Moving the wind speed, wind direction or dryness while a result is playing changes the weather FROM
+THE CURRENT TIME ON, re-runs the simulation automatically (150 ms after the last change, in the
+worker, 20-100 ms on the Boulder Creek grid) and leaves everything that has already burned alone.
+Before any result exists, or at t = 0, the same controls change the starting conditions as before.
+
+How the past stays put. The solver samples the weather at the middle of each step of an absolute grid.
+A change made at playback time T is centred on the first grid boundary B at least `step/2 + 30 s`
+later: a keyframe at `B - step/2` holds the weather exactly as the schedule had it, and a keyframe at
+`B + step/2` holds the new weather. Every step that ends by B is sampled at or before `B - step/2`, so
+nothing that burns before T can change (the extra 30 s covers the 60 s steps inside sprayed cells).
+The change therefore starts to bite 90-210 s of simulated time after T. That needs a finer grid than the
+default, so single live runs set `weatherStepS = 120` (about 2.7x slower than 600 s, still far inside a
+frame budget; ensembles keep 600 s because a 100-run ensemble was already close to its 15 s test limit).
+A live run also always uses the time-varying solver path (an otherwise empty schedule gets one do-nothing
+keyframe after the end), because the closed-form constant-weather path rounds differently and a run
+before and after the first edit would not agree exactly.
+
+Rules the user sees:
+- An edit replaces the preset's trend from then on ("the user has taken over"); the preset's later
+  keyframes are dropped. Earlier ones are kept.
+- Edits in the same slot (a slider drag) are one edit. Editing at an earlier time discards edits
+  centred later: they described a future that no longer happens.
+- At most 80 edits (two keyframes each; a schedule may hold 200). The newest is what gets replaced.
+- The sliders show the weather in force at the playback time, and show a change at once even before it
+  has ramped in. "Undo live changes" clears them; switching live off clears them and flags the result stale.
+- Only wind speed, wind direction and the dryness presets are live. Other settings (spread multiplier,
+  rate model, spotting, fuel moisture and so on) still apply from the start via Re-simulate.
+- Dryness changes temperature and humidity; fuel moisture follows with its usual lag.
+
+Tests: `tests/live.test.ts` (13) runs the real solver and asserts, for 40 random edits over four scenarios
+(with and without water, with and without spotting), that the set of cells burned by T and their times are
+identical before and after an edit, in both directions, and that the edit changes the later fire.
+`tests/weatherEdit.test.ts` (8) covers the store rules. Mutation-checked: no hold keyframe, no half-step
+margin, no spray margin, future preset keyframes kept, slot replacement, the solver path not forced,
+live edits flagged stale, edits kept when live is switched off, a wrong edit time, losing the other fields,
+and a preset change keeping edits are all caught. One mutant (hold keyframe at B instead of B - step/2) is
+equivalent: no solver step samples in between.

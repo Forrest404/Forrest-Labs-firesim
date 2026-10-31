@@ -3,8 +3,9 @@
  * viewer objects are created in response to state changes.
  */
 
-import { FuelClass, ensembleSpecFrom, scheduleFromPreset, validateScenario, windTowardDeg } from '../contract';
+import { FuelClass, ensembleSpecFrom, validateScenario, windTowardDeg } from '../contract';
 import type { Scenario } from '../contract';
+import { LIVE_STEP_S } from '../sim/live';
 import { scenarioFromArea } from '../data/bundle';
 import { loadDemoArea } from '../data/demoAreas';
 import { perimetersToGeoJSON, probabilityToGeoJSON } from '../export/geojson';
@@ -28,6 +29,10 @@ import { ProbabilityPainter } from './probabilityPainter';
 import type { Preview } from './overlayPainter';
 import { SimCancelledError, SimClient } from './simClient';
 import type { Store } from './state';
+import { currentWeather, scheduleFor } from './weatherEdit';
+
+/** Wait this long after the last live change before re-running (ms). */
+const AUTO_RUN_DEBOUNCE_MS = 150;
 
 interface AreaContext {
   burn: GridLayer;
@@ -135,7 +140,8 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     ctx.burn.setAlpha(showProb ? 0.3 : 1);
     ctx.probPainter.schedule(showProb ? s.ensemble.result : null, s.playback.t);
     if (s.area) {
-      const toward = (windTowardDeg(s.weather.windFromDeg) * Math.PI) / 180;
+      const now = currentWeather(s);
+      const toward = (windTowardDeg(now.windFromDeg) * Math.PI) / 180;
       effects.update({
         grid: s.area.grid,
         arrival: s.result?.arrivalTime ?? null,
@@ -144,7 +150,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
         t: s.playback.t,
         windX: Math.sin(toward),
         windY: Math.cos(toward),
-        windSpeedMps: s.weather.windSpeedMps,
+        windSpeedMps: now.windSpeedMps,
         useElevation: s.viewerMode === 'google',
       });
     }
@@ -155,13 +161,15 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     if (!ctx) return;
     if (s.debug !== prev.debug) applyDebug();
     if (s.ignition !== prev.ignition && s.area) marker.set(s.area.grid, s.ignition);
-    if (s.result !== prev.result || s.playback.t !== prev.playback.t || s.interventions !== prev.interventions || s.settings !== prev.settings) repaint();
+    if (s.result !== prev.result || s.playback.t !== prev.playback.t || s.interventions !== prev.interventions || s.settings !== prev.settings
+      || s.weather !== prev.weather || s.liveEdits !== prev.liveEdits || s.weatherPreset !== prev.weatherPreset) repaint();
     if (s.ensemble.result !== prev.ensemble.result || s.showProbability !== prev.showProbability) repaint();
     // An ensemble describes the inputs it was run with: flag it stale when any of them change.
-    if (s.ensemble.result && !s.ensemble.stale && (s.weather !== prev.weather || s.weatherPreset !== prev.weatherPreset || s.settings !== prev.settings
+    if (s.ensemble.result && !s.ensemble.stale && (s.weather !== prev.weather || s.weatherPreset !== prev.weatherPreset || s.liveEdits !== prev.liveEdits || s.settings !== prev.settings
       || s.durationSeconds !== prev.durationSeconds || s.ignition !== prev.ignition || s.interventions !== prev.interventions || s.seed !== prev.seed)) {
       store.set({ ensemble: { ...s.ensemble, stale: true } });
     }
+    if (s.autoRun !== prev.autoRun) scheduleAutoRun();
     if (s.tool !== prev.tool) picker.setDragMode(s.tool !== 'ignite');
     if (s.effects !== prev.effects) {
       effects.setEnabled(s.effects.particles);
@@ -169,6 +177,17 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
       repaint();
     }
   });
+
+  // Live changes re-run the simulation by themselves, a moment after the last change (a slider
+  // drag is many changes). A newer run cancels one still in flight.
+  let autoTimer: ReturnType<typeof setTimeout> | undefined;
+  function scheduleAutoRun(): void {
+    clearTimeout(autoTimer);
+    autoTimer = setTimeout(() => {
+      const s = store.get();
+      if (s.result && s.area && s.ignition && !s.ensemble.running) void simulate(true);
+    }, AUTO_RUN_DEBOUNCE_MS);
+  }
 
   async function selectArea(name: string): Promise<void> {
     const entry = store.get().areas.find((a) => a.name === name);
@@ -185,6 +204,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
         areaLoading: false,
         ignition: defaultIgnition(area),
         interventions: [],
+        liveEdits: [],
         result: null,
         resultStale: false,
         simRunning: false,
@@ -199,7 +219,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     }
   }
 
-  function buildScenario(): Scenario | string {
+  function buildScenario(forEnsemble = false): Scenario | string {
     const s = store.get();
     if (!s.area) return STR.loadError;
     if (!s.ignition) return STR.placeIgnitionHint;
@@ -212,18 +232,21 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
       seed: s.seed,
     });
     scenario.interventions = s.interventions;
-    scenario.weatherSchedule = scheduleFromPreset(s.weatherPreset, s.weather);
+    scenario.weatherSchedule = scheduleFor(s, forEnsemble);
+    // Single live runs use a finer weather grid so a change made now takes effect within minutes.
+    if (s.live && !forEnsemble) scenario.weatherStepS = LIVE_STEP_S;
     const errors = validateScenario(scenario);
     return errors.length ? errors[0] : scenario;
   }
 
-  async function simulate(): Promise<void> {
+  /** `quiet`: an automatic re-run after a live change: no spinner state, the current result keeps playing until the new one lands. */
+  async function simulate(quiet = false): Promise<void> {
     const scenario = buildScenario();
     if (typeof scenario === 'string') {
       store.set({ simError: scenario });
       return;
     }
-    store.set({ simRunning: true, simError: null });
+    store.set(quiet ? { simError: null } : { simRunning: true, simError: null });
     try {
       const result = await sim.run(scenario);
       const s = store.get();
@@ -242,7 +265,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
   }
 
   async function runEnsemble(): Promise<void> {
-    const scenario = buildScenario();
+    const scenario = buildScenario(true);
     if (typeof scenario === 'string') {
       store.set({ ensemble: { ...store.get().ensemble, error: scenario } });
       return;

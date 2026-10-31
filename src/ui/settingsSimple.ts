@@ -3,11 +3,12 @@
  * TOWARD), dryness preset (data from presets.ts), duration. Writes SI into the store.
  */
 
-import { DRYNESS_PRESETS, DRYNESS_PRESET_ORDER, WEATHER_PRESETS, WEATHER_PRESET_ORDER, applyDrynessPreset, deriveFuelMoisture, windTowardDeg } from '../contract';
+import { DRYNESS_PRESETS, DRYNESS_PRESET_ORDER, WEATHER_PRESETS, WEATHER_PRESET_ORDER, deriveFuelMoisture, windTowardDeg } from '../contract';
 import type { DrynessPreset, WeatherPresetId } from '../contract';
 import { staleIfResult } from '../app/state';
 import type { Store } from '../app/state';
-import { compass, el, formatDuration } from './el';
+import { clearLiveEdits, currentWeather, isLiveEditing, setDryness, setLive, setWeatherPreset, setWindFrom, setWindSpeed } from '../app/weatherEdit';
+import { compass, el, formatClock, formatDuration } from './el';
 import { STR } from './strings';
 
 const DURATIONS = [3600, 3 * 3600, 6 * 3600, 12 * 3600, 24 * 3600];
@@ -24,17 +25,24 @@ export function mountSettingsSimple(container: HTMLElement, store: Store): void 
   const drynessVal = el('span', { class: 'value' });
   const weatherOverTime = el('select', { 'aria-label': STR.weatherOverTime }) as HTMLSelectElement;
   for (const id of WEATHER_PRESET_ORDER) weatherOverTime.append(el('option', { value: id }, WEATHER_PRESETS[id].label));
-  weatherOverTime.onchange = () => store.update((s) => ({ weatherPreset: weatherOverTime.value as WeatherPresetId, ...staleIfResult(s) }));
+  weatherOverTime.onchange = () => setWeatherPreset(store, weatherOverTime.value as WeatherPresetId);
   const duration = el('select') as HTMLSelectElement;
   for (const d of DURATIONS) duration.append(el('option', { value: d }, formatDuration(d)));
 
-  speed.oninput = () => store.update((s) => ({ weather: { ...s.weather, windSpeedMps: Number(speed.value) / 3.6 }, ...staleIfResult(s) }));
-  dir.oninput = () => store.update((s) => ({ weather: { ...s.weather, windFromDeg: Number(dir.value) }, ...staleIfResult(s) }));
-  dryness.onchange = () => store.update((s) => ({ weather: applyDrynessPreset(s.weather, dryness.value as DrynessPreset), ...staleIfResult(s) }));
+  speed.oninput = () => setWindSpeed(store, Number(speed.value) / 3.6);
+  dir.oninput = () => setWindFrom(store, Number(dir.value));
+  dryness.onchange = () => setDryness(store, dryness.value as DrynessPreset);
   duration.onchange = () => store.update((s) => ({ durationSeconds: Number(duration.value), ...staleIfResult(s) }));
+
+  const liveBox = el('input', { type: 'checkbox', 'aria-label': STR.liveLabel }) as HTMLInputElement;
+  liveBox.onchange = () => setLive(store, liveBox.checked);
+  const liveInfo = el('span', { class: 'muted live-info' });
+  const liveClear = el('button', { class: 'small', onclick: () => clearLiveEdits(store) }, STR.liveClear) as HTMLButtonElement;
+  const liveRow = el('div', { class: 'live-row', title: STR.liveTitle }, el('label', {}, el('span', {}, STR.liveLabel), liveBox), el('div', { class: 'row' }, liveInfo, liveClear));
 
   container.append(
     el('h2', {}, STR.settingsTitle),
+    liveRow,
     el('label', {}, el('span', {}, STR.windSpeed), speed, speedVal),
     el('label', {}, el('span', {}, STR.windFrom), dir, arrow, dirVal),
     el('label', {}, el('span', {}, STR.dryness), dryness, drynessVal),
@@ -43,7 +51,14 @@ export function mountSettingsSimple(container: HTMLElement, store: Store): void 
   );
 
   store.subscribe((s) => {
-    const w = s.weather;
+    // While live (a result exists and the clock is past 0) the controls show the weather in force now.
+    const liveView = s.live && !!s.result && s.playback.t > 0;
+    const now = currentWeather(s);
+    const w = liveView ? { ...s.weather, ...now, baseFuelMoisture: s.weather.baseFuelMoisture - deriveFuelMoisture(s.weather.temperatureC, s.weather.relativeHumidity) + deriveFuelMoisture(now.temperatureC, now.relativeHumidity) } : s.weather;
+    liveBox.checked = s.live;
+    liveInfo.textContent = !s.live ? STR.liveOffHint : s.liveEdits.length ? STR.liveEdits(s.liveEdits.length, formatClock(s.liveEdits[s.liveEdits.length - 1].tSeconds)) : s.result ? STR.liveIdle : '';
+    liveClear.style.display = s.live && s.liveEdits.length ? '' : 'none';
+    liveRow.classList.toggle('editing', isLiveEditing(s));
     const kmh = Math.round(w.windSpeedMps * 3.6);
     if (document.activeElement !== speed) speed.value = String(kmh);
     speedVal.textContent = `${kmh} km/h`;

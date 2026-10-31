@@ -6,6 +6,7 @@
 import { DEFAULT_DURATION_SECONDS, DEFAULT_SETTINGS, DEFAULT_WEATHER } from '../contract';
 import type { CellRef, EnsembleResult, Intervention, SimResult, SimSettings, UncertaintyLevel, Weather, WeatherPresetId } from '../contract';
 import type { DemoArea, DemoAreaIndexEntry } from '../data/bundle';
+import type { LiveEdit } from '../sim/live';
 import type { ViewerMode } from '../viewer/createViewer';
 
 export type ToolId = 'ignite' | 'firebreak' | 'water';
@@ -61,6 +62,15 @@ export interface AppState {
   weatherPreset: WeatherPresetId;
   settings: SimSettings;
   durationSeconds: number;
+  /**
+   * Live mode: wind and dryness changes made while a result exists take effect from the current
+   * playback time on (the past stays as it was) and re-run the simulation automatically.
+   */
+  live: boolean;
+  /** The live changes made so far (see src/sim/live.ts); `weather` stays the weather at t = 0. */
+  liveEdits: LiveEdit[];
+  /** Bumped whenever something asks for an automatic re-run (wiring debounces and runs it). */
+  autoRun: number;
   seed: number;
   ignition: CellRef | null;
   interventions: Intervention[];
@@ -102,6 +112,9 @@ export function initialState(): AppState {
     weatherPreset: 'steady',
     settings: { ...DEFAULT_SETTINGS },
     durationSeconds: DEFAULT_DURATION_SECONDS,
+    live: true,
+    liveEdits: [],
+    autoRun: 0,
     seed: 1,
     ignition: null,
     interventions: [],
