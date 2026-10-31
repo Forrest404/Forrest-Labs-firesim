@@ -10,6 +10,8 @@ import { mountSettingsAdvanced } from '../ui/settingsAdvanced';
 import { mountTools } from '../ui/tools';
 import { startClock } from './clock';
 import { createStore } from './state';
+import { createDemoController } from './demoController';
+import type { DemoController } from './demoController';
 import { createToolsController } from './toolsController';
 import { wire } from './wiring';
 
@@ -33,12 +35,18 @@ async function main(): Promise<void> {
 
   // Panel first so it is visible even if the viewer fails.
   let wiringRef: ReturnType<typeof wire> | null = null;
+  let demoRef: DemoController | null = null;
   const slots = mountPanel(panelEl, store, {
     selectArea: (name) => void wiringRef?.selectArea(name),
     simulate: () => void wiringRef?.simulate(),
     cancel: () => wiringRef?.cancel(),
     topDown: () => wiringRef?.topDown(),
     resetView: () => wiringRef?.resetView(),
+    demo: {
+      load: (id) => void demoRef?.load(id),
+      reset: () => void demoRef?.reset(),
+      showContained: () => demoRef?.showContained(),
+    },
   });
   mountSettingsAdvanced(slots.advanced, store);
 
@@ -56,7 +64,10 @@ async function main(): Promise<void> {
 
   const wiring = wire(handle.viewer, store, notices);
   wiringRef = wiring;
-  mountTools(slots.tools, store, createToolsController(store, wiring));
+  const toolsController = createToolsController(store, wiring);
+  mountTools(slots.tools, store, toolsController);
+  const demo = createDemoController(store, wiring, toolsController, notices);
+  demoRef = demo;
   startClock(store);
 
   try {
@@ -85,7 +96,7 @@ async function main(): Promise<void> {
 
   if (import.meta.env.DEV) {
     // Dev/test hook (not in production builds): lets headless tests and teammates poke the app.
-    (window as unknown as { __firesim: unknown }).__firesim = { store, wiring, viewer: handle.viewer };
+    (window as unknown as { __firesim: unknown }).__firesim = { store, wiring, viewer: handle.viewer, demo };
   }
   console.log('[app] ready', { mode: handle.mode });
 }

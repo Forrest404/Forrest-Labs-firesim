@@ -38,10 +38,12 @@ export interface DemoScenario {
   dryness: DrynessPreset;
   durationSeconds: number;
   seed: number;
-  /** Camera on the upwind side looking along the fire direction. heading: degrees clockwise from north. */
-  camera: { headingDeg: number; pitchDeg: number; rangeScale: number };
+  /** Camera on the upwind side looking along the fire direction at the middle of the action (heading: degrees clockwise from north). */
+  camera: { focus: CellRef; headingDeg: number; pitchDeg: number; rangeM: number };
   /** Simulation playback speed that fits the 3-minute script. */
   playbackSpeed: number;
+  /** When to pause and draw the line: a little before the head reaches it. */
+  pauseAtSeconds: number;
   /** The thing the fire must not reach: a disc of cells around a village. */
   threatened: { centre: CellRef; radiusCells: number };
   /** The saved containing plan, applied by "Show contained version". */
@@ -62,8 +64,9 @@ export const DEMO_SCENARIOS: Record<DemoId, DemoScenario> = {
     dryness: 'high',
     durationSeconds: 4 * H,
     seed: 1,
-    camera: { headingDeg: 40, pitchDeg: -30, rangeScale: 2.1 },
+    camera: { focus: { row: 120, col: 105 }, headingDeg: 30, pitchDeg: -32, rangeM: 2600 },
     playbackSpeed: 256,
+    pauseAtSeconds: 1.5 * H,
     threatened: { centre: { row: 97, col: 109 }, radiusCells: 8 },
     contained: [
       { id: 'demo-firebreak', type: 'firebreak', points: [[94, 118.5], [132, 118.5]], size: 3, tSeconds: 1.6 * H },
@@ -80,8 +83,9 @@ export const DEMO_SCENARIOS: Record<DemoId, DemoScenario> = {
     dryness: 'high',
     durationSeconds: 6 * H,
     seed: 1,
-    camera: { headingDeg: 70, pitchDeg: -30, rangeScale: 2.0 },
+    camera: { focus: { row: 118, col: 145 }, headingDeg: 70, pitchDeg: -32, rangeM: 2800 },
     playbackSpeed: 256,
+    pauseAtSeconds: 2.3 * H,
     threatened: { centre: { row: 121, col: 165 }, radiusCells: 8 },
     contained: [
       { id: 'demo-firebreak', type: 'firebreak', points: [[148.5, 90], [148.5, 136]], size: 3, tSeconds: 2.4 * H },
@@ -92,6 +96,9 @@ export const DEMO_SCENARIOS: Record<DemoId, DemoScenario> = {
 };
 
 export const DEMO_IDS: DemoId[] = ['surrey', 'backup'];
+
+/** Every intervention in a saved plan has an id starting with this (so the UI can tell they are on). */
+export const DEMO_INTERVENTION_PREFIX = 'demo-';
 
 /** The scenario's weather, with the UI's units (km/h) converted to SI at this edge. */
 export function demoWeather(s: DemoScenario): Weather {

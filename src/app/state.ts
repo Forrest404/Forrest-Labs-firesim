@@ -6,6 +6,7 @@
 import { DEFAULT_DURATION_SECONDS, DEFAULT_SETTINGS, DEFAULT_WEATHER } from '../contract';
 import type { CellRef, Intervention, SimResult, SimSettings, Weather } from '../contract';
 import type { DemoArea, DemoAreaIndexEntry } from '../data/bundle';
+import type { DemoId } from '../data/demo-scenarios';
 import type { ViewerMode } from '../viewer/createViewer';
 
 export type ToolId = 'ignite' | 'firebreak' | 'water';
@@ -61,6 +62,8 @@ export interface AppState {
   seed: number;
   ignition: CellRef | null;
   interventions: Intervention[];
+  /** The demo scenario that was loaded with the Demo card, until the area is changed by hand. */
+  demoId: DemoId | null;
 
   result: SimResult | null;
   /** True when inputs changed since `result` was computed. */
@@ -97,6 +100,7 @@ export function initialState(): AppState {
     seed: 1,
     ignition: null,
     interventions: [],
+    demoId: null,
     result: null,
     resultStale: false,
     simRunning: false,

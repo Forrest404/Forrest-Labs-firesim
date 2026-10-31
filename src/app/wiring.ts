@@ -4,7 +4,7 @@
  */
 
 import { FuelClass, validateScenario, windTowardDeg } from '../contract';
-import type { Scenario } from '../contract';
+import type { CellRef, Scenario } from '../contract';
 import { scenarioFromArea } from '../data/bundle';
 import { loadDemoArea } from '../data/demoAreas';
 import { defaultIgnition } from '../data/ignition';
@@ -42,6 +42,8 @@ export interface Wiring {
   cancel(): void;
   topDown(): void;
   resetView(): void;
+  /** Flies the camera to look at `focus` from `rangeM` away along `headingDeg` (used by the demo loader). */
+  flyToView(v: { focus: CellRef; headingDeg: number; pitchDeg: number; rangeM: number }): void;
   picker: Picker;
   /** Close-up on the ignition cell (dev hook / headless checks; a UI button can reuse it). */
   focusIgnition(rangeM?: number): void;
@@ -270,6 +272,12 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     resetView: () => {
       const g = store.get().area?.grid;
       if (g) flyToGrid(viewer, g);
+    },
+    flyToView: (v) => {
+      const s = store.get();
+      if (!s.area) return;
+      const h = s.viewerMode === 'google' ? s.area.elevation[v.focus.row * s.area.grid.width + v.focus.col] : 0;
+      flyToCell(viewer, s.area.grid, v.focus, h, v.rangeM, 2.5, v.headingDeg, v.pitchDeg);
     },
     picker,
     focusIgnition: (rangeM = 600) => {

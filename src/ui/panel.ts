@@ -8,6 +8,8 @@ import { mountAreaPicker } from './areaPicker';
 import type { AreaPickerActions } from './areaPicker';
 import { iconButton, section, segmented, toggle } from './controls';
 import { mountDebug } from './debug';
+import { mountDemoCard } from './demoCard';
+import type { DemoActions } from './demoCard';
 import { el } from './el';
 import { icon } from './icons';
 import { mountPlayback } from './playback';
@@ -16,6 +18,7 @@ import { mountSettingsSimple } from './settingsSimple';
 import { STR } from './strings';
 
 export interface PanelActions extends AreaPickerActions, PlaybackActions {
+  demo: DemoActions;
   topDown(): void;
   resetView(): void;
 }
@@ -42,6 +45,7 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
   );
 
   // Sections
+  const demo = section('sparkles', STR.demoTitle, { class: 'demo' });
   const area = section('map', STR.areaLabel);
   const settings = section('wind', STR.settingsTitle);
   const sim = section('flame', STR.simulateTitle, { class: 'sim' });
@@ -87,8 +91,9 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
   view.body.append(debugBody, el('div', { class: 'muted hint' }, STR.cameraHelp));
 
   const footer = el('footer', { class: 'muted footer' }, STR.footer);
-  root.append(header, area.root, settings.root, sim.root, tools.root, advanced.root, view.root, footer);
+  root.append(header, demo.root, area.root, settings.root, sim.root, tools.root, advanced.root, view.root, footer);
 
+  mountDemoCard(demo.body, store, actions.demo);
   mountAreaPicker(area.body, store, actions);
   mountSettingsSimple(settings.body, store);
   mountPlayback(sim.body, store, actions);
