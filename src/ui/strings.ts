@@ -89,6 +89,12 @@ export const STR = {
   atTime: 'at',
 
   advancedTitle: 'Advanced settings',
+  advModel: 'Rate-of-spread model',
+  modelFactors: 'Demo factors (default)',
+  modelRothermel: 'Rothermel (1972), uncalibrated',
+  modelIso: 'Constant speed (for testing)',
+  modelNote: 'Rothermel uses placeholder fuel beds and ignores the wind exponent and spread multiplier shape. No model here is validated against real fires.',
+  advIsoSpeed: 'Constant speed (test model)',
   advTemperature: 'Air temperature',
   advHumidity: 'Relative humidity',
   advFuelMoisture: 'Dead fuel moisture',

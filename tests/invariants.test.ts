@@ -12,7 +12,10 @@ import { FIX_H, FIX_W, countBurned, idx, makeFixture } from './fixtures';
 import type { FixtureOptions } from './fixtures';
 
 /** Rate models under test. Extended as models are added (see src/sim/models.ts). */
-const MODELS: { name: string; settings: Partial<Scenario['settings']> }[] = [{ name: 'factors', settings: {} }];
+const MODELS: { name: string; settings: Partial<Scenario['settings']> }[] = [
+  { name: 'factors', settings: {} },
+  { name: 'rothermel', settings: { rateModel: 'rothermel' } },
+];
 
 const CENTRE = { row: 25, col: 25 };
 const open = (o: FixtureOptions = {}): FixtureOptions => ({ river: false, road: false, ignition: [CENTRE], ...o });
@@ -224,15 +227,25 @@ for (const model of MODELS) {
       }
     });
 
-    it('interventions never make any cell burn earlier (fuzz over 40 random scenarios)', () => {
-      for (let seed = 200; seed < 240; seed++) {
+    /**
+     * Strict monotonicity: adding an intervention never makes any cell burn earlier.
+     * With burnout ENABLED this cannot hold for water, and that is physical, not a bug: a fire
+     * that is delayed upstream can reach a sprayed cell after it has dried, whereas an earlier fire
+     * would already have burnt out against the still-wet fuel (see tests below and docs/sim-realism.md SIM-6).
+     * So it is asserted (a) for any mix of interventions with burnout off, and (b) for firebreaks
+     * with burnout on.
+     */
+    const monotone = (seeds: number[], filter: (iv: Intervention) => boolean, burnout: boolean): void => {
+      for (const seed of seeds) {
         const s = randomScenario(seed);
-        s.settings = { ...s.settings, ...model.settings };
+        s.settings = { ...s.settings, ...model.settings, burnoutEnabled: burnout };
         const base = simulate(s).arrivalTime;
         const rand = mulberry32(seed * 31);
         const ivs: Intervention[] = [];
-        for (let k = 0; k < 3; k++) ivs.push(randomIntervention(rand, 30, 30, `iv${k}`, s.durationSeconds));
-        // Adding interventions one by one: every cell is no earlier than before.
+        for (let k = 0; ivs.length < 3 && k < 12; k++) {
+          const iv = randomIntervention(rand, 30, 30, `iv${k}`, s.durationSeconds);
+          if (filter(iv)) ivs.push(iv);
+        }
         let prev = base;
         for (let k = 1; k <= ivs.length; k++) {
           const cur = simulate({ ...s, interventions: ivs.slice(0, k) }).arrivalTime;
@@ -240,6 +253,33 @@ for (const model of MODELS) {
             expect(cur[i] + 1e-2, `seed ${seed} k ${k} cell ${i}: ${cur[i]} < ${prev[i]}`).toBeGreaterThanOrEqual(prev[i]);
           }
           prev = cur;
+        }
+      }
+    };
+    const range = (a: number, b: number): number[] => Array.from({ length: b - a }, (_, i) => a + i);
+
+    it('interventions never make any cell burn earlier, burnout off (fuzz: 150 scenarios, firebreaks and water mixed)', () => {
+      monotone(range(200, 350), () => true, false);
+    });
+
+    it('firebreaks never make any cell burn earlier, burnout on (fuzz: 100 scenarios)', () => {
+      monotone(range(400, 500), (iv) => iv.type === 'firebreak', true);
+    });
+
+    it('with burnout on and water in the mix, results stay valid and causal (fuzz: 60 scenarios)', () => {
+      for (let seed = 600; seed < 660; seed++) {
+        const s = randomScenario(seed);
+        s.settings = { ...s.settings, ...model.settings, burnoutEnabled: true };
+        const rand = mulberry32(seed * 17);
+        s.interventions = [0, 1, 2, 3].map((k) => randomIntervention(rand, 30, 30, `iv${k}`, s.durationSeconds));
+        const { arrivalTime } = simulate(s);
+        const ig = s.ignition[0].row * 30 + s.ignition[0].col;
+        for (let i = 0; i < arrivalTime.length; i++) {
+          const a = arrivalTime[i];
+          expect(Number.isNaN(a)).toBe(false);
+          if (a === Infinity) continue;
+          expect(a).toBeLessThanOrEqual(s.durationSeconds);
+          if (i !== ig) expect(burnedNeighbourEarlier(arrivalTime, 30, 30, i), `seed ${seed} cell ${i}`).toBe(true);
         }
       }
     });
