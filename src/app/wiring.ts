@@ -11,7 +11,7 @@ import { defaultIgnition } from '../data/ignition';
 import { computeSlopeAspect } from '../data/terrain';
 import { paintFuel, paintSlope } from '../viewer/burnCanvas';
 import { GridLayer } from '../viewer/burnLayer';
-import { flyToGrid, flyTopDown } from '../viewer/camera';
+import { flyToCell, flyToGrid, flyTopDown } from '../viewer/camera';
 import type { Viewer } from 'cesium';
 import { createGridOutline } from '../viewer/gridOutline';
 import type { GridOutline } from '../viewer/gridOutline';
@@ -21,7 +21,7 @@ import { createPicker } from '../viewer/picking';
 import type { PickedCell, Picker } from '../viewer/picking';
 import type { Notices } from '../ui/notices';
 import { STR } from '../ui/strings';
-import { OverlayPainter } from './overlayPainter';
+import { OVERLAY_SCALE, OverlayPainter } from './overlayPainter';
 import { SmokeTimeline } from './smoke';
 import type { Preview } from './overlayPainter';
 import { SimCancelledError, SimClient } from './simClient';
@@ -43,6 +43,8 @@ export interface Wiring {
   topDown(): void;
   resetView(): void;
   picker: Picker;
+  /** Close-up on the ignition cell (dev hook / headless checks; a UI button can reuse it). */
+  focusIgnition(rangeM?: number): void;
   /** The smoke timeline of the current result (dev hook / headless checks). */
   smokeTimeline(): SmokeTimeline | null;
   /** Hook for the tools controller: receives picks when a drawing tool is active. */
@@ -57,7 +59,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
   const sim = new SimClient();
   const marker = createIgnitionMarker(viewer, STR.ignitionLabel);
   const effects = createFireEffects(viewer);
-  effects.setEnabled(store.get().effects.particles);
+  effects.setFlags(store.get().effects);
   effects.setQuality(store.get().effects.quality);
   let ctx: AreaContext | null = null;
   let draw: { start(c: PickedCell): void; move(c: PickedCell): void; end(): void } | null = null;
@@ -102,12 +104,13 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     const slope = new GridLayer(viewer, grid, { zIndex: 2 });
     const { slopeDeg } = computeSlopeAspect(s.area.elevation, grid.width, grid.height, grid.cellSizeM);
     slope.paint((d) => paintSlope(d, slopeDeg));
-    const burn = new GridLayer(viewer, grid, { zIndex: 3 });
-    const smoke = new GridLayer(viewer, grid, { zIndex: 4 });
+    const burn = new GridLayer(viewer, grid, { zIndex: 3, scale: OVERLAY_SCALE });
+    const smoke = new GridLayer(viewer, grid, { zIndex: 4, scale: OVERLAY_SCALE });
     smoke.setVisible(s.effects.smoke);
     const outline = createGridOutline(viewer, grid);
     const painter = new OverlayPainter(burn, grid);
     painter.setSmoke(smoke, null);
+    painter.setEffects({ glow: s.effects.glow, smooth: s.effects.smooth });
     ctx = { burn, smoke, fuel, slope, outline, painter };
     applyDebug();
     repaint();
@@ -140,6 +143,9 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
         windSpeedMps: s.weather.windSpeedMps,
         useElevation: s.viewerMode === 'google',
         playbackSpeed: s.playback.speed,
+        fuel: s.area.fuel,
+        intensity: s.result?.intensity ?? null,
+        maxRateMps: s.result?.stats.maxSpreadRateMps ?? 0,
         smoke: s.result && sample
           ? { emission: sample.emission, refEmission: sample.refEmission, burnoutAt: sample.burnoutAt, plumeTopM: sample.plumeTopM, smolderFrac: sample.smolderFrac }
           : null,
@@ -159,9 +165,10 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     if (s.result !== prev.result || s.playback.t !== prev.playback.t || s.interventions !== prev.interventions || s.settings !== prev.settings) repaint();
     if (s.tool !== prev.tool) picker.setDragMode(s.tool !== 'ignite');
     if (s.effects !== prev.effects) {
-      effects.setEnabled(s.effects.particles);
+      effects.setFlags(s.effects);
       effects.setQuality(s.effects.quality);
       ctx.smoke.setVisible(s.effects.smoke);
+      ctx.painter.setEffects({ glow: s.effects.glow, smooth: s.effects.smooth });
       repaint();
     }
   });
@@ -265,6 +272,12 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
       if (g) flyToGrid(viewer, g);
     },
     picker,
+    focusIgnition: (rangeM = 600) => {
+      const s = store.get();
+      if (!s.area || !s.ignition) return;
+      const h = s.viewerMode === 'google' ? s.area.elevation[s.ignition.row * s.area.grid.width + s.ignition.col] : 0;
+      flyToCell(viewer, s.area.grid, s.ignition, h, rangeM);
+    },
     smokeTimeline: () => ctx?.painter.smokeTimeline ?? null,
     setDrawHandlers: (h) => {
       draw = h;

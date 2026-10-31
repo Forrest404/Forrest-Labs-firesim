@@ -85,7 +85,7 @@ async function main(): Promise<void> {
 
   if (import.meta.env.DEV) {
     // Dev/test hook (not in production builds): lets headless tests and teammates poke the app.
-    (window as unknown as { __firesim: unknown }).__firesim = { store, wiring };
+    (window as unknown as { __firesim: unknown }).__firesim = { store, wiring, viewer: handle.viewer };
   }
   console.log('[app] ready', { mode: handle.mode });
 }

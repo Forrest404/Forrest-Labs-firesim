@@ -5,9 +5,17 @@
 
 import { NEVER_ARRIVES, cellAreaHa } from '../contract';
 import type { GridSpec, Intervention, SimResult, SimSettings } from '../contract';
-import { paintBurn } from '../viewer/burnCanvas';
+import { paintBurnScaled } from '../viewer/burnCanvas';
 import type { GridLayer } from '../viewer/burnLayer';
-import { paintSmoke } from '../viewer/smokeCanvas';
+import { paintSmoke, upsampleBilinear, upsampleNearest } from '../viewer/smokeCanvas';
+
+/** Canvas pixels per cell for the burn and smoke layers (smoothing needs > 1). */
+export const OVERLAY_SCALE = 2;
+
+export interface OverlayEffects {
+  glow: boolean;
+  smooth: boolean;
+}
 import type { SmokeSample, SmokeTimeline } from './smoke';
 
 /** Wall-time budget per paint for stepping the smoke field toward the playback time. */
@@ -17,6 +25,8 @@ const SMOKE_CATCHUP_BUDGET_MS = 12;
 /** Nominal mass extinction of biomass smoke, m^2/kg. */
 const SMOKE_SIGMA_EXT = 4000;
 const SMOKE_MAX_ALPHA = 0.8;
+/** Opacity multiplier for smoke drawn over cells that are flaming right now. */
+const SMOKE_OVER_FLAMES = 0.3;
 
 export interface Preview {
   type: 'firebreak' | 'water';
@@ -41,6 +51,9 @@ export class OverlayPainter {
   private burnoutAt: Float32Array | null = null;
   private lastSmoke: SmokeSample | null = null;
   private catchUpRaf = 0;
+  private fx: OverlayEffects = { glow: true, smooth: true };
+  private smokeHi: Float32Array | null = null;
+  private readonly flaming: Uint8Array;
 
   constructor(
     private readonly layer: GridLayer,
@@ -51,6 +64,7 @@ export class OverlayPainter {
     this.firebreak = new Uint8Array(n);
     this.wetness = new Float32Array(n);
     this.smokeBuf = new Float32Array(n);
+    this.flaming = new Uint8Array(n);
   }
 
   /** Attaches (or detaches, with null) the smoke layer and the timeline that fills it. */
@@ -64,6 +78,10 @@ export class OverlayPainter {
   /** Per-cell burnout times for the per-fuel burning ramp (null falls back to the fixed window). */
   setBurnout(burnoutAt: Float32Array | null): void {
     this.burnoutAt = burnoutAt;
+  }
+
+  setEffects(fx: OverlayEffects): void {
+    this.fx = fx;
   }
 
   get lastSmokeSample(): SmokeSample | null {
@@ -104,11 +122,13 @@ export class OverlayPainter {
     const arrival = a.result?.arrivalTime ?? EMPTY;
     const flameWindowS = Math.max(300, Math.min(1800, a.settings.waterHalfLifeS * 1.5));
     this.layer.paint((data) =>
-      paintBurn(data, arrival.length ? arrival : this.emptyArrival(), a.t, {
+      paintBurnScaled(data, arrival.length ? arrival : this.emptyArrival(), this.grid.width, this.grid.height, this.layer.scale, a.t, {
         flameWindowS,
         burnoutAt: a.result && this.burnoutAt ? this.burnoutAt : undefined,
         firebreak: this.firebreak,
         wetness: this.wetness,
+        smooth: this.fx.smooth,
+        glow: this.fx.glow && !!a.result,
       }),
     );
     this.paintSmoke(a.t);
@@ -122,7 +142,34 @@ export class OverlayPainter {
     const sample = tl.sampleAt(t, this.smokeBuf);
     this.lastSmoke = sample;
     const cellAreaM2 = this.grid.cellSizeM * this.grid.cellSizeM;
-    layer.paint((data) => paintSmoke(data, sample.conc, { cellAreaM2, sigmaExtM2PerKg: SMOKE_SIGMA_EXT, maxAlpha: SMOKE_MAX_ALPHA, smolderFrac: sample.smolderFrac }));
+    const { width: w, height: h } = this.grid;
+    const sc = layer.scale;
+    let field = sample.conc;
+    if (sc > 1) {
+      if (!this.smokeHi || this.smokeHi.length !== w * h * sc * sc) this.smokeHi = new Float32Array(w * h * sc * sc);
+      if (this.fx.smooth) upsampleBilinear(sample.conc, w, h, sc, this.smokeHi);
+      else upsampleNearest(sample.conc, w, h, sc, this.smokeHi);
+      field = this.smokeHi;
+    }
+    // Flaming mask so the fire stays visible under its own plume.
+    const arrival = this.args?.result?.arrivalTime;
+    const burnout = this.burnoutAt;
+    const mask = this.flaming;
+    if (arrival && burnout) {
+      for (let i = 0; i < mask.length; i++) {
+        const a = arrival[i];
+        mask[i] = a <= t && t < burnout[i] ? 1 : 0;
+      }
+    } else mask.fill(0);
+    layer.paint((data) =>
+      paintSmoke(data, field, {
+        cellAreaM2,
+        sigmaExtM2PerKg: SMOKE_SIGMA_EXT,
+        maxAlpha: SMOKE_MAX_ALPHA,
+        smolderFrac: sample.smolderFrac,
+        dim: { mask, width: w, height: h, scale: sc, factor: SMOKE_OVER_FLAMES },
+      }),
+    );
     if (!caughtUp && !this.catchUpRaf) this.catchUpRaf = requestAnimationFrame(this.catchUp);
   }
 

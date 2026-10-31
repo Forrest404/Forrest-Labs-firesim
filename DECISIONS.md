@@ -226,3 +226,30 @@ the per-fuel duration.
 Honesty: this is not a dispersion model validated against observations. No boundary layer, no
 terrain channelling, no chemistry; emission factors and extinction (4000 m^2/kg) are
 order-of-magnitude placeholders and opacity is illustrative.
+
+## D21. Fire visuals: every extra is a switch
+
+The View card lists six independent switches (`EffectsFlags`): Flames, Embers, Smoke puffs,
+Smoke plume (the D20 layer), Ground glow, Smooth edges, plus the particle Quality chips. Each
+flag is read in exactly one place (particles for the first three, the overlay painter for glow
+and smoothing, layer visibility for the plume) so turning one off removes only that cost.
+
+- **Flames** are Cesium particle systems with a teardrop sprite; their height comes from Byram
+  flame length `L = 0.0775 (H w R)^0.46` using the fuel's heat and load and the cell's spread
+  rate (`intensity x maxSpreadRateMps`), exaggerated x4 and clamped 3-16 m so they read at
+  30 m cells. They lean downwind and flicker; 'low' quality skips the per-particle update.
+- **Embers** are small hot sprites lofted for the first third of their life, then pulled down
+  by gravity while the wind profile and hash turbulence carry them; rate scales with the local
+  smoke emission weight.
+- **Ground glow** is painted on the burn overlay: a flickering orange halo (deterministic per
+  cell and 20 s slot) onto unburned pixels within 2.5 cells of a flaming cell.
+- **Smooth edges**: the burn and smoke layers are 2 canvas pixels per cell (`GridLayer.scale`);
+  with the switch on, the burn painter bilinearly interpolates burned fraction and age across
+  the four nearest cells (anti-aliased front, soft ramp) and the smoke field is upsampled
+  bilinearly; off, both are nearest-neighbour so the cell structure is honest and visible.
+- Smoke drawn over cells that are flaming right now is dimmed to 30 % so the fire is never
+  hidden under its own plume.
+
+None of this changes the simulation; the particle visuals remain non-reproducible (Cesium
+emitter randomness), the overlay pixels are deterministic and unit-tested
+(`tests/burnCanvasScaled.test.ts`).

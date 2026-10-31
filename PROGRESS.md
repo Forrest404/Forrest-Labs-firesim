@@ -183,6 +183,17 @@ Companion files: [DECISIONS.md](DECISIONS.md) (judgement calls), [FEATURES.md](F
   wind from 0 ~60 cells south; scrubbing 24 h -> 1 h reproduces the 1 h field exactly; smoke
   layer hides with the switch; no exceptions or console errors.
 
+### Fire visuals (`feature/smoke`, D21)
+
+- Switches for Flames, Embers, Smoke puffs, Smoke plume, Ground glow, Smooth edges; Quality
+  chips. Byram-sized flame particles, ember system, flickering ground glow, 2x anti-aliased
+  burn/smoke overlays, smoke dimmed over flaming cells. `wiring.focusIgnition()` close-up camera.
+- `tests/burnCanvasScaled.test.ts` (6 tests): scale-1 parity with `paintBurn`, nearest
+  upsample parity, anti-aliased edge alpha, glow only on empty pixels and only while flaming,
+  deterministic flicker, bilinear/nearest upsampling.
+- Headless: all six switches toggle in the store with no errors; top-down captures show the
+  smooth front + glow vs the blocky overlay; close-up capture of flames/embers/puffs.
+
 ## Known issues / not verified
 
 - **Google Photorealistic 3D Tiles path verified headlessly** (2026-10-31, real key in

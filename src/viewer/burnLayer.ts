@@ -14,6 +14,8 @@ export interface GridLayerOptions {
   alpha?: number;
   /** Draw order among layers: higher wins. */
   zIndex?: number;
+  /** Canvas pixels per grid cell (1 = one pixel per cell). */
+  scale?: number;
 }
 
 export class GridLayer {
@@ -23,16 +25,19 @@ export class GridLayer {
   private front = 0;
   private readonly entity: Entity;
   private visible = true;
+  /** Canvas pixels per grid cell. */
+  readonly scale: number;
 
   constructor(
     private readonly viewer: Viewer,
     readonly grid: GridSpec,
     o: GridLayerOptions = {},
   ) {
+    this.scale = Math.max(1, Math.round(o.scale ?? 1));
     const make = (): [HTMLCanvasElement, CanvasRenderingContext2D] => {
       const c = document.createElement('canvas');
-      c.width = grid.width;
-      c.height = grid.height;
+      c.width = grid.width * this.scale;
+      c.height = grid.height * this.scale;
       const ctx = c.getContext('2d');
       if (!ctx) throw new Error('2D canvas not available');
       return [c, ctx];
@@ -41,7 +46,7 @@ export class GridLayer {
     const [c1, x1] = make();
     this.canvases = [c0, c1];
     this.contexts = [x0, x1];
-    this.imageData = x0.createImageData(grid.width, grid.height);
+    this.imageData = x0.createImageData(grid.width * this.scale, grid.height * this.scale);
     const b = grid.bounds;
     this.entity = viewer.entities.add({
       rectangle: {
@@ -58,10 +63,10 @@ export class GridLayer {
     if (o.alpha !== undefined) this.setAlpha(o.alpha);
   }
 
-  /** Fills the back buffer via `fn` (RGBA, row 0 = north), then swaps buffers. */
+  /** Fills the back buffer via `fn` (RGBA, row 0 = north, dimensions in canvas pixels), then swaps buffers. */
   paint(fn: PaintFn): void {
     const back = 1 - this.front;
-    fn(this.imageData.data, this.grid.width, this.grid.height);
+    fn(this.imageData.data, this.grid.width * this.scale, this.grid.height * this.scale);
     this.contexts[back].putImageData(this.imageData, 0, 0);
     this.front = back;
     this.viewer.scene.requestRender();

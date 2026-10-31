@@ -102,6 +102,142 @@ export function paintBurn(data: Uint8ClampedArray, arrival: Float32Array, t: num
   }
 }
 
+export interface BurnPaintScaledOptions extends BurnPaintOptions {
+  /** Bilinear sub-cell edges and age ramp instead of one flat colour per cell. */
+  smooth?: boolean;
+  /** Flickering orange halo on unburned pixels around flaming cells. */
+  glow?: boolean;
+}
+
+/** Flaming ramp colour by normalised age k (0 = just ignited, 1 = charring). */
+function flameRgb(k: number, out: number[]): void {
+  out[0] = 255;
+  out[1] = Math.round(230 * (1 - k) * (1 - k) + 40);
+  out[2] = Math.round(60 * (1 - k));
+}
+
+/**
+ * Paints the fire state onto a canvas of (width*scale) x (height*scale) pixels. With `smooth`,
+ * each pixel bilinearly interpolates the burned fraction and age of the four nearest cells, which
+ * anti-aliases the front and softens the ramp; otherwise one flat colour per cell. With `glow`,
+ * flaming cells cast a flickering halo onto neighbouring unburned pixels. Masks are per cell.
+ */
+export function paintBurnScaled(data: Uint8ClampedArray, arrival: Float32Array, width: number, height: number, scale: number, t: number, o: BurnPaintScaledOptions): void {
+  const W = width * scale;
+  const H = height * scale;
+  const winDefault = Math.max(1, o.flameWindowS);
+  const burnout = o.burnoutAt;
+  const winOf = (i: number): number => (burnout ? Math.max(1, burnout[i] - arrival[i]) : winDefault);
+  const rgb = [0, 0, 0];
+  const smooth = !!o.smooth && scale > 1;
+  for (let py = 0; py < H; py++) {
+    const cy = (py / scale) | 0;
+    for (let px = 0; px < W; px++) {
+      const cx = (px / scale) | 0;
+      const ci = cy * width + cx;
+      let r = 0, g = 0, b = 0, alpha = 0;
+      let age = -1, win = 1, frac = 0;
+      if (smooth) {
+        const u = (px + 0.5) / scale - 0.5;
+        const v = (py + 0.5) / scale - 0.5;
+        let x0 = Math.floor(u), y0 = Math.floor(v);
+        let fx = u - x0, fy = v - y0;
+        if (x0 < 0) { x0 = 0; fx = 0; }
+        if (y0 < 0) { y0 = 0; fy = 0; }
+        const x1 = Math.min(width - 1, x0 + 1);
+        const y1 = Math.min(height - 1, y0 + 1);
+        const idx = [y0 * width + x0, y0 * width + x1, y1 * width + x0, y1 * width + x1];
+        const wts = [(1 - fx) * (1 - fy), fx * (1 - fy), (1 - fx) * fy, fx * fy];
+        let ageSum = 0, winSum = 0;
+        for (let q = 0; q < 4; q++) {
+          const a = arrival[idx[q]];
+          if (a === NEVER_ARRIVES || a > t) continue;
+          frac += wts[q];
+          ageSum += wts[q] * (t - a);
+          winSum += wts[q] * winOf(idx[q]);
+        }
+        if (frac > 0.001) {
+          age = ageSum / frac;
+          win = winSum / frac;
+        }
+      } else {
+        const a = arrival[ci];
+        if (a !== NEVER_ARRIVES && a <= t) {
+          frac = 1;
+          age = t - a;
+          win = winOf(ci);
+        }
+      }
+      if (age >= 0) {
+        if (age < win) {
+          flameRgb(age / win, rgb);
+          r = rgb[0]; g = rgb[1]; b = rgb[2];
+          alpha = 235;
+        } else {
+          r = 35; g = 28; b = 26; alpha = 200;
+        }
+        if (smooth) alpha = Math.round(alpha * Math.min(1, frac * 1.25));
+      }
+      if (o.firebreak && o.firebreak[ci]) { r = 225; g = 225; b = 215; alpha = 220; }
+      if (o.wetness) {
+        const wv = o.wetness[ci];
+        if (wv > 0.02) {
+          const k = Math.min(1, wv);
+          r = Math.round(r * (1 - k) + 40 * k);
+          g = Math.round(g * (1 - k) + 120 * k);
+          b = Math.round(b * (1 - k) + 255 * k);
+          alpha = Math.max(alpha, Math.round(90 + 130 * k));
+        }
+      }
+      const p = (py * W + px) * 4;
+      data[p] = r; data[p + 1] = g; data[p + 2] = b; data[p + 3] = alpha;
+    }
+  }
+  if (o.glow) paintGlow(data, arrival, width, height, scale, t, winOf);
+}
+
+/** Deterministic flicker in [0.7, 1] from the cell index and a 20 s time slot. */
+export function flicker(i: number, t: number): number {
+  const slot = Math.floor(t / 20);
+  let h = Math.imul(i + 1, 2654435761) ^ Math.imul(slot + 7, 0x9e3779b1);
+  h = Math.imul(h ^ (h >>> 15), 0x85ebca6b) >>> 0;
+  return 0.7 + 0.3 * ((h >>> 8) / 16777216);
+}
+
+function paintGlow(data: Uint8ClampedArray, arrival: Float32Array, width: number, height: number, scale: number, t: number, winOf: (i: number) => number): void {
+  const W = width * scale;
+  const H = height * scale;
+  const R = 2.5 * scale;
+  const Ri = Math.ceil(R);
+  for (let cy = 0; cy < height; cy++) {
+    for (let cx = 0; cx < width; cx++) {
+      const i = cy * width + cx;
+      const a = arrival[i];
+      if (a === NEVER_ARRIVES || a > t) continue;
+      const age = t - a;
+      const win = winOf(i);
+      if (age >= win) continue;
+      const strength = (1 - age / win) * flicker(i, t);
+      const ox = (cx + 0.5) * scale;
+      const oy = (cy + 0.5) * scale;
+      const x0 = Math.max(0, Math.floor(ox - Ri)), x1 = Math.min(W - 1, Math.ceil(ox + Ri));
+      const y0 = Math.max(0, Math.floor(oy - Ri)), y1 = Math.min(H - 1, Math.ceil(oy + Ri));
+      for (let py = y0; py <= y1; py++) {
+        for (let px = x0; px <= x1; px++) {
+          const p = (py * W + px) * 4;
+          if (data[p + 3] >= 90) continue; // only glow onto (nearly) empty pixels
+          const dx = px + 0.5 - ox, dy = py + 0.5 - oy;
+          const d = Math.sqrt(dx * dx + dy * dy) / R;
+          if (d >= 1) continue;
+          const alpha = Math.round(150 * strength * (1 - d) * (1 - d));
+          if (alpha <= data[p + 3]) continue;
+          data[p] = 255; data[p + 1] = 130; data[p + 2] = 30; data[p + 3] = alpha;
+        }
+      }
+    }
+  }
+}
+
 /** Alignment test pattern: 10-cell checkerboard with a red NW corner block and blue SE block. */
 export function paintCheckerboard(data: Uint8ClampedArray, width: number, height: number): void {
   for (let r = 0; r < height; r++) {
