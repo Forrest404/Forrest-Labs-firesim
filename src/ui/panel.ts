@@ -1,10 +1,15 @@
-/** Side panel layout: header + honesty notice, then each section mounts itself. */
+/**
+ * Side panel: brand header (title, viewer-mode pill, collapse), compact honesty pill, then one
+ * card per section. Sections mount themselves into the bodies handed to them.
+ */
 
 import type { Store } from '../app/state';
 import { mountAreaPicker } from './areaPicker';
 import type { AreaPickerActions } from './areaPicker';
+import { iconButton, section, segmented, toggle } from './controls';
 import { mountDebug } from './debug';
 import { el } from './el';
+import { icon } from './icons';
 import { mountPlayback } from './playback';
 import type { PlaybackActions } from './playback';
 import { mountSettingsSimple } from './settingsSimple';
@@ -16,58 +21,64 @@ export interface PanelActions extends AreaPickerActions, PlaybackActions {
 }
 
 export interface PanelSlots {
-  /** Section for the firefighting tools (filled in Stage 6). */
+  /** Section body for the firefighting tools. */
   tools: HTMLElement;
-  /** Section for the advanced settings (filled in Stage 6). */
+  /** Section body for the advanced settings. */
   advanced: HTMLElement;
 }
 
 export function mountPanel(root: HTMLElement, store: Store, actions: PanelActions): PanelSlots {
-  const header = el('div', {},
-    el('h1', {}, STR.appTitle),
-    el('div', { class: 'notice' }, STR.honestyNotice, el('small', {}, STR.honestyDetail)),
+  // Header
+  const modePill = el('span', { class: 'pill mode', title: STR.googleAttribution }, el('i', { class: 'dot' }), el('span', { class: 'pill-text' }));
+  const collapseBtn = iconButton('chevronLeft', STR.collapsePanel, () => {
+    const collapsed = root.classList.toggle('collapsed');
+    collapseBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    collapseBtn.title = collapsed ? STR.expandPanel : STR.collapsePanel;
+  }, { class: 'collapse' });
+  collapseBtn.setAttribute('aria-expanded', 'true');
+  const header = el('header', { class: 'brand' },
+    el('div', { class: 'brand-left' }, el('span', { class: 'logo' }, icon('flame', 18)), el('h1', {}, STR.appTitle)),
+    el('div', { class: 'brand-right' }, modePill, collapseBtn),
   );
-  const modeLine = el('div', { class: 'muted' });
-  const area = el('section');
-  const settings = el('section');
-  const advanced = el('section');
-  const sim = el('section');
-  const tools = el('section');
-  const camera = el('section', {},
-    el('h2', {}, STR.cameraTitle),
-    el('div', { class: 'row' },
-      el('button', { onclick: () => actions.topDown() }, STR.cameraTopDown),
-      el('button', { onclick: () => actions.resetView() }, STR.cameraReset),
-    ),
-    el('div', { class: 'muted' }, STR.cameraHelp),
-  );
-  const particles = el('input', { type: 'checkbox' }) as HTMLInputElement;
-  particles.onchange = () => store.update((s) => ({ effects: { ...s.effects, particles: particles.checked } }));
-  const quality = el('select', {},
-    el('option', { value: 'low' }, STR.qualityLow),
-    el('option', { value: 'medium' }, STR.qualityMedium),
-    el('option', { value: 'high' }, STR.qualityHigh),
-  ) as HTMLSelectElement;
-  quality.onchange = () => store.update((s) => ({ effects: { ...s.effects, quality: quality.value as 'low' | 'medium' | 'high' } }));
-  const effects = el('section', {},
-    el('h2', {}, STR.effectsTitle),
-    el('label', {}, el('span', {}, STR.effectsParticles), particles),
-    el('label', {}, el('span', {}, STR.effectsQuality), quality),
-  );
-  const debug = el('section');
-  const footer = el('div', { class: 'muted footer' }, STR.footer);
-  root.append(header, modeLine, area, settings, advanced, sim, tools, camera, effects, debug, footer);
+  const honesty = el('div', { class: 'honesty', title: STR.honestyDetail, tabindex: '0' }, icon('info', 14), el('span', {}, STR.honestyNotice));
 
-  mountAreaPicker(area, store, actions);
-  mountSettingsSimple(settings, store);
-  mountPlayback(sim, store, actions);
-  mountDebug(debug, store);
+  // Sections
+  const area = section('map', STR.areaLabel);
+  const settings = section('wind', STR.settingsTitle);
+  const sim = section('flame', STR.simulateTitle, { class: 'sim' });
+  const tools = section('axe', STR.toolsTitle);
+  const advanced = section('sliders', STR.advancedTitle, { class: 'adv' });
+
+  const view = section('eye', STR.viewTitle, {
+    trailing: el('div', { class: 'row tight' },
+      iconButton('topdown', STR.cameraTopDown, () => actions.topDown()),
+      iconButton('compass', STR.cameraReset, () => actions.resetView()),
+    ),
+  });
+  const particles = toggle(STR.effectsParticles, (on) => store.update((s) => ({ effects: { ...s.effects, particles: on } })));
+  const quality = segmented(
+    [{ value: 'low', label: STR.qualityLow }, { value: 'medium', label: STR.qualityMedium }, { value: 'high', label: STR.qualityHigh }],
+    (q) => store.update((s) => ({ effects: { ...s.effects, quality: q as 'low' | 'medium' | 'high' } })),
+    { ariaLabel: STR.effectsQuality, class: 'small' },
+  );
+  view.body.append(particles.root, el('div', { class: 'ctl-row' }, el('span', { class: 'ctl-label' }, STR.effectsQuality), quality.root));
+  const debugBody = el('div', { class: 'sub' });
+  view.body.append(debugBody, el('div', { class: 'muted hint' }, STR.cameraHelp));
+
+  const footer = el('footer', { class: 'muted footer' }, STR.footer);
+  root.append(header, honesty, area.root, settings.root, sim.root, tools.root, advanced.root, view.root, footer);
+
+  mountAreaPicker(area.body, store, actions);
+  mountSettingsSimple(settings.body, store);
+  mountPlayback(sim.body, store, actions);
+  mountDebug(debugBody, store);
 
   store.subscribe((s) => {
-    modeLine.textContent = STR.viewerMode[s.viewerMode];
-    particles.checked = s.effects.particles;
-    quality.value = s.effects.quality;
-    quality.disabled = !s.effects.particles;
+    modePill.classList.toggle('live', s.viewerMode === 'google');
+    (modePill.querySelector('.pill-text') as HTMLElement).textContent = STR.viewerMode[s.viewerMode];
+    particles.input.checked = s.effects.particles;
+    quality.set(s.effects.quality);
+    quality.setDisabled(!s.effects.particles);
   });
-  return { tools, advanced };
+  return { tools: tools.body, advanced: advanced.body };
 }

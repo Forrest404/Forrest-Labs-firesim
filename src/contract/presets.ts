@@ -58,6 +58,8 @@ export const DEFAULT_WEATHER: Weather = {
 };
 
 export const DEFAULT_SETTINGS: SimSettings = {
+  rateModel: 'factors',
+  isoSpeedMps: 0.1,
   globalMultiplier: 1,
   windStrength: 1,
   windExponent: 0.8,

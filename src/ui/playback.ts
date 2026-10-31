@@ -1,8 +1,10 @@
-/** Simulate button, play/pause, speed, scrubber, simulated clock and live stats. */
+/** Big Simulate button, hint line, transport controls (icons), speed chips, scrubber, clock, stats. */
 
 import type { Store } from '../app/state';
 import { liveStats } from '../app/overlayPainter';
+import { chip, iconButton, segmented, slider } from './controls';
 import { el, formatClock } from './el';
+import { icon } from './icons';
 import { STR } from './strings';
 
 const SPEEDS = [1, 4, 16, 64, 256];
@@ -13,51 +15,64 @@ export interface PlaybackActions {
 }
 
 export function mountPlayback(container: HTMLElement, store: Store, actions: PlaybackActions): void {
-  const simulateBtn = el('button', { class: 'primary', onclick: () => actions.simulate() }, STR.simulate) as HTMLButtonElement;
-  const cancelBtn = el('button', { onclick: () => actions.cancel() }, STR.cancel) as HTMLButtonElement;
-  const hint = el('div', { class: 'muted' });
+  const simLabel = el('span', {});
+  const simIcon = el('span', { class: 'btn-icon' }, icon('flame'));
+  const simulateBtn = el('button', { type: 'button', class: 'primary big', onclick: () => actions.simulate() }, simIcon, simLabel) as HTMLButtonElement;
+  const cancelBtn = iconButton('x', STR.cancel, () => actions.cancel(), { class: 'cancel' });
+  const hint = el('div', { class: 'hint muted' });
   const error = el('div', { class: 'error-text', role: 'alert' });
 
-  const playBtn = el('button', { onclick: () => store.update((s) => ({ playback: { ...s.playback, playing: !s.playback.playing, t: s.playback.t >= s.durationSeconds ? 0 : s.playback.t } })) }) as HTMLButtonElement;
-  const restartBtn = el('button', { onclick: () => store.update((s) => ({ playback: { ...s.playback, t: 0, playing: true } })) }, STR.restart) as HTMLButtonElement;
-  const speedBtns = SPEEDS.map((sp) =>
-    el('button', { class: 'speed', onclick: () => store.update((s) => ({ playback: { ...s.playback, speed: sp } })) }, `${sp}×`) as HTMLButtonElement,
+  const playBtn = iconButton('play', STR.play, () =>
+    store.update((s) => ({ playback: { ...s.playback, playing: !s.playback.playing, t: s.playback.t >= s.durationSeconds ? 0 : s.playback.t } })), { class: 'play' });
+  const restartBtn = iconButton('restart', STR.restart, () => store.update((s) => ({ playback: { ...s.playback, t: 0, playing: true } })));
+  const speed = segmented(SPEEDS.map((sp) => ({ value: sp, label: `${sp}×` })), (sp) => store.update((s) => ({ playback: { ...s.playback, speed: sp } })), { ariaLabel: STR.speed, class: 'small' });
+  const scrub = slider({ min: 0, max: 1, step: 30, ariaLabel: STR.scrubber }, (v) => store.update((s) => ({ playback: { ...s.playback, t: v, playing: false } })));
+  const clock = el('span', { class: 'clock' });
+  const area = chip('', 'stat');
+  const cells = chip('', 'stat');
+  const stats = el('div', { class: 'stats' }, area, cells);
+  const transport = el('div', { class: 'transport' },
+    el('div', { class: 'row tight' }, playBtn, restartBtn, clock),
+    speed.root,
   );
-  const scrub = el('input', { type: 'range', min: 0, max: 1, step: 30, 'aria-label': STR.scrubber }) as HTMLInputElement;
-  scrub.oninput = () => store.update((s) => ({ playback: { ...s.playback, t: Number(scrub.value), playing: false } }));
-  const clock = el('span', { class: 'value clock' });
-  const stats = el('div', { class: 'stats' });
 
   container.append(
-    el('h2', {}, STR.simulateTitle),
-    el('div', { class: 'row' }, simulateBtn, cancelBtn),
+    el('div', { class: 'sim-row' }, simulateBtn, cancelBtn),
     hint,
     error,
-    el('div', { class: 'row' }, playBtn, restartBtn, ...speedBtns),
-    el('label', {}, scrub, clock),
+    transport,
+    scrub,
     stats,
   );
 
   store.subscribe((s) => {
     const hasArea = !!s.area;
+    const stale = !!s.result && s.resultStale;
     simulateBtn.disabled = !hasArea || !s.ignition || s.simRunning;
-    simulateBtn.textContent = s.simRunning ? STR.simulating : s.result && s.resultStale ? STR.reSimulate : STR.simulate;
-    simulateBtn.classList.toggle('stale', !!s.result && s.resultStale);
-    cancelBtn.style.display = s.simRunning ? '' : 'none';
-    hint.textContent = !s.ignition ? STR.placeIgnitionHint : s.result && s.resultStale ? STR.staleHint : '';
+    simLabel.textContent = s.simRunning ? STR.simulating : stale ? STR.reSimulate : STR.simulate;
+    simIcon.replaceChildren(icon(s.simRunning ? 'loader' : stale ? 'restart' : 'flame'));
+    simulateBtn.classList.toggle('stale', stale);
+    simulateBtn.classList.toggle('running', s.simRunning);
+    cancelBtn.hidden = !s.simRunning;
+    hint.textContent = !s.ignition ? STR.placeIgnitionHint : stale ? STR.staleHint : '';
     error.textContent = s.simError ?? '';
 
     const has = !!s.result;
+    transport.classList.toggle('off', !has);
     playBtn.disabled = restartBtn.disabled = scrub.disabled = !has;
-    for (const b of speedBtns) b.disabled = !has;
-    playBtn.textContent = s.playback.playing ? STR.pause : STR.play;
-    speedBtns.forEach((b, i) => b.classList.toggle('active', SPEEDS[i] === s.playback.speed));
+    speed.setDisabled(!has);
+    playBtn.replaceChildren(icon(s.playback.playing ? 'pause' : 'play'));
+    playBtn.setAttribute('aria-label', s.playback.playing ? STR.pause : STR.play);
+    playBtn.title = s.playback.playing ? STR.pause : STR.play;
+    speed.set(s.playback.speed);
     scrub.max = String(s.durationSeconds);
     if (document.activeElement !== scrub) scrub.value = String(s.playback.t);
     clock.textContent = formatClock(s.playback.t);
+    stats.hidden = !has;
     if (has && s.area) {
       const st = liveStats(s.result, s.area.grid, s.playback.t);
-      stats.textContent = `${st.burnedAreaHa.toFixed(0)} ha · ${st.burnedCells} cells burned · ${STR.simTime} ${s.result!.stats.runtimeMs.toFixed(0)} ms`;
-    } else stats.textContent = '';
+      area.textContent = `${st.burnedAreaHa.toFixed(0)} ha`;
+      cells.textContent = `${st.burnedCells} ${STR.cellsBurned}`;
+    }
   });
 }

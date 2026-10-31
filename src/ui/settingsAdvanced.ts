@@ -4,7 +4,7 @@
  */
 
 import { deriveFuelMoisture } from '../contract';
-import type { SimSettings, Weather } from '../contract';
+import type { RateModelId, SimSettings, Weather } from '../contract';
 import { staleIfResult } from '../app/state';
 import type { Store } from '../app/state';
 import { el } from './el';
@@ -21,6 +21,8 @@ interface NumField {
 }
 
 const FIELDS: NumField[] = [
+  { label: STR.advIsoSpeed, min: 0.01, max: 2, step: 0.01, unit: 'm/s', get: (s) => s.settings.isoSpeedMps,
+    set: (v, s) => ({ settings: { ...s.settings, isoSpeedMps: v } }) },
   { label: STR.advTemperature, min: -10, max: 50, step: 1, unit: '°C', get: (s) => s.weather.temperatureC,
     set: (v, s) => ({ weather: { ...s.weather, temperatureC: v, baseFuelMoisture: deriveFuelMoisture(v, s.weather.relativeHumidity) } }) },
   { label: STR.advHumidity, min: 1, max: 100, step: 1, unit: '%', get: (s) => Math.round(s.weather.relativeHumidity * 100),
@@ -45,6 +47,13 @@ const FIELDS: NumField[] = [
 export function mountSettingsAdvanced(container: HTMLElement, store: Store): void {
   const details = el('details', {}, el('summary', {}, STR.advancedTitle)) as HTMLDetailsElement;
   details.ontoggle = () => store.set({ advancedOpen: details.open });
+  const model = el('select', { 'aria-label': STR.advModel },
+    el('option', { value: 'factors' }, STR.modelFactors),
+    el('option', { value: 'rothermel' }, STR.modelRothermel),
+    el('option', { value: 'iso' }, STR.modelIso),
+  ) as HTMLSelectElement;
+  model.onchange = () => store.update((s) => ({ settings: { ...s.settings, rateModel: model.value as RateModelId }, ...staleIfResult(s) }));
+  details.append(el('label', {}, el('span', {}, STR.advModel), model), el('div', { class: 'muted' }, STR.modelNote));
   const inputs: HTMLInputElement[] = [];
   for (const f of FIELDS) {
     const input = el('input', { type: 'number', min: f.min, max: f.max, step: f.step }) as HTMLInputElement;
@@ -72,6 +81,7 @@ export function mountSettingsAdvanced(container: HTMLElement, store: Store): voi
       if (document.activeElement !== inputs[i]) inputs[i].value = String(f.get(s));
     });
     burnout.checked = s.settings.burnoutEnabled;
+    model.value = s.settings.rateModel;
     if (details.open !== s.advancedOpen) details.open = s.advancedOpen;
   });
 }

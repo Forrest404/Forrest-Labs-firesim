@@ -88,8 +88,19 @@ export interface Intervention {
   label?: string;
 }
 
+/**
+ * Rate-of-spread model. 'factors' is the demo-tuned product of simple factors (default),
+ * 'rothermel' is the Rothermel (1972) / Albini (1976) surface-fire model on single-size fuel beds,
+ * 'iso' is a constant speed everywhere (for tests and grid-error checks).
+ */
+export type RateModelId = 'factors' | 'rothermel' | 'iso';
+
 /** Tuning knobs. All values are placeholders, not calibrated against real fires. */
 export interface SimSettings {
+  /** Which rate-of-spread model drives the simulation. */
+  rateModel: RateModelId;
+  /** 'iso' model only: constant spread speed in m/s. */
+  isoSpeedMps: number;
   /** Scales every spread rate. */
   globalMultiplier: number;
   /** Magnitude of the wind effect (0 disables wind). */
