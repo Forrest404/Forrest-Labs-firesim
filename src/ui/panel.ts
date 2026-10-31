@@ -1,4 +1,4 @@
-/** Side panel layout: header + honesty notice, then each section mounts itself. */
+/** Side panel layout: title, then each section mounts itself. */
 
 import type { Store } from '../app/state';
 import { mountAreaPicker } from './areaPicker';
@@ -27,10 +27,7 @@ export interface PanelSlots {
 }
 
 export function mountPanel(root: HTMLElement, store: Store, actions: PanelActions): PanelSlots {
-  const header = el('div', {},
-    el('h1', {}, STR.appTitle),
-    el('div', { class: 'notice' }, STR.honestyNotice, el('small', {}, STR.honestyDetail)),
-  );
+  const header = el('div', {}, el('h1', {}, STR.appTitle));
   const modeLine = el('div', { class: 'muted' });
   const area = el('section');
   const settings = el('section');
