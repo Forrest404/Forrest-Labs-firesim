@@ -26,7 +26,7 @@ const perims = (c: GeoJsonCollection): GeoJsonFeature[] => c.features.filter((f)
 describe('perimeters GeoJSON', () => {
   const s = scenario();
   const result = simulate(s);
-  const ctx = { grid: s.grid, areaName: 'Test area', areaIsSynthetic: true };
+  const ctx = { grid: s.grid, areaName: 'Test area', areaIsSynthetic: true, attribution: ['© OpenStreetMap contributors (ODbL)', '© ESA WorldCover project 2021 (CC BY 4.0)'] };
   const fc = perimetersToGeoJSON(ctx, result, { durationSeconds: s.durationSeconds, ignition: s.ignition });
 
   it('is a FeatureCollection with the honesty metadata every export must carry', () => {
@@ -34,6 +34,9 @@ describe('perimeters GeoJSON', () => {
     expect(fc.disclaimer).toBe(EXPORT_DISCLAIMER);
     expect(fc.disclaimer).toMatch(/Not for real-world decisions/);
     expect(fc.properties).toMatchObject({ kind: 'fire-perimeters', area: 'Test area', areaIsSynthetic: true, cellSizeM: 30 });
+    // Derived data keeps the licences of its sources (ODbL / CC BY require attribution).
+    expect(fc.properties!.attribution).toEqual(['© OpenStreetMap contributors (ODbL)', '© ESA WorldCover project 2021 (CC BY 4.0)']);
+    expect(perimetersToGeoJSON({ grid: s.grid }, result, { durationSeconds: s.durationSeconds }).properties!.attribution).toEqual([]);
     expect(fc.generator).toMatch(/simplified/);
     expect(JSON.parse(JSON.stringify(fc))).toEqual(fc); // plain JSON, round-trips
   });
@@ -198,13 +201,13 @@ describe('ring orientation holds for every shape (holes, islands, several blobs)
 
 describe('probability GeoJSON', () => {
   const s = scenario();
-  const ctx = { grid: s.grid, areaName: 'Test area', areaIsSynthetic: false };
+  const ctx = { grid: s.grid, areaName: 'Test area', areaIsSynthetic: false, attribution: ['© ESA WorldCover project 2021 (CC BY 4.0)'] };
   const ens = runEnsemble(s, { ...DEFAULT_ENSEMBLE_SPEC, runs: 40, baseSeed: 3 })!;
   const fc = probabilityToGeoJSON(ctx, ens);
 
   it('carries the disclaimer and the ensemble summary, with one feature per level', () => {
     expect(fc.disclaimer).toBe(EXPORT_DISCLAIMER);
-    expect(fc.properties).toMatchObject({ kind: 'burn-probability', runs: 40, areaIsSynthetic: false });
+    expect(fc.properties).toMatchObject({ kind: 'burn-probability', runs: 40, areaIsSynthetic: false, attribution: ['© ESA WorldCover project 2021 (CC BY 4.0)'] });
     expect(fc.features.map((f) => f.properties.probability)).toEqual([0.1, 0.5, 0.9]);
   });
 

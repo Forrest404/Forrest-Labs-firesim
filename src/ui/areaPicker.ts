@@ -33,7 +33,8 @@ export function mountAreaPicker(container: HTMLElement, store: Store, actions: A
     if (s.areaLoading) info.textContent = STR.loadingArea;
     else if (s.area) {
       const m = s.area.meta;
-      info.textContent = `${m.description} ${m.synthetic ? '' : STR.realNote}`;
+      // Each bundle names its own data sources and licences (OSM, ESA WorldCover, ...): show those, not a fixed line.
+      info.textContent = `${m.description} ${m.synthetic ? '' : m.attribution.join(' · ')}`;
     }
   });
 }

@@ -6,7 +6,7 @@ export const STR = {
   honestyNotice: 'Simplified model. Not for real-world decisions.',
   honestyDetail:
     'Fire spread here is a simplified cellular model with Rothermel-inspired trends (wind, slope, fuel, moisture). It is not validated against real fires.',
-  footer: 'Simplified model, not for real-world decisions. Land cover © OpenStreetMap contributors (ODbL); elevation AWS Terrain Tiles; synthetic areas are generated.',
+  footer: 'Simplified model, not for real-world decisions. Data attributions are listed under the demo area; elevation: AWS Terrain Tiles; synthetic areas are generated.',
   fallbackBanner: 'Fallback view: Google 3D tiles unavailable.',
   loadingArea: 'Loading demo area…',
   loadError: 'Could not load the demo area.',

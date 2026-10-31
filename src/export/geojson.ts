@@ -42,6 +42,8 @@ export interface ExportContext {
   /** Name of the demo area and whether its data is synthetic. */
   areaName?: string;
   areaIsSynthetic?: boolean;
+  /** The demo area's data sources and licences (OSM ODbL, ESA WorldCover CC BY 4.0, ...). Exported results are derived data and must keep them. */
+  attribution?: string[];
 }
 
 /** Signed area of a lon/lat ring (positive = counter-clockwise). */
@@ -105,7 +107,7 @@ function header(ctx: ExportContext, kind: string, extra: Record<string, unknown>
     type: 'FeatureCollection',
     disclaimer: EXPORT_DISCLAIMER,
     generator: 'firesim (simplified demo model)',
-    properties: { kind, area: ctx.areaName ?? null, areaIsSynthetic: ctx.areaIsSynthetic ?? null, cellSizeM: ctx.grid.cellSizeM, ...extra },
+    properties: { kind, area: ctx.areaName ?? null, areaIsSynthetic: ctx.areaIsSynthetic ?? null, attribution: ctx.attribution ?? [], cellSizeM: ctx.grid.cellSizeM, ...extra },
   };
 }
 

@@ -4,6 +4,29 @@ Decisions for the `sim-realism` slot (see [FEATURES.md](../FEATURES.md)), kept i
 parallel work on `DECISIONS.md` does not conflict. Numbered `SIM-n`. Source of ideas: a read-only
 review of [ForeFire](https://github.com/forefireAPI/forefire) (CNRS), summarised in SIM-1.
 
+## What was built (index)
+
+Nine features from the ForeFire review, each with tests and mutation checks. 264 tests, all green.
+
+| # | Feature | Section | Where |
+|---|---|---|---|
+| 1 | Model invariant tests (no golden data) | SIM-7 | `tests/invariants.test.ts` |
+| 2 | Pluggable rate-of-spread models, Rothermel (1972) | SIM-2, 3 | `src/sim/models.ts`, `rothermel.ts` |
+| 3 | 16-direction stencil: rounder fires (8.2 % to 2.7 % shape error) | SIM-8 | `src/sim/rates.ts`, `index.ts` |
+| 4 | Byram fireline intensity and flame length | SIM-9 | `src/sim/intensity.ts` |
+| 5 | Deterministic ember spotting | SIM-10 | `src/sim/spotting.ts`, `hash.ts` |
+| 6 | Time-varying weather and lagged fuel moisture | SIM-11 | `src/sim/weather.ts`, `crossing.ts` |
+| 7 | Ensemble runs and burn-probability maps | SIM-12 | `src/sim/ensemble.ts` |
+| 8 | GeoJSON perimeters and probability lines | SIM-13 | `src/data/contours.ts`, `src/export/` |
+| 9 | Satellite land cover (ESA WorldCover / CORINE) | SIM-14 | `src/data/landcover.ts`, `scripts/` |
+
+Real bugs these tests found in code that already existed (each is described in its section):
+edges into sprayed cells were not FIFO, so a firebreak could make a wet cell burn EARLIER (SIM-4); a later
+spray overwrote an earlier, stronger one (SIM-5); the Rothermel wind limit ignored slope (SIM-3); crossing
+integrators ignored a spray starting mid-interval, up to 4,000 % off (SIM-4); a size check that could never
+fire (SIM-14); a default ignition that could land in a walled-in patch or a town (SIM-14); hard-coded data
+attribution that was wrong for WorldCover-based areas and missing from exports (SIM-13, 14).
+
 ## SIM-1. What we borrow from ForeFire, and what we do not
 
 ForeFire is **GPL-3.0**. We borrowed ideas only, never code: copying or porting its source could

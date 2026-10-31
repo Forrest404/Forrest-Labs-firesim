@@ -262,9 +262,9 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     }
   }
 
-  function exportContext(): { grid: NonNullable<ReturnType<Store['get']>['area']>['grid']; areaName: string; areaIsSynthetic: boolean } | null {
+  function exportContext(): { grid: NonNullable<ReturnType<Store['get']>['area']>['grid']; areaName: string; areaIsSynthetic: boolean; attribution: string[] } | null {
     const a = store.get().area;
-    return a ? { grid: a.grid, areaName: a.meta.label, areaIsSynthetic: a.meta.synthetic } : null;
+    return a ? { grid: a.grid, areaName: a.meta.label, areaIsSynthetic: a.meta.synthetic, attribution: a.meta.attribution } : null;
   }
 
   return {
