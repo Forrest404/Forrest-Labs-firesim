@@ -168,20 +168,3 @@ Draping and picking on tiles: `ClassificationType.BOTH` (D5) is the right settin
 onto 3D Tiles, and `scene.pickPosition` (D6) is the tile-aware path. Neither has been exercised
 with a real key on the build machine (no key available). If the overlay does not drape, keep the
 fallback as default and revisit per PROGRESS.md "Known issues".
-
-## D18. 3D tiles come from Cesium ion, not a Google Maps key (supersedes the key part of D5/D17)
-
-The team has a Cesium ion account, so the photoreal backdrop is now ion asset 2275207 ("Google
-Photorealistic 3D Tiles" from the Asset Depot) authenticated with `VITE_CESIUM_ION_TOKEN`. The
-Google Maps key path (`googleTiles.ts`, `VITE_GOOGLE_MAPS_API_KEY`) is removed rather than kept
-as a second option: one credential, one setup page, one failure path. D5's "ion is never called"
-is relaxed to "ion is called for that one asset only": the token goes to `IonResource.fromAssetId`
-per request and is never assigned to `Ion.defaultAccessToken`, so no other ion default (terrain,
-imagery, geocoder) can silently start using it. Base imagery stays OpenStreetMap and terrain
-stays the ellipsoid in fallback mode.
-
-Everything else in D17 carries over unchanged: failure window and auth fast path (401/403/429,
-plus 404 reported as "asset not added to the account"), cost controls, redaction (now also strips
-`access_token=`, Bearer headers and JWT-shaped strings, since ion tokens are JWTs). The mode name
-is `tiles` instead of `google`. Draping and picking on the tileset remain unverified on the build
-machine (no token available).

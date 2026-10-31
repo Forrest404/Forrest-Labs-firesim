@@ -45,7 +45,7 @@ async function main(): Promise<void> {
   notices.persistent('loading', STR.loadingArea, 'info');
   const handle = await createViewer({
     container: viewerEl,
-    ionAccessToken: import.meta.env.VITE_CESIUM_ION_TOKEN as string | undefined,
+    googleApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined,
     onModeChange: (mode, reason) => {
       store.set({ viewerMode: mode });
       notices.persistent('fallback', `${STR.fallbackBanner} ${reason}`);

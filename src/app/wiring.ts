@@ -128,7 +128,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
         windX: Math.sin(toward),
         windY: Math.cos(toward),
         windSpeedMps: s.weather.windSpeedMps,
-        useElevation: s.viewerMode === 'tiles',
+        useElevation: s.viewerMode === 'google',
       });
     }
   }
