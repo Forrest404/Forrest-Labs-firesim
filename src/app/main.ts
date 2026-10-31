@@ -39,6 +39,8 @@ async function main(): Promise<void> {
     cancel: () => wiringRef?.cancel(),
     runEnsemble: () => void wiringRef?.runEnsemble(),
     cancelEnsemble: () => wiringRef?.cancelEnsemble(),
+    exportPerimeters: () => wiringRef?.exportPerimeters(),
+    exportProbability: () => wiringRef?.exportProbability(),
     topDown: () => wiringRef?.topDown(),
     resetView: () => wiringRef?.resetView(),
   });

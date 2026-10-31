@@ -7,6 +7,7 @@ import { FuelClass, ensembleSpecFrom, scheduleFromPreset, validateScenario, wind
 import type { Scenario } from '../contract';
 import { scenarioFromArea } from '../data/bundle';
 import { loadDemoArea } from '../data/demoAreas';
+import { perimetersToGeoJSON, probabilityToGeoJSON } from '../export/geojson';
 import { defaultIgnition } from '../data/ignition';
 import { computeSlopeAspect } from '../data/terrain';
 import { paintFuel, paintSlope } from '../viewer/burnCanvas';
@@ -21,6 +22,7 @@ import { createPicker } from '../viewer/picking';
 import type { PickedCell, Picker } from '../viewer/picking';
 import type { Notices } from '../ui/notices';
 import { STR } from '../ui/strings';
+import { downloadJson, exportFilename } from './download';
 import { OverlayPainter } from './overlayPainter';
 import { ProbabilityPainter } from './probabilityPainter';
 import type { Preview } from './overlayPainter';
@@ -43,6 +45,8 @@ export interface Wiring {
   cancel(): void;
   runEnsemble(): Promise<void>;
   cancelEnsemble(): void;
+  exportPerimeters(): void;
+  exportProbability(): void;
   topDown(): void;
   resetView(): void;
   picker: Picker;
@@ -258,10 +262,28 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     }
   }
 
+  function exportContext(): { grid: NonNullable<ReturnType<Store['get']>['area']>['grid']; areaName: string; areaIsSynthetic: boolean } | null {
+    const a = store.get().area;
+    return a ? { grid: a.grid, areaName: a.meta.label, areaIsSynthetic: a.meta.synthetic } : null;
+  }
+
   return {
     selectArea,
     simulate,
     runEnsemble,
+    exportPerimeters: () => {
+      const s = store.get();
+      const ctxe = exportContext();
+      if (!ctxe || !s.result) return;
+      const fc = perimetersToGeoJSON(ctxe, s.result, { durationSeconds: s.durationSeconds, ignition: s.ignition ? [s.ignition] : [], interventions: s.interventions });
+      downloadJson(exportFilename('perimeters', s.area!.meta.name), fc);
+    },
+    exportProbability: () => {
+      const s = store.get();
+      const ctxe = exportContext();
+      if (!ctxe || !s.ensemble.result) return;
+      downloadJson(exportFilename('probability', s.area!.meta.name), probabilityToGeoJSON(ctxe, s.ensemble.result));
+    },
     cancelEnsemble: () => {
       sim.cancelAll();
       store.set({ ensemble: { ...store.get().ensemble, running: false, progress: 0 } });

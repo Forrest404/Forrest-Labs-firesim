@@ -6,13 +6,15 @@ import type { AreaPickerActions } from './areaPicker';
 import { mountDebug } from './debug';
 import { mountEnsemble } from './ensemble';
 import type { EnsembleActions } from './ensemble';
+import { mountExport } from './export';
+import type { ExportActions } from './export';
 import { el } from './el';
 import { mountPlayback } from './playback';
 import type { PlaybackActions } from './playback';
 import { mountSettingsSimple } from './settingsSimple';
 import { STR } from './strings';
 
-export interface PanelActions extends AreaPickerActions, PlaybackActions, EnsembleActions {
+export interface PanelActions extends AreaPickerActions, PlaybackActions, EnsembleActions, ExportActions {
   topDown(): void;
   resetView(): void;
 }
@@ -35,6 +37,7 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
   const advanced = el('section');
   const sim = el('section');
   const ensemble = el('section');
+  const exportSec = el('section');
   const tools = el('section');
   const camera = el('section', {},
     el('h2', {}, STR.cameraTitle),
@@ -59,12 +62,13 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
   );
   const debug = el('section');
   const footer = el('div', { class: 'muted footer' }, STR.footer);
-  root.append(header, modeLine, area, settings, advanced, sim, ensemble, tools, camera, effects, debug, footer);
+  root.append(header, modeLine, area, settings, advanced, sim, ensemble, exportSec, tools, camera, effects, debug, footer);
 
   mountAreaPicker(area, store, actions);
   mountSettingsSimple(settings, store);
   mountPlayback(sim, store, actions);
   mountEnsemble(ensemble, store, actions);
+  mountExport(exportSec, store, actions);
   mountDebug(debug, store);
 
   store.subscribe((s) => {

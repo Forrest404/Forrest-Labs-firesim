@@ -232,3 +232,36 @@ order, sensitivity to wind and direction uncertainty, downwind monotonicity, int
 spotting inside runs, cancel and progress. Mutation-checked: a non-mean-preserving factor, a
 same-for-every-run perturbation, a wrong divisor, dropped interventions, and slices shifted one early
 or late are all caught (two earlier tests were too weak to catch the last two and were strengthened).
+
+## SIM-13. Perimeter export: GeoJSON isochrones and probability lines (`src/data/contours.ts`, `src/export/geojson.ts`)
+
+The arrival-time grid already encodes every perimeter: the fire edge at time t is the contour of
+arrival time at level t. `src/data/contours.ts` is a marching-squares implementation (pure raster
+geometry, cell space): a one-sample "outside" border so every contour closes, linear interpolation
+between samples (midpoint where one side is unburned/infinite), explicit saddle resolution by the
+centre value, ring assembly, and polygons with holes by nesting depth (so islands inside pockets
+work). Probability lines use the same code with `mode: 'above'`.
+
+`src/export/geojson.ts` writes RFC 7946: WGS84 `[lon, lat]`, exterior rings counter-clockwise, holes
+clockwise (normalised after the lat flip), closed rings, coordinates rounded to 6 decimals (about
+0.1 m). `perimetersToGeoJSON`: hourly isochrones (at most 48, always ending at the duration) with
+`tHours`, `areaHa`, `perimeterKm`, plus the ignition point and firebreak / water cells. `probabilityToGeoJSON`:
+10 / 50 / 90 % lines of an ensemble at the end of the run or any time. A new `src/export/` module
+(README included) because it needs both `data/` and `sim/`, which `data/` may not import.
+
+Every file carries a `disclaimer` ("Simplified model. Not for real-world decisions."), the demo
+area's name and whether its data is synthetic, because an exported file loses the on-screen notice.
+
+Known behaviour: contours cut the four grid corners diagonally (a fully burned 6 x 4 grid has area
+23.5 cells, not 24) and run half a cell outside the outermost cell centres along the grid edge. Where
+two probability levels both touch the grid edge their lines coincide there.
+
+Tests (`tests/contours.test.ts` 15, `tests/geojson.test.ts` 15): exact known shapes (single cell is a
+diamond of area 0.5, a distance field gives a circle within 2 % in radius and area), holes, islands,
+two blobs, grid-edge closure, interpolation, saddles, fuzz over 150 random fields (closed, finite, no
+repeated points, valid nesting), RFC 7946 orientation fuzzed over 150 shapes with holes and islands,
+every cell centre on the correct side of the final perimeter (0 wrong), perimeter area within 10 % of
+the burned area at every hour, nested probability lines, the disclaimer. Mutation-checked: inverted
+saddles, no interpolation, a wrong edge id, holes as exteriors, lat/lon swapped and a dropped
+disclaimer are caught; un-normalised orientation survived until the fuzz over holes and islands was
+added (ordinary fire shapes happen to come out right by luck).
