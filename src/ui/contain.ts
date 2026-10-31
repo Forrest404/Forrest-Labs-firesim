@@ -12,7 +12,7 @@ import { chip, segmented, toggle } from './controls';
 import { el, formatClock } from './el';
 import { STR } from './strings';
 
-export function mountContain(container: HTMLElement, store: Store): void {
+export function mountContain(container: HTMLElement, store: Store, actions: { simulate(): void }): void {
   const enable = toggle(STR.containEnable, (on) =>
     store.update((s) => {
       const plan = s.contain.plan;
@@ -50,14 +50,20 @@ export function mountContain(container: HTMLElement, store: Store): void {
   const list = el('ul', { class: 'interventions orders' });
   const planBox = el('div', { class: 'sub plan' }, show.root, outline.root, units.root, hud.root, stats, homes, resources, list);
   const status = el('div', { class: 'muted hint' });
+  const dispatchBtn = el('button', { type: 'button', class: 'primary', onclick: () => {
+    store.update((s) => ({ contain: { ...s.contain, enabled: true } }));
+    actions.simulate();
+  } }, STR.dispatchNow) as HTMLButtonElement;
 
-  container.append(enable.root, level.root, levelHint, progress, progressText, status, planBox);
+  container.append(enable.root, level.root, levelHint, dispatchBtn, progress, progressText, status, planBox);
 
   let lastPlan: unknown = null;
   let lastLevelKey = '';
   store.subscribe((s) => {
     const c = s.contain;
     enable.input.checked = c.enabled;
+    dispatchBtn.disabled = !s.area || !s.ignition || s.simRunning;
+    dispatchBtn.textContent = c.planning ? STR.containPlanning : c.plan && !s.resultStale ? STR.dispatchAgain : STR.dispatchNow;
     level.set(c.level);
     level.setDisabled(!c.enabled);
     const key = `${c.level}:${c.overrides ? 'custom' : ''}`;

@@ -371,7 +371,7 @@ ol.clusters button.on { border-color: var(--accent); background: var(--accent-so
 ul.interventions.orders li .chip.small { font-size: 11px; min-width: 0; padding: 1px 7px; }
 .sub.plan { display: flex; flex-direction: column; gap: 8px; }
 .sub.plan[hidden] { display: none; }
-.dispatch-hud { position: absolute; top: 14px; right: 14px; width: 240px; display: flex; flex-direction: column; gap: 6px; pointer-events: none; z-index: 3; }
+.dispatch-hud { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
 .dispatch-hud[hidden] { display: none; }
 .dispatch-hud .card {
   display: flex; gap: 9px; align-items: flex-start; padding: 7px 10px; font-size: 12px; line-height: 1.3;
@@ -536,3 +536,21 @@ ul.interventions li { border-radius: 4px; }
   #panel { padding: 16px 14px 14px; }
 }
 .sub-title { font-size: 12.5px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--muted); }
+
+/* Emergency response popup (top right, collapsible) */
+.response-pop {
+  position: absolute; top: 14px; right: 14px; width: 320px; max-height: calc(100% - 28px); overflow-y: auto; z-index: 4;
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px 12px;
+  display: flex; flex-direction: column; gap: 8px; box-shadow: var(--shadow);
+}
+.response-pop[hidden] { display: none; }
+.response-pop .pop-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; }
+.response-pop .pop-head h2 { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; display: flex; align-items: center; gap: 8px; color: var(--fg); }
+.response-pop .pop-head h2 .icon { color: var(--accent); }
+.response-pop .pop-toggle .icon { transition: transform var(--t-fast); transform: rotate(180deg); }
+.response-pop.collapsed .pop-toggle .icon { transform: none; }
+.response-pop.collapsed .pop-body { display: none; }
+.response-pop.collapsed { width: auto; }
+.response-pop .pop-body { display: flex; flex-direction: column; gap: 8px; }
+.response-pop .pop-body > button.primary { width: 100%; min-height: 38px; }
+@media (max-width: 720px) { .response-pop { display: none; } }
