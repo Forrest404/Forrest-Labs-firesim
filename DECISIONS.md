@@ -54,8 +54,9 @@ builder-side nodata, which must be filled before a scenario exists; the validato
 
 ## D5. Cesium integration
 
-- Static assets are copied to `/cesium/` with `vite-plugin-static-copy`; `CESIUM_BASE_URL` is a
-  Vite `define`.
+- Static assets are copied into the gitignored `public/cesium/` by `scripts/copy-cesium.mjs`
+  (postinstall / predev / prebuild) and `window.CESIUM_BASE_URL = '/cesium/'` is set in
+  `index.html`. (`vite-plugin-static-copy` was tried first and did not serve the files in dev.)
 - The viewer is created with an explicit OpenStreetMap base layer and an ellipsoid terrain
   provider, with every widget off. **Cesium ion is never called**; no ion token is read.
 - With `VITE_GOOGLE_MAPS_API_KEY` present, the Google Photorealistic 3D Tiles tileset is added
@@ -75,17 +76,52 @@ Cartographic -> degrees -> `geo.lonLatToCell`. Tools only ever see cell coordina
 Plain TS with a tiny `el()` helper and one CSS file. Preact was allowed but not needed for a
 side panel; one fewer dependency and no build plugin.
 
-## D8. Demo areas are synthetic in this build
+## D8. Demo areas: two real, two synthetic
 
-Overpass was unreachable from the build machine (four public endpoints timed out). The two
-committed bundles are generated (`scripts/make-synthetic.ts`), flagged `synthetic: true`, and
-labelled "(synthetic)" in the picker. The real builder (`scripts/build-demo-area.ts`) is written
-and should be run by a teammate on a networked machine. Suggested real areas (varied terrain,
-river or road, lots of forest, good OSM coverage):
-- Boulder Creek, Santa Cruz Mountains, CA, centre about 37.126, -122.122: redwood forest, Hwy 9,
-  San Lorenzo River, strong relief.
-- Alpirsbach, Black Forest, DE, centre about 48.345, 8.40: dense `landuse=forest`, Kinzig river,
-  B294, good OSM polygons.
+Overpass was unreachable during recon (four public endpoints timed out), so two synthetic areas
+were generated first (`scripts/make-synthetic.ts`, flagged `synthetic: true`, labelled
+"(synthetic)" in the picker). Overpass came back during Stage 3 and the real builder
+(`scripts/build-demo-area.ts`) produced two real bundles, which are listed first:
+- `boulder-creek`: Boulder Creek, Santa Cruz Mountains, CA (37.126, -122.122): redwood forest,
+  Hwy 9, San Lorenzo River, 100-800 m relief. Patchy OSM forest polygons; much land is "default".
+- `alpirsbach`: Alpirsbach, Black Forest, DE (48.345, 8.40): dense `landuse=forest` (75 % of
+  cells), Kinzig river, B294, railway.
+The synthetic areas stay as the no-network fallback and as a predictable test bed.
+Bundles are about 260 KB each (base64 fuel + Float32 elevation); 4 of them is fine to commit.
+
+## D13. Which OSM features are barriers
+
+A 30 m cell is either burnable or not, and the model has no spotting, so every barrier is
+absolute. To avoid turning real areas into mazes:
+- Roads are barriers only for `motorway/trunk/primary/secondary/tertiary` (+ links). Residential and
+  unclassified streets are ignored (a few metres wide; Boulder Creek had 5,500 cells of them).
+- Waterways are barriers only for `river` and `canal`; `stream` is ignored (5,100 cells of
+  creeks in Boulder Creek).
+- `building=*`, industrial/retail/quarry land use, parking and runways are non-burnable.
+  `landuse=residential` is NOT: in wildland-urban areas those polygons are wooded lots and would
+  have removed a quarter of the Boulder Creek grid. They fall through to the default fuel (D10).
+Teammates on `sim-realism` / `live-data` can revisit once spotting exists.
+
+## D14. Particle effects and heights
+
+Flames and smoke are Cesium `ParticleSystem`s on up to 20/45/80 (low/medium/high) front cells,
+chosen by a stable per-cell hash so emitters do not jump between frames. Smoke drifts with the
+wind. Heights: on the fallback ellipsoid globe everything sits at 0 m; with Google 3D tiles the
+elevation grid is used, which is orthometric and can be off by the geoid offset (tens of metres).
+`scene.sampleHeight` would be right but needs a rendered frame; left to `3d-polish`.
+
+## D15. Dev hook
+
+In dev builds only, `window.__firesim = { store, wiring }`. `wiring.debugStroke(points)` feeds a
+cell-space stroke through the active drawing tool. This is how the headless tests exercise the
+tools without a real mouse; it is also handy for teammates. Not present in production builds.
+
+## D16. Verification method
+
+The Chrome extension was not connected during the build, so a small CDP script drives the
+installed Chrome headlessly (SwiftShader WebGL): navigate, run a JS scenario, capture console and
+a screenshot. Everything visual reported in `PROGRESS.md` comes from those screenshots. Real
+mouse drags on the 3D view were not exercised.
 
 ## D9. Legal boundary for Google tiles
 
@@ -110,3 +146,33 @@ constantly and the `| undefined` noise would hurt more than help. TypeScript pin
 Branch `scaffold/v0` from `main`. `plan.md` (untracked, written earlier this session) is committed
 with the Stage 1 docs because `DECISIONS.md` references it. One commit per stage. Nothing pushed.
 A teammate branch `feature/gemini-agent` exists on the remote (adds `docs/research/eaton-fire-data.md`); untouched.
+
+## D17. Google 3D tiles: key plumbing, failure detection and cost controls
+
+The key reaches the viewer only via `import.meta.env.VITE_GOOGLE_MAPS_API_KEY` (read once in
+`src/app/main.ts`, passed to `createViewer`). It is never stored in a tracked file, never logged,
+and every error message that could contain a tile URL passes through `src/viewer/redact.ts`
+(URLs and `key=` fragments are stripped) before it reaches a banner or console.
+
+Fallback triggers, all leading to the same OSM globe plus banner: empty key; root tileset fetch
+failure (any HTTP status or network error); 3 auth/quota failures (401/403/429) or 25 other tile
+failures inside any sliding 30 s window after start. The old fixed 30 s window after boot was
+replaced because a quota can run out mid-session. There is no automatic switch back to Google
+mode; reload the page.
+
+Cost: `maximumScreenSpaceError` 20 (default 16), `preloadFlightDestinations` off,
+`cullRequestsWhileMoving` on, `dynamicScreenSpaceError` on, cache 512 MB. No geocoder exists, so
+`onlyUsingWithGoogleGeocoder` is set to silence Cesium's warning.
+
+Draping and picking on tiles: `ClassificationType.BOTH` (D5) classifies onto the 3D Tiles and
+`scene.pickPosition` (D6) is the tile-aware path. Both verified headlessly with a real key on
+2026-10-31: overlay drapes on the tiles, synthetic click lands the marker within 1 px.
+
+## D18. Stay on the Google Maps key; Cesium ion variant shelved
+
+An ion-based variant (asset 2275207 "Google Photorealistic 3D Tiles" via `IonResource.fromAssetId`
+with `VITE_CESIUM_ION_TOKEN`, token passed per asset and never set on `Ion.defaultAccessToken`)
+was built in bdde0a6 and reverted in d2c0c65: the credential the team actually holds is a Google
+Maps key (`AIza...` shape), which ion rejects with 401. One credential, one path. If the team
+later gets an ion account, cherry-pick bdde0a6; its redaction also covers `access_token=`,
+Bearer headers and JWTs, which is worth keeping either way.

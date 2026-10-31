@@ -15,6 +15,12 @@ Desktop.ini
 .env.*
 !.env.example
 
+# Dependencies
+node_modules/
+
+# Cesium static assets copied by scripts/copy-cesium.mjs (postinstall)
+public/cesium/
+
 # Build / output
 build/
 dist/
@@ -22,6 +28,8 @@ out/
 target/
 coverage/
 tmp/
+.vite/
+*.tsbuildinfo
 
 # Logs
 *.log

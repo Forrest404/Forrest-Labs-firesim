@@ -1,0 +1,32 @@
+{
+  "name": "firesim",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Simplified 3D wildfire spread demo. Not for real-world decisions.",
+  "scripts": {
+    "postinstall": "node scripts/copy-cesium.mjs",
+    "predev": "node scripts/copy-cesium.mjs",
+    "dev": "vite",
+    "prebuild": "node scripts/copy-cesium.mjs",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build:demo-area": "tsx scripts/build-demo-area.ts",
+    "make:synthetic": "tsx scripts/make-synthetic.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/pngjs": "^6.0.5",
+    "pngjs": "^7.0.0",
+    "tsx": "^4.23.15",
+    "typescript": "~5.9.0",
+    "vite": "^8.3.5",
+    "vitest": "^4.1.12"
+  },
+  "dependencies": {
+    "cesium": "^1.146.0"
+  }
+}
