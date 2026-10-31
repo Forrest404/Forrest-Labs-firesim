@@ -39,6 +39,11 @@ html, body { margin: 0; height: 100%; background: #0b0d10; overflow: hidden; }
 #panel button:disabled { opacity: 0.5; cursor: not-allowed; }
 #panel .row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 #panel .muted { color: var(--muted); font-size: 12px; }
+#panel details.honesty { margin: 2px 0 6px; font-size: 12px; color: var(--muted); }
+#panel details.honesty summary { cursor: pointer; text-transform: none; letter-spacing: 0; margin: 0; font-size: 12px; }
+#panel details.honesty small { display: block; margin-top: 4px; }
+#panel details.about-area summary { text-transform: none; letter-spacing: 0; margin: 4px 0; }
+#panel details.more { border-top: 1px solid var(--border); margin-top: 10px; }
 #panel .notice { background: rgba(255, 122, 26, 0.15); border: 1px solid rgba(255, 122, 26, 0.5); border-radius: 8px; padding: 8px 10px; margin: 6px 0 10px; font-weight: 600; }
 #panel .notice small { display: block; font-weight: 400; color: var(--muted); margin-top: 4px; }
 

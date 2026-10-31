@@ -11,6 +11,7 @@ import { compass, el, formatDuration } from './el';
 import { STR } from './strings';
 
 const DURATIONS = [3600, 3 * 3600, 6 * 3600, 12 * 3600, 24 * 3600];
+const RED_FLAG_WIND_KMH = 40;
 
 export function mountSettingsSimple(container: HTMLElement, store: Store): void {
   const speed = el('input', { type: 'range', min: 0, max: 80, step: 1 }) as HTMLInputElement;
@@ -28,6 +29,11 @@ export function mountSettingsSimple(container: HTMLElement, store: Store): void 
   speed.oninput = () => store.update((s) => ({ weather: { ...s.weather, windSpeedMps: Number(speed.value) / 3.6 }, ...staleIfResult(s) }));
   dir.oninput = () => store.update((s) => ({ weather: { ...s.weather, windFromDeg: Number(dir.value) }, ...staleIfResult(s) }));
   dryness.onchange = () => store.update((s) => ({ weather: applyDrynessPreset(s.weather, dryness.value as DrynessPreset), ...staleIfResult(s) }));
+  // One click for the demo: extreme dryness and Red Flag wind, keeping the wind direction.
+  const redFlag = el('button', {
+    title: STR.redFlagTitle,
+    onclick: () => store.update((s) => ({ weather: { ...applyDrynessPreset(s.weather, 'extreme'), windSpeedMps: RED_FLAG_WIND_KMH / 3.6 }, ...staleIfResult(s) })),
+  }, STR.redFlag);
   duration.onchange = () => store.update((s) => ({ durationSeconds: Number(duration.value), ...staleIfResult(s) }));
 
   container.append(
@@ -36,6 +42,7 @@ export function mountSettingsSimple(container: HTMLElement, store: Store): void 
     el('label', {}, el('span', {}, STR.windFrom), dir, arrow, dirVal),
     el('label', {}, el('span', {}, STR.dryness), dryness, drynessVal),
     el('label', {}, el('span', {}, STR.duration), duration),
+    el('div', { class: 'row' }, redFlag),
   );
 
   store.subscribe((s) => {

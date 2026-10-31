@@ -95,7 +95,7 @@ export function initialState(): AppState {
     resultStale: false,
     simRunning: false,
     simError: null,
-    playback: { t: 0, playing: false, speed: 64 },
+    playback: { t: 0, playing: false, speed: 1024 },
     tool: 'ignite',
     toolParams: { firebreakWidthCells: 3, waterRadiusCells: 3, preClear: false },
     debug: { outline: false, fuel: false, slope: false },

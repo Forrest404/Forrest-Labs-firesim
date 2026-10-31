@@ -25,9 +25,10 @@ export interface PanelSlots {
 }
 
 export function mountPanel(root: HTMLElement, store: Store, actions: PanelActions): PanelSlots {
+  // Honesty stays on screen, but as one quiet line: the demo leads with the fire, not a warning.
   const header = el('div', {},
     el('h1', {}, STR.appTitle),
-    el('div', { class: 'notice' }, STR.honestyNotice, el('small', {}, STR.honestyDetail)),
+    el('details', { class: 'honesty' }, el('summary', {}, STR.honestyNotice), el('small', {}, STR.honestyDetail)),
   );
   const modeLine = el('div', { class: 'muted' });
   const area = el('section');
@@ -59,7 +60,9 @@ export function mountPanel(root: HTMLElement, store: Store, actions: PanelAction
   );
   const debug = el('section');
   const footer = el('div', { class: 'muted footer' }, STR.footer);
-  root.append(header, modeLine, area, settings, advanced, sim, planner, tools, camera, effects, debug, footer);
+  // Demo flow first (place, conditions, run, plan, fight); everything else folds away.
+  const more = el('details', { class: 'more' }, el('summary', {}, STR.moreSettings), advanced, camera, effects, debug);
+  root.append(header, modeLine, area, settings, sim, planner, tools, more, footer);
 
   mountAreaPicker(area, store, actions);
   mountSettingsSimple(settings, store);

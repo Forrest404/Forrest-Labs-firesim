@@ -12,9 +12,11 @@ export interface AreaPickerActions {
 export function mountAreaPicker(container: HTMLElement, store: Store, actions: AreaPickerActions): void {
   const select = el('select', { id: 'area-select', 'aria-label': STR.areaLabel }) as HTMLSelectElement;
   const info = el('div', { class: 'muted' });
+  // Sources stay one click away instead of filling the panel during a demo.
+  const about = el('details', { class: 'about-area' }, el('summary', {}, STR.aboutArea), info);
   const live = el('option', { value: LIVE_AREA_NAME, disabled: true }, STR.liveAreaLabel);
   select.onchange = () => actions.selectArea(select.value);
-  container.append(el('h2', {}, STR.areaLabel), select, info);
+  container.append(el('h2', {}, STR.areaLabel), select, about);
 
   let renderedKey = '';
   store.subscribe((s, prev) => {

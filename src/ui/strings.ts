@@ -20,6 +20,10 @@ export const STR = {
   liveAreaUnavailable: 'Live loading of the current view is coming soon. Pick a saved demo area.',
 
   settingsTitle: 'Conditions',
+  redFlag: 'Red Flag day',
+  redFlagTitle: 'Extreme dryness (38 °C, 8 % humidity) and 40 km/h wind, typical of a California Red Flag warning',
+  moreSettings: 'More settings',
+  aboutArea: 'About this map data',
   windSpeed: 'Wind speed',
   windFrom: 'Wind from',
   windArrowTitle: 'Arrow shows where the wind blows toward',

@@ -49,11 +49,12 @@ async function main(): Promise<void> {
     googleApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined,
     onModeChange: (mode, reason) => {
       store.set({ viewerMode: mode });
-      notices.persistent('fallback', `${STR.fallbackBanner} ${reason}`);
+      notices.show(`${STR.fallbackBanner} ${reason}`, 'warn', 8000);
     },
   });
   store.set({ viewerMode: handle.mode });
-  if (handle.mode === 'fallback') notices.persistent('fallback', `${STR.fallbackBanner} ${handle.fallbackReason}`);
+  // Shown briefly: it would otherwise cover the time scrubber. The panel keeps a mode line.
+  if (handle.mode === 'fallback') notices.show(`${STR.fallbackBanner} ${handle.fallbackReason}`, 'warn', 8000);
 
   const wiring = wire(handle.viewer, store, notices);
   wiringRef = wiring;
