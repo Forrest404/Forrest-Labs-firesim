@@ -6,7 +6,7 @@ Companion files: [DECISIONS.md](DECISIONS.md) (judgement calls), [FEATURES.md](F
 ## Stage checklist
 
 - [x] Stage 0: Recon (branch `scaffold/v0` created from `main` @ `42fe7b2`)
-- [ ] Stage 1: Scaffold and contract
+- [x] Stage 1: Scaffold and contract
 - [ ] Stage 2: Sim core on the fixture
 - [ ] Stage 3: Data (geo, raster, terrain, bundles, synthetic areas, build script)
 - [ ] Stage 4: Cesium viewer spike
@@ -29,13 +29,22 @@ Companion files: [DECISIONS.md](DECISIONS.md) (judgement calls), [FEATURES.md](F
 - Read `README.md`, `ideas.md`, `ROADMAP.md`, `plan.md`, `docs/adr/*`, `CONTRIBUTING.md`.
 - Created branch `scaffold/v0`. `plan.md` was untracked; it is committed with the Stage 1 docs.
 
+### Stage 1 — Scaffold and contract
+- Vite 8 + TypeScript 5.9 (strict) + Vitest 4; Cesium 1.146 installed; static assets served from `/cesium/`.
+- Scripts: `dev`, `build`, `test`, `typecheck`, `build:demo-area`, `make:synthetic`.
+- Full contract in `src/contract/` (types, conventions, fuel table, presets, validator) + 7 tests.
+- Module READMEs, `DECISIONS.md` (D1-D12), `FEATURES.md` skeleton, `.env.example`.
+- Note: commit `f19479e` on this branch was made from VS Code (not by the build session) and
+  pushed `PROGRESS.md` + `plan.md` to `origin/scaffold/v0`. Harmless; the build keeps committing locally.
+- Verified: `npm run typecheck`, `npm test` (7 pass), `npm run build` all green.
+
 ## Current stage
 
-Stage 1: Scaffold and contract.
+Stage 2: Sim core on the fixture.
 
 ## Next
 
-Stage 2: Sim core.
+Stage 3: Data.
 
 ## Known issues / not verified
 
