@@ -46,6 +46,7 @@ export function mountRealVsSim(container: HTMLElement, store: Store): void {
       el('figure', {}, simCanvas, el('figcaption', {}, el('span', { class: 'rvs-tag sim' }, STR.sideBySideSim), simArea, simSub)),
     ),
     el('div', { class: 'rvs-stats' }, match, covered, windCheck),
+    el('div', { class: 'rvs-note' }, el('span', { class: 'rvs-start-dot' }), STR.sideBySideStart, ' · ', STR.sideBySideRevealNote),
   );
   card.hidden = true;
   container.append(card);
@@ -54,7 +55,9 @@ export function mountRealVsSim(container: HTMLElement, store: Store): void {
   let key: { area: DemoArea; result: SimResult } | null = null;
   let crop: Crop | null = null;
   let fair: Overlap | null = null;
-  let realPainted = false;
+  let realRank: Int32Array | null = null;
+  let realCells = 0;
+  let start: { row: number; col: number } | null = null;
 
   store.subscribe((s, prev) => {
     const ref = s.area?.reference;
@@ -67,12 +70,16 @@ export function mountRealVsSim(container: HTMLElement, store: Store): void {
       return;
     }
     if (!key || key.area !== s.area || key.result !== s.result) {
+      if (key?.area !== s.area || !realRank) {
+        start = s.area.meta.suggestedIgnition ?? s.ignition;
+        realRank = revealOrder(ref.mask, s.area.grid, start);
+        realCells = ref.mask.reduce((a, b) => a + b, 0);
+      }
       key = { area: s.area, result: s.result };
       fair = overlapAtRealSize(s.result, ref);
       crop = cropFor(s.area.grid, ref, s.result, fair ? fair.t : s.durationSeconds);
-      realPainted = false;
     }
-    if (!crop) return;
+    if (!crop || !realRank) return;
 
     // Stop at real size so the fair match is on screen without anyone scrubbing.
     if (fair && s.playback.playing && prev.playback.t < fair.t && s.playback.t >= fair.t) {
@@ -80,19 +87,31 @@ export function mountRealVsSim(container: HTMLElement, store: Store): void {
       return;
     }
 
-    if (!realPainted) {
-      paint(realCanvas, s.area, crop, (i) => (ref.mask[i] ? BURNED : null), ref.mask, false);
-      realPainted = true;
-    }
     const arr = s.result.arrivalTime;
     const t = s.playback.t;
+    let simBurned = 0;
+    let simFront = 0;
+    for (const a of arr) {
+      if (a === NEVER_ARRIVES || a > t) continue;
+      simBurned++;
+      if (t - a < FRONT_WINDOW_S) simFront++;
+    }
+    // The real side grows outward from the real start to its official final shape, matched to our
+    // burned area so both reach full size together. Its order uses distance only, never our model.
+    const shown = Math.min(realCells, simBurned);
+    const rank = realRank;
+    paint(realCanvas, s.area, crop, (i) => {
+      const k = rank[i];
+      if (k < 0 || k >= shown) return null;
+      return k >= shown - simFront && shown < realCells ? FRONT : BURNED;
+    }, ref.mask, false, start);
     paint(simCanvas, s.area, crop, (i) => {
       const a = arr[i];
       if (a === NEVER_ARRIVES || a > t) return null;
       return t - a < FRONT_WINDOW_S ? FRONT : BURNED;
-    }, ref.mask, true);
+    }, ref.mask, true, start);
 
-    realArea.textContent = `${Math.round(ref.areaHa)} ha`;
+    realArea.textContent = shown < realCells ? `${Math.round((ref.areaHa * shown) / realCells)} / ${Math.round(ref.areaHa)} ha` : `${Math.round(ref.areaHa)} ha`;
     const now = liveStats(s.result, s.area.grid, t);
     simArea.textContent = `${Math.round(now.burnedAreaHa)} ha`;
     simSub.textContent = fair && t >= fair.t - 1
@@ -140,8 +159,67 @@ export function cropFor(grid: GridSpec, ref: ReferenceFire, result: SimResult, t
   return { r0: clampStart(rMin, rMax, H), c0: clampStart(cMin, cMax, W), size: Math.min(size, W, H) };
 }
 
-/** One pixel per cell: dimmed fuel colour underneath, `color(i)` on top, optional real-perimeter edge. */
-function paint(canvas: HTMLCanvasElement, area: DemoArea, crop: Crop, color: (i: number) => [number, number, number] | null, realMask: Uint8Array, edge: boolean): void {
+/**
+ * Rank of each real-burned cell by distance from the start, walking only through the burned area
+ * (a two-pass chamfer distance, repeated until stable since the shape is not convex). -1 elsewhere.
+ */
+export function revealOrder(mask: Uint8Array, grid: GridSpec, start: { row: number; col: number } | null): Int32Array {
+  const { width: W, height: H } = grid;
+  const n = W * H;
+  const dist = new Float32Array(n).fill(Infinity);
+  let seed = start ? start.row * W + start.col : -1;
+  if (seed < 0 || !mask[seed]) {
+    // Start just outside the perimeter: begin from the nearest burned cell instead.
+    let best = Infinity;
+    for (let i = 0; i < n; i++) {
+      if (!mask[i]) continue;
+      const d = start ? Math.hypot(((i / W) | 0) - start.row, (i % W) - start.col) : i;
+      if (d < best) { best = d; seed = i; }
+    }
+  }
+  const rank = new Int32Array(n).fill(-1);
+  if (seed < 0) return rank;
+  dist[seed] = 0;
+  const D = Math.SQRT2;
+  const relax = (i: number, j: number, cost: number): boolean => {
+    if (!mask[j] || dist[i] + cost >= dist[j]) return false;
+    dist[j] = dist[i] + cost;
+    return true;
+  };
+  for (let pass = 0, changed = true; changed && pass < 50; pass++) {
+    changed = false;
+    for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) {
+      const i = r * W + c;
+      if (!mask[i] || dist[i] === Infinity) continue;
+      if (c + 1 < W) changed = relax(i, i + 1, 1) || changed;
+      if (r + 1 < H) {
+        changed = relax(i, i + W, 1) || changed;
+        if (c > 0) changed = relax(i, i + W - 1, D) || changed;
+        if (c + 1 < W) changed = relax(i, i + W + 1, D) || changed;
+      }
+    }
+    for (let r = H - 1; r >= 0; r--) for (let c = W - 1; c >= 0; c--) {
+      const i = r * W + c;
+      if (!mask[i] || dist[i] === Infinity) continue;
+      if (c > 0) changed = relax(i, i - 1, 1) || changed;
+      if (r > 0) {
+        changed = relax(i, i - W, 1) || changed;
+        if (c + 1 < W) changed = relax(i, i - W + 1, D) || changed;
+        if (c > 0) changed = relax(i, i - W - 1, D) || changed;
+      }
+    }
+  }
+  // Pieces not connected to the start (spot fires) come last, nearest first.
+  const cells: number[] = [];
+  for (let i = 0; i < n; i++) if (mask[i]) cells.push(i);
+  const far = (i: number): number => (dist[i] === Infinity ? 1e6 + Math.hypot(((i / W) | 0) - ((seed / W) | 0), (i % W) - (seed % W)) : dist[i]);
+  cells.sort((a, b) => far(a) - far(b));
+  cells.forEach((i, k) => { rank[i] = k; });
+  return rank;
+}
+
+/** One pixel per cell: dimmed fuel colour underneath, `color(i)` on top, optional real-perimeter edge and start marker. */
+function paint(canvas: HTMLCanvasElement, area: DemoArea, crop: Crop, color: (i: number) => [number, number, number] | null, realMask: Uint8Array, edge: boolean, start: { row: number; col: number } | null): void {
   const { size, r0, c0 } = crop;
   const W = area.grid.width;
   canvas.width = size;
@@ -163,6 +241,19 @@ function paint(canvas: HTMLCanvasElement, area: DemoArea, crop: Crop, color: (i:
     }
   }
   ctx.putImageData(img, 0, 0);
+  if (start) {
+    // Same start on both maps (the official ignition point): white ring with a dark core.
+    const x = start.col - c0 + 0.5;
+    const y = start.row - r0 + 0.5;
+    const rad = Math.max(2.5, size / 45);
+    ctx.lineWidth = Math.max(1, size / 110);
+    ctx.fillStyle = '#111';
+    ctx.strokeStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(x, y, rad, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
 }
 
 const FUEL_BG = new Map<number, [number, number, number]>();

@@ -23,6 +23,8 @@ export interface AreaMeta {
   defaultWindFromDeg?: number;
   /** Conditions applied when the area is selected (e.g. the real weather of a historical fire). */
   defaultWeather?: Partial<Weather>;
+  /** Model settings applied when the area is selected (e.g. Rothermel where real fuel data exists). */
+  defaultSettings?: Partial<SimSettings>;
   defaultDurationSeconds?: number;
 }
 
@@ -144,7 +146,7 @@ export function scenarioFromArea(area: DemoArea, o: ScenarioOptions = {}): Scena
     interventions: [],
     durationSeconds: o.durationSeconds ?? area.meta.defaultDurationSeconds ?? DEFAULT_DURATION_SECONDS,
     seed: o.seed ?? 1,
-    settings: { ...DEFAULT_SETTINGS, ...o.settings },
+    settings: { ...DEFAULT_SETTINGS, ...area.meta.defaultSettings, ...o.settings },
   };
 }
 

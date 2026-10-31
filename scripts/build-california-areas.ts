@@ -18,6 +18,7 @@ import { ELEVATION_NODATA, FuelClass, cellAreaHa } from '../src/contract';
 import { decodeBundle, encodeBundle, indexEntryFor } from '../src/data/bundle';
 import type { DemoArea, DemoAreaBundle, DemoAreaIndex } from '../src/data/bundle';
 import { lonLatToCell, lonLatToCellFloat, makeGridSpec } from '../src/data/geo';
+import { fbfm40ToFuelClass, landfireExportUrl } from '../src/data/landfire';
 import { rasterizePolygon } from '../src/data/raster';
 import type { Pt } from '../src/data/raster';
 import { decodeTerrariumTile, fillNodata, sampleElevationGrid, tileUrl, tilesForGrid } from '../src/data/terrain';
@@ -63,6 +64,18 @@ function decodeFuelRle(encoded: string, n: number): Uint8Array {
   }
   if (i !== n) throw new Error(`fuel RLE covers ${i} cells, expected ${n}`);
   return fuel;
+}
+
+const LANDFIRE_FUEL_LAYER = 'LF2023_FBFM40';
+
+/** Raw LANDFIRE codes per cell (0 where there is no data), straight from the public ImageServer. */
+async function landfireCodes(grid: ReturnType<typeof makeGridSpec>, layer: string): Promise<Uint8Array> {
+  const res = await fetch(landfireExportUrl(layer, grid.bounds, grid.width, grid.height));
+  if (!res.ok) throw new Error(`LANDFIRE ${layer}: HTTP ${res.status}`);
+  const png = PNG.sync.read(Buffer.from(await res.arrayBuffer()));
+  if (png.width !== grid.width || png.height !== grid.height) throw new Error(`LANDFIRE ${layer}: got ${png.width}x${png.height}`);
+  // Greyscale PNG decoded to RGBA: the code is in the red channel.
+  return Uint8Array.from({ length: grid.width * grid.height }, (_, i) => png.data[i * 4]);
 }
 
 async function elevationFor(grid: ReturnType<typeof makeGridSpec>, zoom = 13): Promise<Float32Array> {
@@ -115,7 +128,11 @@ function boulderCreek(): DemoArea {
 async function crozier(): Promise<DemoArea> {
   const grid = makeGridSpec({ centerLon: -120.68995, centerLat: 38.83855, width: 200, height: 200, cellSizeM: 30 });
   const n = grid.width * grid.height;
-  const fuel = decodeFuelRle(readFileSync(join(DATA, 'crozier-fuel-rle.txt'), 'utf8'), n);
+  // Real pre-fire fuel: LANDFIRE 2023 (the fire was Aug 2024). OSM barely maps this box (99.6 %
+  // unmapped), so OSM's land cover is kept only where LANDFIRE has no data.
+  const osmFuel = decodeFuelRle(readFileSync(join(DATA, 'crozier-fuel-rle.txt'), 'utf8'), n);
+  const codes = await landfireCodes(grid, LANDFIRE_FUEL_LAYER);
+  const fuel = Uint8Array.from(codes, (code, i) => (code ? fbfm40ToFuelClass(code) : osmFuel[i]));
   const elevation = await elevationFor(grid);
 
   const geo = JSON.parse(readFileSync(join(DATA, 'crozier-perimeter.geojson'), 'utf8')) as {
@@ -140,9 +157,10 @@ async function crozier(): Promise<DemoArea> {
       name: 'crozier',
       label: 'Crozier Fire 2024, CA (real-fire test)',
       synthetic: false,
-      description: `Real land cover (OpenStreetMap; unmapped land assumed conifer forest, which is 99.6 % of this box) and elevation (AWS Terrain Tiles) around the 2024 Crozier Fire, El Dorado County. ${OSM_NOTE}`,
+      description: 'Real pre-fire fuel (LANDFIRE 2023, Scott & Burgan 40 fuel models) and elevation (AWS Terrain Tiles) around the 2024 Crozier Fire, El Dorado County. Simulated with the Rothermel spread model.',
       source: 'scripts/build-california-areas.ts',
       attribution: [
+        'Fuel: LANDFIRE 2023 FBFM40, USGS/USDA (public domain)',
         '© OpenStreetMap contributors (ODbL)',
         'Elevation: AWS Terrain Tiles (Mapzen Terrarium), sources per https://registry.opendata.aws/terrain-tiles/',
         'Fire perimeter: NIFC WFIGS Interagency Perimeters (public domain)',
@@ -154,6 +172,8 @@ async function crozier(): Promise<DemoArea> {
       defaultWindFromDeg: 225,
       // Open-Meteo archive at the ignition point, afternoons of 6-8 Aug 2024: ~35 C, ~10 % RH, ~13 km/h from SW.
       defaultWeather: { windSpeedMps: 13 / 3.6, windFromDeg: 225, temperatureC: 35, relativeHumidity: 0.1, baseFuelMoisture: 0.04 },
+      // Real fuel models plus the Rothermel equations: 67 % match vs 63 % for OSM + factors (data.md).
+      defaultSettings: { rateModel: 'rothermel' },
       defaultDurationSeconds: 24 * 3600,
     },
     grid,

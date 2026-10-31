@@ -21,7 +21,7 @@
         "lon": -120.68995,
         "lat": 38.83855
       },
-      "description": "Real land cover (OpenStreetMap; unmapped land assumed conifer forest, which is 99.6 % of this box) and elevation (AWS Terrain Tiles) around the 2024 Crozier Fire, El Dorado County. OSM fetched in overpass-turbo on 2026-10-31."
+      "description": "Real pre-fire fuel (LANDFIRE 2023, Scott & Burgan 40 fuel models) and elevation (AWS Terrain Tiles) around the 2024 Crozier Fire, El Dorado County. Simulated with the Rothermel spread model."
     },
     {
       "name": "alpirsbach",

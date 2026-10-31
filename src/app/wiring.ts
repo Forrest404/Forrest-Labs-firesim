@@ -3,7 +3,7 @@
  * viewer objects are created in response to state changes.
  */
 
-import { FuelClass, validateScenario, windTowardDeg } from '../contract';
+import { DEFAULT_SETTINGS, FuelClass, validateScenario, windTowardDeg } from '../contract';
 import type { GridSpec, Scenario, SimResult } from '../contract';
 import { scenarioFromArea } from '../data/bundle';
 import { simulate as runSimulation } from '../sim';
@@ -195,6 +195,8 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
           ...area.meta.defaultWeather,
         },
         durationSeconds: area.meta.defaultDurationSeconds ?? store.get().durationSeconds,
+        // Area defaults (e.g. Rothermel on real LANDFIRE fuel), else back to the app's default model.
+        settings: { ...store.get().settings, rateModel: DEFAULT_SETTINGS.rateModel, ...area.meta.defaultSettings },
       });
     } catch (err) {
       store.set({ areaLoading: false });
@@ -254,6 +256,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
     if (!s.area || !ref) return null;
     store.set({
       weather: { ...s.weather, windFromDeg: s.area.meta.defaultWindFromDeg ?? s.weather.windFromDeg, ...s.area.meta.defaultWeather },
+      settings: { ...s.settings, ...s.area.meta.defaultSettings },
       ignition: defaultIgnition(s.area),
       interventions: [],
       plan: null,
