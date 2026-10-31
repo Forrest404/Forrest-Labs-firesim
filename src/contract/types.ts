@@ -145,6 +145,10 @@ export interface SimStats {
   burnedAreaHa: number;
   /** Fastest cell-to-cell spread rate observed, m/s. */
   maxSpreadRateMps: number;
+  /** Largest Byram fireline intensity, kW/m (indicative, see SimResult.firelineIntensityKwM). */
+  maxIntensityKwM: number;
+  /** Largest Byram flame length, m. */
+  maxFlameLengthM: number;
   runtimeMs: number;
 }
 
@@ -157,6 +161,14 @@ export interface SimResult {
   arrivalTime: Float32Array;
   /** Optional relative spread strength at ignition, 0-1. Not a physical intensity. */
   intensity?: Float32Array;
+  /**
+   * Byram fireline intensity at ignition, kW/m: heat content x fuel load x spread rate (H w R),
+   * using the fuel bed in the fuel table and the spread rate along the edge that ignited the cell
+   * (head > flank > back). Zero for cells that never burn. Indicative, not calibrated.
+   */
+  firelineIntensityKwM: Float32Array;
+  /** Byram (1959) flame length, m: 0.0775 I^0.46 with I in kW/m. Zero for cells that never burn. */
+  flameLengthM: Float32Array;
   stats: SimStats;
 }
 

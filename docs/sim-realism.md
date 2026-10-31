@@ -104,3 +104,19 @@ slow fuel or a thin wall could be skipped; without (b) a one-cell wet band could
 (c) a firebreak could be hopped. Each guard is covered by tests that fail when it is removed. With
 the guards, 16 directions is never slower than 8 at any cell (fuzzed, burnout off: 0 of 77,561
 cells later, 16,084 earlier). With burnout on and water that guarantee does not hold, see SIM-6.
+
+## SIM-9. Fireline intensity and flame length (`src/sim/intensity.ts`)
+
+`SimResult` now carries `firelineIntensityKwM` and `flameLengthM` per cell, plus `maxIntensityKwM`
+and `maxFlameLengthM` in the stats (additive contract change). Byram (1959): `I = H w R` (kW/m,
+H heat content, w the whole dead fuel load of the bed, R the spread rate along the edge that
+ignited the cell, so head > flank > back) and `L = 0.0775 I^0.46` (m). Ignition cells take the
+strongest rate they started. Never-burned cells are 0.
+
+Indicative only: w counts the entire lumped dead load as consumed (overstating heavy-timber beds),
+and R and the beds are placeholders. Example: Rothermel on conifer under 9 m/s wind shows about
+19,000 kW/m and 7 m flames, which is a plausible order of magnitude for a wind-driven timber fire
+but not a prediction. The UI shows a coarse class (low < 350, moderate < 1700, high < 3500,
+extreme kW/m), the usual rule-of-thumb breakpoints for how hard a fire is to suppress; they are
+not a safety rating. Flame particles are scaled to the flame length (clamped 1.5-30 m). This is
+the input the spotting feature (SIM-10) uses.

@@ -33,6 +33,8 @@ export interface FireEffectsUpdate {
   windX: number;
   windY: number;
   windSpeedMps: number;
+  /** Byram flame length per cell (m). Scales each flame emitter; null uses a default size. */
+  flameLengthM?: Float32Array | null;
   /** Heights: on the fallback ellipsoid everything sits at 0; with 3D tiles use the elevation grid. */
   useElevation: boolean;
 }
@@ -154,8 +156,10 @@ export function createFireEffects(viewer: Viewer): FireEffects {
         const h = (Math.imul(i, 2654435761) >>> 0) / 4294967296;
         if (h > keep) continue;
         const e = emitters[k++];
+        const len = u.flameLengthM ? u.flameLengthM[i] : 0;
         if (e.cell !== i) {
           e.cell = i;
+          sizeFlame(e.flame, len);
           const row = (i / u.grid.width) | 0;
           const col = i - row * u.grid.width;
           const { lon, lat } = cellCenterLonLat(u.grid, row, col);
@@ -189,6 +193,16 @@ export function createFireEffects(viewer: Viewer): FireEffects {
 
 // TODO(3d-polish): additive-blended glow sprite, heat shimmer, ember sparks, LOD by camera
 // distance, and real surface heights on 3D tiles (scene.sampleHeight) instead of the elevation grid.
+/** Flame particles span roughly the flame length: size and rise speed follow Byram's L. */
+function sizeFlame(flame: ParticleSystem, lengthM: number): void {
+  const L = Math.min(30, Math.max(1.5, lengthM || 3));
+  const size = new Cartesian2(Math.max(5, L * 0.8), Math.max(7, L * 1.2));
+  flame.minimumImageSize = size;
+  flame.maximumImageSize = size;
+  flame.minimumSpeed = L * 0.5;
+  flame.maximumSpeed = L * 1.1;
+}
+
 function makeSprite(): HTMLCanvasElement {
   const c = document.createElement('canvas');
   c.width = c.height = 32;

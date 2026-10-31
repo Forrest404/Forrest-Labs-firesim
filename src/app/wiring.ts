@@ -124,6 +124,7 @@ export function wire(viewer: Viewer, store: Store, notices: Notices): Wiring {
         grid: s.area.grid,
         arrival: s.result?.arrivalTime ?? null,
         elevation: s.area.elevation,
+        flameLengthM: s.result?.flameLengthM ?? null,
         t: s.playback.t,
         windX: Math.sin(toward),
         windY: Math.cos(toward),

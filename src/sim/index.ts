@@ -16,6 +16,7 @@ import { crossWetEdge } from './crossing';
 import type { Crossing } from './crossing';
 import { buildEventLayers } from './events';
 import { MinHeap } from './heap';
+import { byramIntensityKwM, flameLengthM } from './intensity';
 import { createRateFn } from './models';
 import type { EdgeInput } from './models';
 import { mulberry32 } from './prng';
@@ -151,16 +152,48 @@ export function simulate(scenario: Scenario): SimResult {
   let burnedCells = 0;
   for (let i = 0; i < n; i++) if (arrival[i] !== NEVER_ARRIVES) burnedCells++;
 
+  // Ignition cells have no incoming edge: give them the strongest spread they started.
+  for (const ig of scenario.ignition) {
+    const i = ig.row * width + ig.col;
+    let best = 0;
+    for (let k = 0; k < KING_MOVES; k++) {
+      const o = NEIGHBOR_OFFSETS[k];
+      const r2 = ig.row + o.dr;
+      const c2 = ig.col + o.dc;
+      if (r2 < 0 || c2 < 0 || r2 >= height || c2 >= width) continue;
+      const j = r2 * width + c2;
+      if (arrival[j] !== NEVER_ARRIVES && rateAtIgnition[j] > best) best = rateAtIgnition[j];
+    }
+    rateAtIgnition[i] = best;
+  }
+
   const intensity = new Float32Array(n);
-  if (maxRate > 0) for (let i = 0; i < n; i++) intensity[i] = rateAtIgnition[i] / maxRate;
+  const firelineIntensity = new Float32Array(n);
+  const flameLength = new Float32Array(n);
+  let maxIntensity = 0;
+  let maxFlame = 0;
+  for (let i = 0; i < n; i++) {
+    if (arrival[i] === NEVER_ARRIVES) continue;
+    if (maxRate > 0) intensity[i] = rateAtIgnition[i] / maxRate;
+    const bed = FUELS[fuel[i] as FuelClass].bed;
+    const kwPerM = byramIntensityKwM(bed.heatContentJkg, bed.loadKgM2, rateAtIgnition[i]);
+    firelineIntensity[i] = kwPerM;
+    flameLength[i] = flameLengthM(kwPerM);
+    if (kwPerM > maxIntensity) maxIntensity = kwPerM;
+    if (flameLength[i] > maxFlame) maxFlame = flameLength[i];
+  }
 
   return {
     arrivalTime: arrival,
     intensity,
+    firelineIntensityKwM: firelineIntensity,
+    flameLengthM: flameLength,
     stats: {
       burnedCells,
       burnedAreaHa: burnedCells * cellAreaHa(grid),
       maxSpreadRateMps: maxRate,
+      maxIntensityKwM: maxIntensity,
+      maxFlameLengthM: maxFlame,
       runtimeMs: now() - t0,
     },
   };

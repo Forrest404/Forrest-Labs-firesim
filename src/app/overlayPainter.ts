@@ -16,6 +16,9 @@ export interface Preview {
 export interface LiveStats {
   burnedCells: number;
   burnedAreaHa: number;
+  /** Strongest fireline intensity (kW/m) and flame length (m) among cells ignited by time t. */
+  maxIntensityKwM: number;
+  maxFlameLengthM: number;
 }
 
 export class OverlayPainter {
@@ -104,9 +107,18 @@ export class OverlayPainter {
 const EMPTY = new Float32Array(0);
 
 export function liveStats(result: SimResult | null, grid: GridSpec, t: number): LiveStats {
-  if (!result) return { burnedCells: 0, burnedAreaHa: 0 };
+  if (!result) return { burnedCells: 0, burnedAreaHa: 0, maxIntensityKwM: 0, maxFlameLengthM: 0 };
   const arr = result.arrivalTime;
+  const inten = result.firelineIntensityKwM;
+  const flame = result.flameLengthM;
   let n = 0;
-  for (let i = 0; i < arr.length; i++) if (arr[i] <= t) n++;
-  return { burnedCells: n, burnedAreaHa: n * cellAreaHa(grid) };
+  let maxI = 0;
+  let maxL = 0;
+  for (let i = 0; i < arr.length; i++) {
+    if (arr[i] > t) continue;
+    n++;
+    if (inten[i] > maxI) maxI = inten[i];
+    if (flame[i] > maxL) maxL = flame[i];
+  }
+  return { burnedCells: n, burnedAreaHa: n * cellAreaHa(grid), maxIntensityKwM: maxI, maxFlameLengthM: maxL };
 }

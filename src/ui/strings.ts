@@ -44,6 +44,10 @@ export const STR = {
   restart: 'Restart',
   scrubber: 'Simulated time',
   simTime: 'computed in',
+  peakIntensity: 'peak intensity',
+  flameLength: 'flames up to',
+  intensityClass: { low: 'low', moderate: 'moderate', high: 'high', extreme: 'extreme' },
+  intensityNote: 'Fireline intensity and flame length are indicative (Byram), from uncalibrated placeholders.',
 
   effectsTitle: 'Effects',
   effectsParticles: 'Flames and smoke',

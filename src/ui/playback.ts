@@ -2,6 +2,7 @@
 
 import type { Store } from '../app/state';
 import { liveStats } from '../app/overlayPainter';
+import { intensityClass } from '../sim/intensity';
 import { el, formatClock } from './el';
 import { STR } from './strings';
 
@@ -57,7 +58,10 @@ export function mountPlayback(container: HTMLElement, store: Store, actions: Pla
     clock.textContent = formatClock(s.playback.t);
     if (has && s.area) {
       const st = liveStats(s.result, s.area.grid, s.playback.t);
-      stats.textContent = `${st.burnedAreaHa.toFixed(0)} ha · ${st.burnedCells} cells burned · ${STR.simTime} ${s.result!.stats.runtimeMs.toFixed(0)} ms`;
+      const fire = st.maxIntensityKwM > 0
+        ? ` · ${STR.peakIntensity} ${st.maxIntensityKwM.toFixed(0)} kW/m (${STR.intensityClass[intensityClass(st.maxIntensityKwM)]}), ${STR.flameLength} ${st.maxFlameLengthM.toFixed(1)} m`
+        : '';
+      stats.textContent = `${st.burnedAreaHa.toFixed(0)} ha · ${st.burnedCells} cells burned${fire} · ${STR.simTime} ${s.result!.stats.runtimeMs.toFixed(0)} ms`;
     } else stats.textContent = '';
   });
 }
