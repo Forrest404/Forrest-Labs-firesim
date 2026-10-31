@@ -140,10 +140,22 @@ Land cover © OpenStreetMap contributors (ODbL). Elevation: AWS Terrain Tiles (M
 underlying sources per <https://registry.opendata.aws/terrain-tiles/>). Basemap tiles ©
 OpenStreetMap. 3D tiles (optional): Google. Rendering: CesiumJS.
 
+## Deployment (GitHub Pages)
+
+Live site: <https://forrest404.github.io/Forrest-Labs-firesim/>
+
+`.github/workflows/pages.yml` builds and publishes on every push to `main` (or by hand via
+Actions -> "Deploy to GitHub Pages" -> Run workflow, from any branch). The build sets
+`BASE_PATH=/Forrest-Labs-firesim/` so assets, Cesium workers and demo areas resolve under the
+project sub-path. Google 3D tiles on the live site need a repository secret
+`VITE_GOOGLE_MAPS_API_KEY` (Settings -> Secrets and variables -> Actions); restrict that key to
+`forrest404.github.io` and the Map Tiles API, since it ships in the public bundle. Without the
+secret the site runs on the OSM fallback globe.
+
 ## Working in parallel
 
 Branch `feature/<slot>` from `main`, small PRs, `main` always builds. **Do not edit
 `src/contract/` without announcing it in chat.** See [FEATURES.md](FEATURES.md) and
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
-<!-- TODO(demo-ship): deployment target + URL, 3-minute demo script, rehearsal notes. -->
+<!-- TODO(demo-ship): 3-minute demo script, rehearsal notes. -->

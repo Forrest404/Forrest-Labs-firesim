@@ -13,7 +13,7 @@
       <div id="notices"></div>
     </div>
     <!-- Cesium needs to know where its static assets are served from (see vite.config.ts). -->
-    <script>window.CESIUM_BASE_URL = '/cesium/';</script>
+    <script>window.CESIUM_BASE_URL = '%BASE_URL%cesium/';</script>
     <script type="module" src="/src/app/main.ts"></script>
   </body>
 </html>
